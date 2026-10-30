@@ -6,7 +6,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { configOf, listEntries } from "@/lib/databases";
 import { getPage } from "@/lib/pages";
 
-// Base : en-tête, propriétés, vue Tableau (Kanban à venir).
+// Base : en-tête, propriétés, vue Tableau ou Kanban.
 export default function DatabaseRoute({ params }: PageProps<"/db/[id]">) {
   return (
     <Suspense fallback={<p className="page-loading">Chargement…</p>}>

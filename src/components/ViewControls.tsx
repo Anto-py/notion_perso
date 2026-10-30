@@ -2,6 +2,7 @@
 // Filtres (combinés par « et ») et tris de la vue. Chaque changement remonte
 // la vue entière ; delay > 0 pour une frappe, enregistrée après un temps de calme.
 import {
+  isSingleOptionType,
   OP_LABELS,
   OPS_BY_TYPE,
   opNeedsValue,
@@ -20,6 +21,7 @@ const TYPING_DELAY = 500;
 
 export function ViewControls({ properties, view, onChange }: Props) {
   const filterable = [TITLE_PROP, ...properties];
+  const groupables = properties.filter((prop) => isSingleOptionType(prop.type));
   const sortable = [
     ...Object.entries(SORT_BUILTINS).map(([id, name]) => ({ id, name })),
     ...properties.map(({ id, name }) => ({ id, name })),
@@ -37,6 +39,23 @@ export function ViewControls({ properties, view, onChange }: Props) {
 
   return (
     <div className="view-controls">
+      {view.kind === "board" && groupables.length > 0 && (
+        <div className="control-row">
+          <span className="control-label">Colonnes</span>
+          <select
+            aria-label="Propriété de regroupement"
+            value={view.group_by ?? groupables[0].id}
+            onChange={(event) => onChange({ ...view, group_by: event.target.value })}
+          >
+            {groupables.map((prop) => (
+              <option key={prop.id} value={prop.id}>
+                {prop.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {view.filters.map((filter, index) => {
         const prop = filterable.find((p) => p.id === filter.prop) ?? TITLE_PROP;
         return (

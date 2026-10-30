@@ -9,12 +9,15 @@ import {
   nextColor,
   OPTION_COLORS,
   PROPERTY_TYPES,
+  STATUS_GROUPS,
+  STATUS_GROUP_LABELS,
   TYPE_LABELS,
   uniqueName,
   type OptionColor,
   type Property,
   type PropertyType,
   type SelectOption,
+  type StatusGroup,
   type Values,
 } from "@/lib/properties";
 import { CommitInput } from "./CommitInput";
@@ -94,6 +97,19 @@ function OptionsEditor({ prop, onChange }: { prop: Property; onChange: (options:
               </option>
             ))}
           </select>
+          {prop.type === "status" && (
+            <select
+              aria-label={`Groupe de ${option.name}`}
+              value={option.group ?? "todo"}
+              onChange={(event) => update(option.id, { group: event.target.value as StatusGroup })}
+            >
+              {STATUS_GROUPS.map((group) => (
+                <option key={group} value={group}>
+                  {STATUS_GROUP_LABELS[group]}
+                </option>
+              ))}
+            </select>
+          )}
           <button type="button" className="ghost" aria-label={`Supprimer l'option ${option.name}`} onClick={() => onChange(options.filter((o) => o.id !== option.id))}>
             ✕
           </button>
@@ -107,7 +123,12 @@ function OptionsEditor({ prop, onChange }: { prop: Property; onChange: (options:
           placeholder="+ Nouvelle option"
           value=""
           maxLength={100}
-          onCommit={(name) => name && onChange([...options, { id: localId("opt"), name, color: nextColor(options) }])}
+          onCommit={(name) => {
+            if (!name) return;
+            const option: SelectOption = { id: localId("opt"), name, color: nextColor(options) };
+            if (prop.type === "status") option.group = "todo";
+            onChange([...options, option]);
+          }}
         />
       </li>
     </ul>

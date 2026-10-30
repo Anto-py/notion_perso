@@ -1,9 +1,13 @@
 "use client";
-// Choix d'options d'une sélection (simple ou multiple), avec création à la
-// volée : taper un nom absent propose « Créer … ». Entrée choisit l'option
-// exacte, sinon la première trouvée, sinon crée.
+// Choix d'options d'une statut ou d'une sélection (simple ou multiple), avec
+// création à la volée : taper un nom absent propose « Créer … ». Entrée
+// choisit l'option exacte, sinon la première trouvée, sinon crée.
+// Le menu est monté dans <body> et positionné en fixe : dans une cellule de
+// tableau, il ne doit être rogné ni par la cellule ni par le conteneur qui
+// fait défiler horizontalement.
 import { useEffect, useRef, useState } from "react";
-import { fold, nextColor, optionById, type Property } from "@/lib/properties";
+import { createPortal } from "react-dom";
+import { fold, nextColor, optionById, orderedOptions, type Property } from "@/lib/properties";
 import { OptionChip } from "./propertyUi";
 
 type Props = {
@@ -15,25 +19,57 @@ type Props = {
   onCreate: (name: string) => Promise<string | null>;
 };
 
+type MenuPosition = { left: number; top: number; width: number; above: boolean };
+
+const MIN_MENU_WIDTH = 224;
+const VIEWPORT_MARGIN = 12;
+
 export function OptionPicker({ prop, selected, multiple, onChange, onCreate }: Props) {
   const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState<MenuPosition | null>(null);
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
 
-  const options = prop.options ?? [];
+  // Pour un statut, le menu suit l'ordre des colonnes (groupes puis options).
+  const options = orderedOptions(prop);
   const typed = query.trim();
   const matches = options.filter((option) => fold(option.name).includes(fold(typed)));
   const exact = options.find((option) => fold(option.name) === fold(typed));
 
-  // Un clic hors du menu le ferme.
+  function showMenu() {
+    const rect = trigger.current?.getBoundingClientRect();
+    if (!rect) return;
+    const width = Math.min(Math.max(rect.width, MIN_MENU_WIDTH), window.innerWidth - 2 * VIEWPORT_MARGIN);
+    setPosition({
+      left: Math.min(rect.left, window.innerWidth - width - VIEWPORT_MARGIN),
+      top: rect.bottom + 4,
+      width,
+      above: rect.bottom > window.innerHeight * 0.6,
+    });
+    setQuery("");
+    setOpen(true);
+  }
+
+  // Un clic hors du bouton et du menu le ferme ; un défilement le referme
+  // plutôt que de le laisser flotter à côté de sa cellule.
   useEffect(() => {
     if (!open) return;
-    const close = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    const closeOut = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (trigger.current?.contains(target) || menu.current?.contains(target)) return;
+      setOpen(false);
     };
-    document.addEventListener("pointerdown", close);
-    return () => document.removeEventListener("pointerdown", close);
+    const close = () => setOpen(false);
+    document.addEventListener("pointerdown", closeOut);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("pointerdown", closeOut);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
   }, [open]);
 
   function pick(id: string) {
@@ -60,8 +96,15 @@ export function OptionPicker({ prop, selected, multiple, onChange, onCreate }: P
   const chosen = selected.map((id) => optionById(prop, id)).filter((option) => option !== undefined);
 
   return (
-    <div className="picker" ref={root}>
-      <button type="button" className="picker-value" aria-expanded={open} aria-label={`${prop.name} : modifier`} onClick={() => setOpen(!open)}>
+    <div className="picker">
+      <button
+        ref={trigger}
+        type="button"
+        className="picker-value"
+        aria-expanded={open}
+        aria-label={`${prop.name} : modifier`}
+        onClick={() => (open ? setOpen(false) : showMenu())}
+      >
         {chosen.length > 0 ? (
           <span className="chips">
             {chosen.map((option) => (
@@ -72,45 +115,57 @@ export function OptionPicker({ prop, selected, multiple, onChange, onCreate }: P
           <span className="empty-value">Vide</span>
         )}
       </button>
-      {open && (
-        <div className="picker-menu">
-          <input
-            // Le menu s'ouvre pour taper : le curseur y va directement.
-            autoFocus
-            aria-label={`Chercher ou créer une option de ${prop.name}`}
-            placeholder="Chercher ou créer une option"
-            value={query}
-            maxLength={100}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Escape") setOpen(false);
-              if (event.key !== "Enter") return;
-              event.preventDefault();
-              const target = exact ?? (typed ? matches[0] : undefined);
-              if (target) pick(target.id);
-              else void create();
+      {open &&
+        position &&
+        createPortal(
+          <div
+            ref={menu}
+            className="picker-menu picker-menu-fixed"
+            style={{
+              left: position.left,
+              top: position.top,
+              width: position.width,
+              transform: position.above ? "translateY(-100%)" : undefined,
             }}
-          />
-          <ul>
-            {matches.map((option) => (
-              <li key={option.id}>
-                <button type="button" className="picker-option" aria-pressed={selected.includes(option.id)} onClick={() => pick(option.id)}>
-                  <OptionChip option={option} />
-                  {selected.includes(option.id) && <span aria-hidden="true">✓</span>}
-                </button>
-              </li>
-            ))}
-            {typed && !exact && (
-              <li>
-                <button type="button" className="picker-option" disabled={busy} onClick={() => void create()}>
-                  Créer <OptionChip option={{ name: typed, color: nextColor(options) }} />
-                </button>
-              </li>
-            )}
-            {!typed && options.length === 0 && <li className="hint picker-hint">Tapez un nom pour créer la première option.</li>}
-          </ul>
-        </div>
-      )}
+          >
+            <input
+              // Le menu s'ouvre pour taper : le curseur y va directement.
+              autoFocus
+              aria-label={`Chercher ou créer une option de ${prop.name}`}
+              placeholder="Chercher ou créer une option"
+              value={query}
+              maxLength={100}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setOpen(false);
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                const target = exact ?? (typed ? matches[0] : undefined);
+                if (target) pick(target.id);
+                else void create();
+              }}
+            />
+            <ul>
+              {matches.map((option) => (
+                <li key={option.id}>
+                  <button type="button" className="picker-option" aria-pressed={selected.includes(option.id)} onClick={() => pick(option.id)}>
+                    <OptionChip option={option} />
+                    {selected.includes(option.id) && <span aria-hidden="true">✓</span>}
+                  </button>
+                </li>
+              ))}
+              {typed && !exact && (
+                <li>
+                  <button type="button" className="picker-option" disabled={busy} onClick={() => void create()}>
+                    Créer <OptionChip option={{ name: typed, color: nextColor(options) }} />
+                  </button>
+                </li>
+              )}
+              {!typed && options.length === 0 && <li className="hint picker-hint">Tapez un nom pour créer la première option.</li>}
+            </ul>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

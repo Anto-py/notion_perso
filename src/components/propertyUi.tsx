@@ -6,6 +6,7 @@ export const TYPE_ICONS: Record<PropertyType, string> = {
   text: "Aa",
   url: "🔗",
   date: "📅",
+  status: "◔",
   select: "◉",
   multiselect: "☰",
   checkbox: "☑",
@@ -35,6 +36,7 @@ export function ValueView({ prop, value }: { prop: Property; value: unknown }) {
   }
   if (normalized === undefined) return null;
   switch (prop.type) {
+    case "status":
     case "select": {
       const option = optionById(prop, normalized as string);
       return option ? <OptionChip option={option} /> : null;

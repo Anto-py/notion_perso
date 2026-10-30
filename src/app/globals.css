@@ -606,9 +606,140 @@ a {
   color: var(--ink-soft);
 }
 
+/* Cellules saisissables : la valeur se règle dans le tableau, sans ouvrir
+   l'entrée. La cellule ne rogne pas son éditeur. */
+.db-table td.cell-edit {
+  padding: 0.15rem 0.3rem;
+  overflow: visible;
+}
+
+.db-table td.cell-edit input:not([type="checkbox"]),
+.db-table td.cell-edit select {
+  width: 100%;
+  min-width: 9rem;
+  border-color: transparent;
+  background: transparent;
+}
+
+.db-table td.cell-edit input:not([type="checkbox"]):hover,
+.db-table td.cell-edit input:not([type="checkbox"]):focus,
+.db-table td.cell-edit select:hover,
+.db-table td.cell-edit select:focus {
+  border-color: var(--line);
+  background: var(--bg);
+}
+
+.db-table td.cell-edit input[type="checkbox"] {
+  margin: 0.55rem;
+}
+
+.db-table td.cell-edit .picker,
+.db-table td.cell-edit .picker-value,
+.db-table td.cell-edit .prop-url {
+  width: 100%;
+}
+
 .add-entry {
   margin-top: 0.25rem;
   color: var(--ink-soft);
+}
+
+/* --- Vue Kanban ---------------------------------------------------------- */
+
+.board {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+.board-column {
+  flex: 0 0 16rem;
+  display: flex;
+  flex-direction: column;
+  max-height: 70vh;
+  padding: 0.5rem;
+  background: var(--bg-side);
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+
+.board-column.over {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.board-column-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+
+.board-column-name,
+.board-count {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.board-add {
+  margin-left: auto;
+  padding: 0 0.4rem;
+}
+
+.board-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-height: 3rem;
+  overflow-y: auto;
+}
+
+.board-card {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: grab;
+  touch-action: manipulation;
+}
+
+/* Le lien remplit la carte : cliquer n'importe où ouvre l'entrée, pas
+   seulement sur le titre. */
+.board-card a {
+  display: block;
+  padding: 0.45rem 0.6rem;
+  text-decoration: none;
+}
+
+.board-card.dragging {
+  opacity: 0.4;
+}
+
+/* Trait de dépôt : la carte prendra la place juste avant ou juste après. */
+.board-card.drop-before {
+  box-shadow: 0 -2px 0 var(--accent);
+}
+
+.board-card.drop-after {
+  box-shadow: 0 2px 0 var(--accent);
+}
+
+.drag-overlay-card {
+  width: 15rem;
+  padding: 0.45rem 0.6rem;
+  cursor: grabbing;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 18%);
+}
+
+.board-invite {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: var(--bg-side);
+  border-radius: 8px;
 }
 
 .url-view,
@@ -721,6 +852,13 @@ a {
   text-align: left;
   border-color: transparent;
   background: transparent;
+}
+
+/* Monté dans <body> : position fixe calculée sur le bouton, jamais rogné.
+   Deux classes, pour l'emporter sur .picker-menu quelle que soit l'ordre. */
+.picker-menu.picker-menu-fixed {
+  position: fixed;
+  z-index: 50;
 }
 
 .picker-menu {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  boardOrder,
   changeType,
   convertValue,
   countLosses,
@@ -9,6 +10,8 @@ import {
   moveInOrder,
   nextColor,
   normalizeValue,
+  orderedOptions,
+  withNewOption,
   checkValue,
   sanitizeView,
   sortEntries,
@@ -255,6 +258,94 @@ describe("groupEntries", () => {
     const columns = groupEntries([entry("x", { prop_statut: "s2" }), entry("y", {}), entry("z", { prop_statut: "s_partie" })], statut);
     expect(columns.map((c) => c.name)).toEqual(["Sans statut", "À lire", "En cours", "Traité"]);
     expect(columns.map((c) => c.entries.map((e) => e.id))).toEqual([["y", "z"], [], ["x"], []]);
+  });
+});
+
+describe("boardOrder", () => {
+  const columns = groupEntries(
+    [entry("a", { prop_statut: "s1" }), entry("b", { prop_statut: "s1" }), entry("c", { prop_statut: "s2" }), entry("d", {})],
+    statut,
+  );
+  const all = ["a", "b", "c", "d"];
+
+  it("place avant ou après une carte d'une autre colonne", () => {
+    expect(boardOrder(all, columns, "d", "s1", { before: "a" })).toEqual(["d", "a", "b", "c"]);
+    expect(boardOrder(all, columns, "a", "s2", { after: "c" })).toEqual(["b", "c", "a", "d"]);
+  });
+
+  it("range en fin de colonne, même vide, et à défaut à la fin de la base", () => {
+    expect(boardOrder(all, columns, "d", "s1", { end: true })).toEqual(["a", "b", "d", "c"]);
+    // « Traité » n'a pas de suite : la carte suit « c », dernière carte vue.
+    expect(boardOrder(all, columns, "a", "s3", { end: true })).toEqual(["b", "c", "a", "d"]);
+    // Colonne vide au milieu : la carte se place avant la colonne suivante.
+    const sparse = groupEntries([entry("c", { prop_statut: "s2" }), entry("d", {})], statut);
+    expect(boardOrder(["c", "d"], sparse, "d", "s1", { end: true })).toEqual(["d", "c"]);
+  });
+
+  it("laisse l'ordre des entrées masquées par un filtre", () => {
+    // b est filtrée : seule a reste visible dans « À lire ».
+    const filtered = groupEntries([entry("a", { prop_statut: "s1" }), entry("c", { prop_statut: "s2" })], statut);
+    expect(boardOrder(all, filtered, "c", "s1", { end: true })).toEqual(["a", "c", "b", "d"]);
+  });
+
+  it("ne change rien si l'ancre est inconnue ou la carte elle-même", () => {
+    expect(boardOrder(all, columns, "b", "s1", { before: "zz" })).toEqual(all);
+    expect(boardOrder(all, columns, "b", "s1", { before: "b" })).toEqual(all);
+    expect(boardOrder(all, columns, "zz", "s1", { before: "a" })).toEqual(all);
+  });
+});
+
+describe("propriété Statut", () => {
+  const etat: Property = {
+    id: "prop_etat",
+    name: "État",
+    type: "status",
+    options: [
+      { id: "b", name: "Bloqué", color: "red", group: "in_progress" },
+      { id: "a", name: "À faire", color: "gray", group: "todo" },
+      { id: "c", name: "Fini", color: "green", group: "complete" },
+    ],
+  };
+
+  it("lit et regroupe ses options dans l'ordre des groupes", () => {
+    expect(orderedOptions(etat).map((option) => option.name)).toEqual(["À faire", "Bloqué", "Fini"]);
+    const columns = groupEntries([entry("x", { prop_etat: "c" })], etat);
+    expect(columns.map((column) => column.name)).toEqual(["Sans état", "À faire", "Bloqué", "Fini"]);
+    expect(columns[3].entries.map((e) => e.id)).toEqual(["x"]);
+  });
+
+  it("valide le groupe d'une option, et pose « à faire » s'il manque", () => {
+    const checked = validateProperties([
+      {
+        id: "prop_etat",
+        name: "État",
+        type: "status",
+        options: [
+          { id: "a", name: "À faire", color: "gray" },
+          { id: "c", name: "Fini", color: "green", group: "complete" },
+        ],
+      },
+    ]);
+    expect(typeof checked).not.toBe("string");
+    expect((checked as Property[])[0].options?.map((option) => option.group)).toEqual(["todo", "complete"]);
+    const wrong = validateProperties([{ id: "p", name: "État", type: "status", options: [{ id: "a", name: "X", color: "gray", group: "ailleurs" }] }]);
+    expect(typeof wrong).toBe("string");
+  });
+
+  it("change de type sans perdre les options, et pose ou retire le groupe", () => {
+    const fromSelect = changeType({ id: "p", name: "Statut", type: "select", options: [{ id: "s1", name: "À lire", color: "gray" }] }, "status", []);
+    expect(fromSelect.options).toEqual([{ id: "s1", name: "À lire", color: "gray", group: "todo" }]);
+    const back = changeType(etat, "select", []);
+    expect(back.options?.every((option) => option.group === undefined)).toBe(true);
+    expect(convertValue(etat, { ...etat, id: "prop_etat" }, "c")).toBe("c");
+  });
+
+  it("ajoute une option de statut dans le groupe « à faire »", () => {
+    const added = withNewOption([etat], etat.id, "Nouveau", () => "opt_x");
+    expect(added?.option).toEqual({ id: "opt_x", name: "Nouveau", color: "brown", group: "todo" });
+    expect(added?.properties[0].options).toHaveLength(4);
+    expect(withNewOption([etat], etat.id, "  fini ")).toBeNull();
+    expect(withNewOption([etat], "prop_inconnue", "Nouveau")).toBeNull();
   });
 });
 

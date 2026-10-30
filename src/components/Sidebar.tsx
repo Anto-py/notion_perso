@@ -131,7 +131,10 @@ export function Sidebar({ rows, username }: Props) {
             {message}
           </p>
         )}
-        <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
+        {/* id explicite : l'identifiant d'accessibilité de dnd-kit est sinon
+            tiré d'un compteur global, différent au rendu serveur et au rendu
+            client, d'où un avertissement d'hydratation. */}
+        <DndContext id="tree-dnd" sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
           <nav className="tree" aria-label="Pages">
             {tree.length === 0 ? (
               <p className="tree-empty">Aucune page.</p>

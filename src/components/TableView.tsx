@@ -1,16 +1,27 @@
 "use client";
 // Vue Tableau : une ligne par entrée, une colonne par propriété, le titre en
-// tête. Cliquer une ligne ouvre l'entrée ; un lien dans une cellule (Source)
-// s'ouvre lui-même, sans ouvrir l'entrée.
+// tête. Chaque cellule porte l'éditeur de son type : la valeur se règle là,
+// sans ouvrir l'entrée. Cliquer ailleurs sur la ligne ouvre l'entrée.
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { EntryRow, Property } from "@/lib/properties";
+import type { EntryRow, Property, Value } from "@/lib/properties";
 import { label } from "@/lib/tree";
-import { TYPE_ICONS, ValueView } from "./propertyUi";
+import { PropertyInput } from "./PropertyInput";
+import { TYPE_ICONS } from "./propertyUi";
 
-type Props = { properties: Property[]; entries: EntryRow[]; filtered: boolean; onCreate: () => void };
+type Props = {
+  properties: Property[];
+  entries: EntryRow[];
+  filtered: boolean;
+  onCreate: () => void;
+  onSave: (entryId: string, propId: string, value: Value | null) => void;
+  onCreateOption: (prop: Property, name: string) => Promise<string | null>;
+};
 
-export function TableView({ properties, entries, filtered, onCreate }: Props) {
+// Un clic sur un élément de saisie ne doit pas ouvrir l'entrée.
+const INTERACTIVE = "a, button, input, select, textarea, label, .picker";
+
+export function TableView({ properties, entries, filtered, onCreate, onSave, onCreateOption }: Props) {
   const router = useRouter();
   return (
     <div className="table-wrap">
@@ -38,7 +49,7 @@ export function TableView({ properties, entries, filtered, onCreate }: Props) {
             <tr
               key={entry.id}
               onClick={(event) => {
-                if ((event.target as HTMLElement).closest("a")) return;
+                if ((event.target as HTMLElement).closest(INTERACTIVE)) return;
                 router.push(`/page/${entry.id}`);
               }}
             >
@@ -46,8 +57,13 @@ export function TableView({ properties, entries, filtered, onCreate }: Props) {
                 <Link href={`/page/${entry.id}`}>{label(entry)}</Link>
               </td>
               {properties.map((prop) => (
-                <td key={prop.id}>
-                  <ValueView prop={prop} value={entry.values[prop.id]} />
+                <td key={prop.id} className="cell-edit">
+                  <PropertyInput
+                    prop={prop}
+                    value={entry.values[prop.id]}
+                    onSave={(value) => onSave(entry.id, prop.id, value)}
+                    onCreate={(name) => onCreateOption(prop, name)}
+                  />
                 </td>
               ))}
             </tr>
