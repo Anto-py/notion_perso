@@ -2491,3 +2491,171 @@ button.link.icon-danger {
     margin: 0 -1rem 1rem;
   }
 }
+
+/* --- Import Notion -------------------------------------------------------- */
+
+.import-page {
+  max-width: 50rem;
+}
+
+.import-intro {
+  margin: 0 0 0.8rem;
+  line-height: 1.5;
+}
+
+.import-hint {
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+
+.import {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin-top: 1.4rem;
+}
+
+.import-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 2rem 1rem;
+  border: 2px dashed var(--line);
+  border-radius: var(--r-surface);
+  background: var(--bg-side);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.import-drop:hover,
+.import-drop.over {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.import-drop:focus-within {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.import-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.import-drop-title {
+  font-family: var(--font-label);
+  font-weight: 500;
+  font-size: 1rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.import-drop-hint {
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+
+.import-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.import-submit {
+  padding: 0.6rem 1.4rem;
+  font-size: 0.95rem;
+}
+
+.import-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.import-progress progress {
+  width: 9rem;
+  accent-color: var(--accent);
+}
+
+.import-report {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin-top: 0.6rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-surface);
+  background: var(--bg-side);
+}
+
+.import-report h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.import-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.import-counts div {
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--r-inner);
+  background: var(--bg);
+}
+
+.import-counts dt {
+  font-family: var(--font-label);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-soft);
+}
+
+.import-counts dd {
+  margin: 0.1rem 0 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.import-open {
+  margin: 0;
+}
+
+.import-open a {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.import-detail h3 {
+  margin: 0 0 0.3rem;
+  font-family: var(--font-label);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.import-detail ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.import-count {
+  color: var(--ink);
+  font-weight: 600;
+}

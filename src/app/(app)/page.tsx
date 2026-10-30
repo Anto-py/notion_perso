@@ -23,7 +23,12 @@ async function Recent() {
   const user = await getCurrentUser();
   const pages = (await listRecent()).filter((page) => canAccess(user, page, "read"));
   if (pages.length === 0) {
-    return <p>Aucune page pour l&apos;instant. Créez la première avec « + Nouvelle page », dans la barre de gauche.</p>;
+    return (
+      <p>
+        Aucune page pour l&apos;instant. Créez la première avec « + Nouvelle page », dans la barre de gauche, ou{" "}
+        <Link href="/import">importez un export Notion</Link>.
+      </p>
+    );
   }
   return (
     <>

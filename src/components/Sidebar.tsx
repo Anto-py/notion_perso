@@ -171,6 +171,9 @@ export function Sidebar({ rows, username, inboxCount }: Props) {
           </DndContext>
         </SearchBar>
         <div className="sidebar-footer">
+          <Link href="/import" className={pathname === "/import" ? "active" : undefined}>
+            Importer
+          </Link>
           <Link href="/trash" className={pathname === "/trash" ? "active" : undefined}>
             Corbeille
           </Link>
