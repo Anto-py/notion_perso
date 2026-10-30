@@ -715,12 +715,45 @@ a {
   touch-action: manipulation;
 }
 
-/* Le lien remplit la carte : cliquer n'importe où ouvre l'entrée, pas
-   seulement sur le titre. */
-.board-card a {
+/* Le lien remplit le haut de la carte : cliquer sur le titre ouvre l'entrée. */
+.board-card-title {
   display: block;
   padding: 0.45rem 0.6rem;
   text-decoration: none;
+}
+
+.board-card-title:hover {
+  text-decoration: underline;
+}
+
+/* Valeurs des propriétés affichées, sous le titre. */
+.board-card-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0 0.6rem 0.5rem;
+  font-size: 0.85rem;
+}
+
+.board-card-field {
+  display: grid;
+  grid-template-columns: minmax(0, 0.45fr) minmax(0, 1fr);
+  gap: 0.4rem;
+  align-items: baseline;
+}
+
+.board-card-field dt {
+  overflow: hidden;
+  color: var(--ink-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-card-field dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .board-card.dragging {

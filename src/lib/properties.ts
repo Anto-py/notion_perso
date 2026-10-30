@@ -3,40 +3,33 @@
 // migration des valeurs) comme par le navigateur (affichage, filtre, tri,
 // confirmation avant une perte de valeurs). Formats jsonb : BRAINSTORMING §3-4.
 
-export const PROPERTY_TYPES = ["text", "url", "date", "status", "select", "multiselect", "checkbox"] as const;
+export const PROPERTY_TYPES = ["text", "url", "date", "select", "multiselect", "checkbox"] as const;
 export type PropertyType = (typeof PROPERTY_TYPES)[number];
 
 export const TYPE_LABELS: Record<PropertyType, string> = {
   text: "Texte",
   url: "Lien",
   date: "Date",
-  status: "Statut",
   select: "Sélection",
   multiselect: "Sélection multiple",
   checkbox: "Case à cocher",
 };
 
-// Une propriété « Statut » est une sélection dont les options sont rangées
-// dans trois groupes fixes, dans cet ordre : c'est ce qui la distingue d'une
-// simple sélection et ce qui donne son sens au Kanban (colonnes par groupe).
-export const STATUS_GROUPS = ["todo", "in_progress", "complete"] as const;
-export type StatusGroup = (typeof STATUS_GROUPS)[number];
-
-export const STATUS_GROUP_LABELS: Record<StatusGroup, string> = {
-  todo: "À faire",
-  in_progress: "En cours",
-  complete: "Terminé",
-};
-
 // Les types qui portent une liste d'options.
 export function isOptionType(type: PropertyType): boolean {
-  return type === "select" || type === "multiselect" || type === "status";
+  return type === "select" || type === "multiselect";
 }
 
-// Types à valeur unique choisie dans une liste d'options : ceux qui peuvent
-// servir de colonnes Kanban.
+// Types à valeur unique choisie dans une liste d'options.
 export function isSingleOptionType(type: PropertyType): boolean {
-  return type === "select" || type === "status";
+  return type === "select";
+}
+
+// Types sur lesquels un Kanban peut se regrouper : ceux dont les valeurs sont
+// discrètes (une option, une combinaison d'options, coché ou non). Le texte
+// libre, les liens et les dates restent hors du Kanban.
+export function isGroupableType(type: PropertyType): boolean {
+  return type === "select" || type === "multiselect" || type === "checkbox";
 }
 
 export const OPTION_COLORS = ["gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red"] as const;
@@ -54,8 +47,7 @@ export const COLOR_LABELS: Record<OptionColor, string> = {
   red: "Rouge",
 };
 
-// group : présent uniquement sur les options d'une propriété « Statut ».
-export type SelectOption = { id: string; name: string; color: OptionColor; group?: StatusGroup };
+export type SelectOption = { id: string; name: string; color: OptionColor };
 export type Property = { id: string; name: string; type: PropertyType; options?: SelectOption[] };
 
 // text, url, date (AAAA-MM-JJ), select (id d'option) : chaîne ;
@@ -81,7 +73,6 @@ export const OPS_BY_TYPE: Record<PropertyType, FilterOp[]> = {
   text: ["contains", "is_empty", "is_not_empty"],
   url: ["contains", "is_empty", "is_not_empty"],
   date: ["is", "before", "after", "is_empty", "is_not_empty"],
-  status: ["is", "is_not", "is_empty", "is_not_empty"],
   select: ["is", "is_not", "is_empty", "is_not_empty"],
   multiselect: ["contains", "not_contains", "is_empty", "is_not_empty"],
   checkbox: ["checked", "unchecked"],
@@ -108,10 +99,18 @@ export function opNeedsValue(op: FilterOp): boolean {
 
 export type Filter = { prop: string; op: FilterOp; value?: string };
 export type Sort = { prop: string; dir: "asc" | "desc" };
-// group_by : id d'une propriété select (vue Kanban). hidden : ids des
-// propriétés absentes du tableau, toujours modifiables dans l'entrée. Une
-// seule vue par base.
-export type View = { kind: "table" | "board"; group_by: string | null; filters: Filter[]; sorts: Sort[]; hidden: string[] };
+// group_by : id d'une propriété discrète (vue Kanban). hidden : ids des
+// propriétés absentes de la vue (colonnes du tableau, champs des cartes du
+// Kanban), toujours modifiables dans l'entrée. hidden_columns : colonnes du
+// Kanban masquées, par propriété de regroupement. Une seule vue par base.
+export type View = {
+  kind: "table" | "board";
+  group_by: string | null;
+  filters: Filter[];
+  sorts: Sort[];
+  hidden: string[];
+  hidden_columns: Record<string, string[]>;
+};
 export type DbConfig = { properties: Property[]; view: View };
 
 // Une entrée telle que la lisent les vues (dates en ISO).
@@ -168,31 +167,21 @@ export function localId(prefix: string): string {
 }
 
 export function emptyConfig(): DbConfig {
-  return { properties: [], view: { kind: "table", group_by: null, filters: [], sorts: [], hidden: [] } };
+  return { properties: [], view: { kind: "table", group_by: null, filters: [], sorts: [], hidden: [], hidden_columns: {} } };
 }
 
-// Options de départ d'un statut : un statut sans option ne range rien, et le
-// Kanban n'y montrerait qu'une colonne « Sans … ».
-export function defaultStatusOptions(makeId: (prefix: string) => string = localId): SelectOption[] {
+// Options de départ d'une sélection créée pour grouper un Kanban : sans
+// option, elle n'aurait qu'une colonne « Sans … ».
+export function defaultSelectOptions(makeId: (prefix: string) => string = localId): SelectOption[] {
   return [
-    { id: makeId("opt"), name: "À faire", color: "gray", group: "todo" },
-    { id: makeId("opt"), name: "En cours", color: "yellow", group: "in_progress" },
-    { id: makeId("opt"), name: "Terminé", color: "green", group: "complete" },
+    { id: makeId("opt"), name: "À faire", color: "gray" },
+    { id: makeId("opt"), name: "En cours", color: "yellow" },
+    { id: makeId("opt"), name: "Terminé", color: "green" },
   ];
 }
 
 export function optionById(prop: Property, id: string): SelectOption | undefined {
   return prop.options?.find((option) => option.id === id);
-}
-
-// Options dans l'ordre où on les lit : pour un statut, groupées (à faire,
-// en cours, terminé), l'ordre interne à chaque groupe étant conservé.
-export function orderedOptions(prop: Property): SelectOption[] {
-  const options = prop.options ?? [];
-  if (prop.type !== "status") return options;
-  return [...options].sort(
-    (a, b) => STATUS_GROUPS.indexOf(a.group ?? "todo") - STATUS_GROUPS.indexOf(b.group ?? "todo"),
-  );
 }
 
 function optionByName(prop: Property, name: string): SelectOption | undefined {
@@ -241,7 +230,7 @@ export function validateProperties(raw: unknown): Property[] | string {
     names.add(fold(name));
     const prop: Property = { id, name, type: type as PropertyType };
     if (isOptionType(prop.type)) {
-      const options = validateOptions(item.options ?? [], prop.type);
+      const options = validateOptions(item.options ?? []);
       if (typeof options === "string") return `${name} : ${options}`;
       prop.options = options;
     }
@@ -250,7 +239,7 @@ export function validateProperties(raw: unknown): Property[] | string {
   return properties;
 }
 
-function validateOptions(raw: unknown, type: PropertyType): SelectOption[] | string {
+function validateOptions(raw: unknown): SelectOption[] | string {
   if (!Array.isArray(raw)) return "liste d'options attendue";
   if (raw.length > LIMITS.options) return `au plus ${LIMITS.options} options`;
   const ids = new Set<string>();
@@ -266,14 +255,7 @@ function validateOptions(raw: unknown, type: PropertyType): SelectOption[] | str
     if (typeof color !== "string" || !(OPTION_COLORS as readonly string[]).includes(color)) return "couleur d'option inconnue";
     ids.add(id);
     names.add(fold(name));
-    const option: SelectOption = { id, name, color: color as OptionColor };
-    // Un statut range chaque option dans un groupe ; une sélection n'en a pas.
-    if (type === "status") {
-      const group = item.group ?? "todo";
-      if (typeof group !== "string" || !(STATUS_GROUPS as readonly string[]).includes(group)) return "groupe d'option inconnu";
-      option.group = group as StatusGroup;
-    }
-    options.push(option);
+    options.push({ id, name, color: color as OptionColor });
   }
   return options;
 }
@@ -283,8 +265,11 @@ function validateOptions(raw: unknown, type: PropertyType): SelectOption[] | str
 // sans erreur. Une vue Kanban groupe par défaut sur la première sélection.
 export function sanitizeView(raw: unknown, properties: readonly Property[]): View {
   const view = isRecord(raw) ? raw : {};
-  const groupables = properties.filter((prop) => isSingleOptionType(prop.type));
-  const groupBy = groupables.some((prop) => prop.id === view.group_by) ? (view.group_by as string) : (groupables[0]?.id ?? null);
+  const groupables = properties.filter((prop) => isGroupableType(prop.type));
+  // À défaut de choix enregistré, une Sélection fait le meilleur regroupement
+  // (une colonne par option) ; sinon la première propriété discrète.
+  const fallback = groupables.find((prop) => isSingleOptionType(prop.type)) ?? groupables[0];
+  const groupBy = groupables.some((prop) => prop.id === view.group_by) ? (view.group_by as string) : (fallback?.id ?? null);
 
   const filters: Filter[] = [];
   for (const item of Array.isArray(view.filters) ? view.filters : []) {
@@ -306,7 +291,15 @@ export function sanitizeView(raw: unknown, properties: readonly Property[]): Vie
     (id, index, all): id is string => typeof id === "string" && all.indexOf(id) === index && properties.some((prop) => prop.id === id),
   );
 
-  return { kind: view.kind === "board" ? "board" : "table", group_by: groupBy, filters, sorts, hidden };
+  const hiddenColumns: Record<string, string[]> = {};
+  if (isRecord(view.hidden_columns)) {
+    for (const [propId, keys] of Object.entries(view.hidden_columns)) {
+      if (!properties.some((prop) => prop.id === propId) || !Array.isArray(keys)) continue;
+      hiddenColumns[propId] = keys.filter((key, index, all): key is string => typeof key === "string" && all.indexOf(key) === index);
+    }
+  }
+
+  return { kind: view.kind === "board" ? "board" : "table", group_by: groupBy, filters, sorts, hidden, hidden_columns: hiddenColumns };
 }
 
 function sanitizeFilter(raw: unknown, properties: readonly Property[]): Filter | null {
@@ -327,10 +320,32 @@ function sanitizeFilter(raw: unknown, properties: readonly Property[]): Filter |
   return { prop: prop.id, op, value };
 }
 
+// Configurations écrites avant la suppression du type « Statut » : le type
+// devient « Sélection » et les options reprennent l'ordre qu'elles avaient à
+// l'écran (groupes à faire, en cours, terminé), avant que validateOptions ne
+// reconstruise chaque option sans groupe. Une modification ultérieure de la
+// base réécrit la configuration migrée.
+const LEGACY_STATUS_GROUPS = ["todo", "in_progress", "complete"];
+
+function legacyGroupRank(option: unknown): number {
+  const group = isRecord(option) && typeof option.group === "string" ? option.group : "";
+  const rank = LEGACY_STATUS_GROUPS.indexOf(group);
+  return rank === -1 ? LEGACY_STATUS_GROUPS.length : rank;
+}
+
+function migrateLegacyProperties(raw: unknown): unknown {
+  if (!Array.isArray(raw)) return raw;
+  return raw.map((item) => {
+    if (!isRecord(item) || item.type !== "status") return item;
+    const options = Array.isArray(item.options) ? [...item.options].sort((a, b) => legacyGroupRank(a) - legacyGroupRank(b)) : item.options;
+    return { ...item, type: "select", options };
+  });
+}
+
 // Lecture tolérante d'une configuration stockée (déjà validée à l'écriture).
 export function parseConfig(raw: unknown): DbConfig {
   const config = isRecord(raw) ? raw : {};
-  const checked = validateProperties(config.properties ?? []);
+  const checked = validateProperties(migrateLegacyProperties(config.properties ?? []));
   const properties = typeof checked === "string" ? [] : checked;
   return { properties, view: sanitizeView(config.view, properties) };
 }
@@ -346,7 +361,6 @@ export function normalizeValue(prop: Property, raw: unknown): Value | undefined 
       return typeof raw === "string" && raw.trim() !== "" ? raw : undefined;
     case "date":
       return typeof raw === "string" && isIsoDate(raw) ? raw : undefined;
-    case "status":
     case "select":
       return typeof raw === "string" && optionById(prop, raw) ? raw : undefined;
     case "multiselect": {
@@ -381,7 +395,6 @@ export function checkValue(prop: Property, raw: unknown): string | null {
       return typeof raw === "string" && raw.length <= LIMITS.url ? null : `${prop.name} : lien trop long`;
     case "date":
       return raw === "" || (typeof raw === "string" && isIsoDate(raw)) ? null : `${prop.name} : date invalide`;
-    case "status":
     case "select":
       return raw === "" || (typeof raw === "string" && optionById(prop, raw)) ? null : `${prop.name} : option inconnue, rechargez la page`;
     case "multiselect":
@@ -401,7 +414,6 @@ export function valueText(prop: Property, value: unknown): string {
   switch (prop.type) {
     case "checkbox":
       return "Oui";
-    case "status":
     case "select":
       return optionById(prop, normalized as string)?.name ?? "";
     case "multiselect":
@@ -440,8 +452,8 @@ export function convertValue(from: Property, to: Property, value: unknown): Valu
   if (from.type === to.type) return normalizeValue(to, value);
   const current = normalizeValue(from, value);
   if (current === undefined) return undefined;
-  // Une valeur unique choisie (sélection ou statut) garde son option par id,
-  // sinon par nom : le passage d'un type à l'autre ne perd rien.
+  // Une valeur unique choisie garde son option par id, sinon par nom : le
+  // passage d'un type à l'autre ne perd rien.
   if (isSingleOptionType(from.type) && isSingleOptionType(to.type)) {
     return normalizeValue(to, mapOption(from, to, current as string));
   }
@@ -460,7 +472,6 @@ export function convertValue(from: Property, to: Property, value: unknown): Valu
       return isIsoDate(text) ? text : undefined;
     case "checkbox":
       return TRUTHY.has(fold(text)) ? true : undefined;
-    case "status":
     case "select":
       return optionByName(to, text)?.id;
     case "multiselect":
@@ -519,25 +530,9 @@ export function changeType(
 ): Property {
   const next: Property = { id: prop.id, name: prop.name, type };
   if (!isOptionType(type)) return next;
-  // Un statut range toujours ses options dans un groupe (à faire par défaut) ;
-  // une sélection n'en porte pas, même si elle vient d'un statut.
-  // La liste n'est recopiée que si un groupe doit apparaître ou disparaître :
-  // entre deux types qui n'en portent pas, elle reste la même.
-  const settle = (options: SelectOption[]): SelectOption[] => {
-    if (type === "status") {
-      return options.every((option) => option.group) ? options : options.map((option) => ({ ...option, group: option.group ?? "todo" }));
-    }
-    if (options.every((option) => option.group === undefined)) return options;
-    return options.map((option) => {
-      const copy = { ...option };
-      delete copy.group;
-      return copy;
-    });
-  };
-  next.options = settle(prop.options ?? optionsFromValues(prop, type, valuesList, makeId));
-  // Qu'il vienne d'une sélection vide ou d'un champ jamais rempli, un statut
-  // sans option reçoit celles de départ.
-  if (type === "status" && next.options.length === 0) next.options = defaultStatusOptions(makeId);
+  // D'une propriété à options vers une autre, la liste est gardée telle
+  // quelle ; depuis un texte, les valeurs saisies font les options.
+  next.options = prop.options ?? optionsFromValues(prop, type, valuesList, makeId);
   return next;
 }
 
@@ -556,16 +551,13 @@ function optionsFromValues(
     for (const name of type === "multiselect" ? splitNames(text) : [text]) {
       if (!name || name.length > LIMITS.name || seen.has(fold(name)) || options.length >= LIMITS.options) continue;
       seen.add(fold(name));
-      const option: SelectOption = { id: makeId("opt"), name, color: nextColor(options) };
-      if (type === "status") option.group = "todo";
-      options.push(option);
+      options.push({ id: makeId("opt"), name, color: nextColor(options) });
     }
   }
   return options;
 }
 
 // Liste complète de propriétés après l'ajout d'une option à l'une d'elles.
-// Une option de statut naît dans le groupe « À faire ».
 export function withNewOption(
   properties: readonly Property[],
   propId: string,
@@ -578,7 +570,6 @@ export function withNewOption(
   if (optionByName(prop, trimmed)) return null;
   const options = prop.options ?? [];
   const option: SelectOption = { id: makeId("opt"), name: trimmed, color: nextColor(options) };
-  if (prop.type === "status") option.group = "todo";
   return {
     option,
     properties: properties.map((p) => (p.id === propId ? { ...p, options: [...options, option] } : p)),
@@ -646,16 +637,15 @@ function sortKey(propId: string, properties: readonly Property[]): SortKey | nul
         const value = normalizeValue(prop, entry.values[prop.id]);
         return typeof value === "string" ? Date.parse(value) : undefined;
       };
-    // Une sélection se trie dans l'ordre de ses options, pas par ordre alphabétique ;
-    // un statut, dans l'ordre de ses colonnes (groupes puis options).
-    case "status":
+    // Une sélection se trie dans l'ordre de ses options, pas par ordre
+    // alphabétique : c'est aussi l'ordre des colonnes du Kanban.
     case "select":
     case "multiselect":
       return (entry) => {
         const value = normalizeValue(prop, entry.values[prop.id]);
         if (value === undefined) return undefined;
         const ids = Array.isArray(value) ? value : [value as string];
-        const order = orderedOptions(prop);
+        const order = prop.options ?? [];
         return Math.min(...ids.map((id) => order.findIndex((option) => option.id === id)));
       };
     default:
@@ -690,7 +680,13 @@ export function sortEntries(entries: readonly EntryRow[], sorts: readonly Sort[]
   });
 }
 
-export type Column = { key: string | null; name: string; color: OptionColor | null; entries: EntryRow[] };
+// value : ce qu'un dépôt dans cette colonne écrit dans l'entrée (id d'option,
+// liste d'ids, true), null pour la colonne « Sans … » et « Non coché ».
+export type Column = { key: string | null; name: string; color: OptionColor | null; value: Value | null; entries: EntryRow[] };
+
+// Clé de la colonne « Sans … » quand on la range dans hidden_columns, dont
+// les clés sont des chaînes (null n'en est pas une).
+export const NO_COLUMN = "__none__";
 
 // « Statut » → « Sans statut » ; un sigle (« TVA ») garde sa casse.
 function withoutLabel(name: string): string {
@@ -698,17 +694,67 @@ function withoutLabel(name: string): string {
   return `Sans ${lower}`;
 }
 
-// Colonnes Kanban : « Sans … » d'abord, puis une par option dans l'ordre des
-// options (groupées pour un statut), même vide. Les entrées gardent l'ordre reçu.
+// Ordre canonique des ids d'une multi-sélection : celui des options, pour que
+// deux entrées qui portent les mêmes valeurs tombent dans la même colonne.
+function canonicalIds(prop: Property, ids: readonly string[]): string[] {
+  const order = new Map((prop.options ?? []).map((option, index) => [option.id, index]));
+  return [...ids].sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
+}
+
+// Colonnes Kanban selon la propriété de regroupement.
+// - Sélection : « Sans … » puis une colonne par option, même vide.
+// - Sélection multiple : « Sans … » puis une colonne par combinaison de
+//   valeurs présente, rangée par nom.
+// - Case à cocher : « Non coché » puis « Coché ».
+// Les entrées gardent l'ordre reçu.
 export function groupEntries(entries: readonly EntryRow[], prop: Property): Column[] {
-  const columns: Column[] = [
-    { key: null, name: withoutLabel(prop.name), color: null, entries: [] },
-    ...orderedOptions(prop).map((option) => ({ key: option.id, name: option.name, color: option.color, entries: [] as EntryRow[] })),
-  ];
-  const byKey = new Map(columns.map((column) => [column.key, column]));
+  const columns: Column[] = [];
+  const byKey = new Map<string | null, Column>();
+  const add = (key: string | null, name: string, color: OptionColor | null, value: Value | null): Column => {
+    const column = { key, name, color, value, entries: [] as EntryRow[] };
+    columns.push(column);
+    byKey.set(key, column);
+    return column;
+  };
+
+  if (prop.type === "checkbox") {
+    add("false", "Non coché", null, null);
+    add("true", "Coché", null, true);
+  } else {
+    add(null, withoutLabel(prop.name), null, null);
+    if (prop.type === "select") {
+      for (const option of prop.options ?? []) add(option.id, option.name, option.color, option.id);
+    }
+  }
+
   for (const entry of entries) {
     const value = normalizeValue(prop, entry.values[prop.id]);
-    (byKey.get(typeof value === "string" ? value : null) ?? columns[0]).entries.push(entry);
+    let column: Column | undefined;
+    if (prop.type === "checkbox") {
+      column = byKey.get(value === true ? "true" : "false");
+    } else if (prop.type === "multiselect") {
+      const ids = Array.isArray(value) ? canonicalIds(prop, value) : [];
+      if (ids.length === 0) {
+        column = byKey.get(null);
+      } else {
+        const key = ids.join(",");
+        column =
+          byKey.get(key) ??
+          add(key, ids.map((id) => optionById(prop, id)?.name ?? "").join(", "), null, ids);
+      }
+    } else {
+      column = byKey.get(typeof value === "string" ? value : null) ?? byKey.get(null);
+    }
+    column?.entries.push(entry);
+  }
+
+  // Les combinaisons d'une multi-sélection ne viennent pas du schéma : on les
+  // range par nom, après « Sans … », pour que leur ordre ne dépende pas de
+  // l'ordre d'arrivée des entrées.
+  if (prop.type === "multiselect") {
+    const [first, ...rest] = columns;
+    rest.sort((a, b) => collator.compare(a.name, b.name));
+    return [first, ...rest];
   }
   return columns;
 }

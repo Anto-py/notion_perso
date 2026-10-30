@@ -4,14 +4,15 @@
 // après un temps de calme.
 import { useState } from "react";
 import {
+  isGroupableType,
   isOptionType,
-  isSingleOptionType,
+  NO_COLUMN,
   OP_LABELS,
   OPS_BY_TYPE,
   opNeedsValue,
-  orderedOptions,
   SORT_BUILTINS,
   TITLE_PROP,
+  type Column,
   type Filter,
   type FilterOp,
   type Property,
@@ -19,14 +20,18 @@ import {
   type View,
 } from "@/lib/properties";
 
-type Props = { properties: Property[]; view: View; onChange: (view: View, delay?: number) => void };
+type Props = { properties: Property[]; view: View; columns: Column[]; onChange: (view: View, delay?: number) => void };
 
 const TYPING_DELAY = 500;
 
-export function ViewControls({ properties, view, onChange }: Props) {
+export function ViewControls({ properties, view, columns, onChange }: Props) {
   const [columnsOpen, setColumnsOpen] = useState(false);
+  const [boardColumnsOpen, setBoardColumnsOpen] = useState(false);
   const filterable = [TITLE_PROP, ...properties];
-  const groupables = properties.filter((prop) => isSingleOptionType(prop.type));
+  const groupables = properties.filter((prop) => isGroupableType(prop.type));
+  const groupProp = groupables.find((prop) => prop.id === view.group_by) ?? groupables[0];
+  const hiddenColumnKeys = new Set(groupProp ? (view.hidden_columns[groupProp.id] ?? []) : []);
+  const hiddenColumnCount = columns.filter((column) => hiddenColumnKeys.has(column.key ?? NO_COLUMN)).length;
   const sortable = [
     ...Object.entries(SORT_BUILTINS).map(([id, name]) => ({ id, name })),
     ...properties.map(({ id, name }) => ({ id, name })),
@@ -46,11 +51,17 @@ export function ViewControls({ properties, view, onChange }: Props) {
     onChange({ ...view, hidden: shown ? view.hidden.filter((id) => id !== propId) : [...view.hidden, propId] });
   }
 
+  function setColumnShown(propId: string, key: string, shown: boolean) {
+    const current = view.hidden_columns[propId] ?? [];
+    const next = shown ? current.filter((item) => item !== key) : [...current, key];
+    onChange({ ...view, hidden_columns: { ...view.hidden_columns, [propId]: next } });
+  }
+
   return (
     <div className="view-controls">
       {view.kind === "board" && groupables.length > 0 && (
         <div className="control-row">
-          <span className="control-label">Colonnes</span>
+          <span className="control-label">Regroupement</span>
           <select
             aria-label="Propriété de regroupement"
             value={view.group_by ?? groupables[0].id}
@@ -122,15 +133,37 @@ export function ViewControls({ properties, view, onChange }: Props) {
           </div>
         ))}
 
-      {view.kind === "table" && columnsOpen && properties.length > 0 && (
-        <div className="control-row" role="group" aria-label="Colonnes affichées">
-          <span className="control-label">Colonnes</span>
+      {columnsOpen && properties.length > 0 && (
+        <div className="control-row" role="group" aria-label={view.kind === "table" ? "Colonnes affichées" : "Champs affichés sur les cartes"}>
+          <span className="control-label">{view.kind === "table" ? "Colonnes" : "Champs"}</span>
           {properties.map((prop) => (
             <label key={prop.id} className="column-toggle">
               <input type="checkbox" checked={!view.hidden.includes(prop.id)} onChange={(event) => setShown(prop.id, event.target.checked)} />
               {prop.name}
             </label>
           ))}
+          {view.kind === "board" && groupProp && (
+            <span className="hint">La propriété de regroupement fait les colonnes et reste absente des cartes.</span>
+          )}
+        </div>
+      )}
+
+      {view.kind === "board" && groupProp && boardColumnsOpen && (
+        <div className="control-row" role="group" aria-label="Colonnes du Kanban">
+          <span className="control-label">Colonnes</span>
+          {columns.map((column) => {
+            const key = column.key ?? NO_COLUMN;
+            return (
+              <label key={key} className="column-toggle">
+                <input
+                  type="checkbox"
+                  checked={!hiddenColumnKeys.has(key)}
+                  onChange={(event) => setColumnShown(groupProp.id, key, event.target.checked)}
+                />
+                {column.name}
+              </label>
+            );
+          })}
         </div>
       )}
 
@@ -143,10 +176,19 @@ export function ViewControls({ properties, view, onChange }: Props) {
             + Tri
           </button>
         )}
-        {view.kind === "table" && properties.length > 0 && (
+        {view.kind === "board" && groupProp && (
+          <button type="button" className="ghost" aria-expanded={boardColumnsOpen} onClick={() => setBoardColumnsOpen(!boardColumnsOpen)}>
+            Colonnes du Kanban
+            {hiddenColumnCount > 0 && ` (${hiddenColumnCount} ${hiddenColumnCount > 1 ? "masquées" : "masquée"})`}
+          </button>
+        )}
+        {properties.length > 0 && (
           <button type="button" className="ghost" aria-expanded={columnsOpen} onClick={() => setColumnsOpen(!columnsOpen)}>
-            Colonnes
-            {view.hidden.length > 0 && ` (${view.hidden.length} ${view.hidden.length > 1 ? "masquées" : "masquée"})`}
+            {view.kind === "table" ? "Colonnes" : "Champs des cartes"}
+            {view.hidden.length > 0 &&
+              ` (${view.hidden.length} ${
+                view.kind === "table" ? (view.hidden.length > 1 ? "masquées" : "masquée") : view.hidden.length > 1 ? "masqués" : "masqué"
+              })`}
           </button>
         )}
       </div>
@@ -156,13 +198,13 @@ export function ViewControls({ properties, view, onChange }: Props) {
 
 function FilterValue({ prop, filter, onChange }: { prop: Property; filter: Filter; onChange: (value: string, delay?: number) => void }) {
   const value = filter.value ?? "";
-  // Le filtre compare des ids d'option : un statut se choisit dans sa liste,
-  // comme une sélection, jamais en texte libre.
+  // Le filtre compare des ids d'option : une sélection se choisit dans sa
+  // liste, jamais en texte libre.
   if (isOptionType(prop.type)) {
     return (
       <select aria-label="Valeur du filtre" value={value} onChange={(event) => onChange(event.target.value)}>
         <option value="">choisir…</option>
-        {orderedOptions(prop).map((option) => (
+        {(prop.options ?? []).map((option) => (
           <option key={option.id} value={option.id}>
             {option.name}
           </option>

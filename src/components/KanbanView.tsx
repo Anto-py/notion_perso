@@ -19,7 +19,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { useMemo, useState } from "react";
-import { boardOrder, groupEntries, type Column, type EntryRow, type Property, type Values } from "@/lib/properties";
+import { boardOrder, groupEntries, NO_COLUMN, type Column, type EntryRow, type Property, type Value, type Values } from "@/lib/properties";
 import { KanbanCard } from "./KanbanCard";
 import { OptionChip } from "./propertyUi";
 
@@ -29,10 +29,12 @@ const COLUMN_PREFIX = "col:";
 
 type Props = {
   groupProp: Property;
+  properties: Property[]; // affichées dans la vue (hors propriétés masquées)
+  hiddenKeys: string[]; // colonnes masquées pour cette propriété de regroupement
   entries: EntryRow[]; // visibles, dans l'ordre manuel
   allIds: string[]; // toutes les entrées de la base, masquées comprises
   onCreate: (values: Values) => void;
-  onMove: (entryId: string, value: string | null, order: string[]) => Promise<void>;
+  onMove: (entryId: string, value: Value | null, order: string[]) => Promise<void>;
 };
 
 type Hint = { id: string; before: boolean };
@@ -47,8 +49,11 @@ const collisionDetection: CollisionDetection = (args) => {
   return column ? [column] : hits.length > 0 ? hits : closestCenter(args);
 };
 
-export function KanbanView({ groupProp, entries, allIds, onCreate, onMove }: Props) {
-  const columns = useMemo(() => groupEntries(entries, groupProp), [entries, groupProp]);
+export function KanbanView({ groupProp, properties, hiddenKeys, entries, allIds, onCreate, onMove }: Props) {
+  const columns = useMemo(() => {
+    const hidden = new Set(hiddenKeys);
+    return groupEntries(entries, groupProp).filter((column) => !hidden.has(column.key ?? NO_COLUMN));
+  }, [entries, groupProp, hiddenKeys]);
   const columnOf = useMemo(() => new Map(columns.flatMap((column) => column.entries.map((e) => [e.id, column.key] as const))), [columns]);
 
   const [dragging, setDragging] = useState<EntryRow | null>(null);
@@ -88,10 +93,12 @@ export function KanbanView({ groupProp, entries, allIds, onCreate, onMove }: Pro
     const place = onColumn ? null : (hintOf(event) ?? hint);
     const where = place ? (place.before ? { before: overId } : { after: overId }) : { end: true as const };
     const order = boardOrder(allIds, columns, movedId, targetKey, where);
+    const target = columns.find((column) => column.key === targetKey);
+    if (!target) return;
 
     const sameOrder = order.length === allIds.length && order.every((id, index) => id === allIds[index]);
     if (sameOrder && targetKey === (columnOf.get(movedId) ?? null)) return;
-    await onMove(movedId, targetKey, order);
+    await onMove(movedId, target.value, order);
   }
 
   return (
@@ -109,17 +116,22 @@ export function KanbanView({ groupProp, entries, allIds, onCreate, onMove }: Pro
         setHint(null);
       }}
     >
-      <div className="board">
-        {columns.map((column) => (
-          <BoardColumn
-            key={column.key ?? "none"}
-            column={column}
-            groupProp={groupProp}
-            hint={hint}
-            onCreate={onCreate}
-          />
-        ))}
-      </div>
+      {columns.length === 0 ? (
+        <p className="hint">Toutes les colonnes sont masquées. Réaffichez-en une dans « Colonnes du Kanban ».</p>
+      ) : (
+        <div className="board">
+          {columns.map((column) => (
+            <BoardColumn
+              key={column.key ?? "none"}
+              column={column}
+              groupProp={groupProp}
+              properties={properties}
+              hint={hint}
+              onCreate={onCreate}
+            />
+          ))}
+        </div>
+      )}
       <DragOverlay dropAnimation={null}>
         {dragging && (
           <div className="board-card drag-overlay-card">
@@ -144,13 +156,14 @@ function hintOf(event: DragOverEvent | DragEndEvent): Hint | null {
 type ColumnProps = {
   column: Column;
   groupProp: Property;
+  properties: Property[];
   hint: Hint | null;
   onCreate: (values: Values) => void;
 };
 
-function BoardColumn({ column, groupProp, hint, onCreate }: ColumnProps) {
+function BoardColumn({ column, groupProp, properties, hint, onCreate }: ColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: `${COLUMN_PREFIX}${column.key ?? ""}` });
-  const create = () => onCreate(column.key ? { [groupProp.id]: column.key } : {});
+  const create = () => onCreate(column.value === null ? {} : { [groupProp.id]: column.value });
 
   return (
     <section ref={setNodeRef} className={isOver ? "board-column over" : "board-column"} aria-label={column.name}>
@@ -163,7 +176,13 @@ function BoardColumn({ column, groupProp, hint, onCreate }: ColumnProps) {
       </header>
       <div className="board-cards">
         {column.entries.map((entry) => (
-          <KanbanCard key={entry.id} entry={entry} hint={hint?.id === entry.id ? (hint.before ? "before" : "after") : null} />
+          <KanbanCard
+            key={entry.id}
+            entry={entry}
+            properties={properties}
+            groupId={groupProp.id}
+            hint={hint?.id === entry.id ? (hint.before ? "before" : "after") : null}
+          />
         ))}
       </div>
     </section>

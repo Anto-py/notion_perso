@@ -34,7 +34,6 @@ export function PropertyInput({ prop, value, onSave, onCreate }: PropertyInputPr
       return <input type="date" aria-label={prop.name} value={text} onChange={(event) => onSave(event.target.value || null)} />;
     case "checkbox":
       return <input type="checkbox" aria-label={prop.name} checked={value === true} onChange={(event) => onSave(event.target.checked ? true : null)} />;
-    case "status":
     case "select":
       return (
         <OptionPicker

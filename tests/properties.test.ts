@@ -4,13 +4,14 @@ import {
   changeType,
   convertValue,
   countLosses,
+  defaultSelectOptions,
   groupEntries,
   matchesFilters,
   migrateValues,
   moveInOrder,
   nextColor,
   normalizeValue,
-  orderedOptions,
+  parseConfig,
   withNewOption,
   checkValue,
   sanitizeView,
@@ -73,8 +74,9 @@ describe("validateProperties", () => {
     expect(validateProperties([{ ...note, name: "titre" }])).toMatch(/déjà pris/);
   });
 
-  it("refuse un type inconnu, une couleur inconnue, une option en double", () => {
+  it("refuse un type inconnu, l'ancien type Statut, une couleur inconnue, une option en double", () => {
     expect(validateProperties([{ ...note, type: "formula" }])).toMatch(/Type/);
+    expect(validateProperties([{ ...note, type: "status" }])).toMatch(/Type/);
     expect(validateProperties([{ ...statut, options: [{ id: "o", name: "A", color: "fuchsia" }] }])).toMatch(/couleur/);
     expect(
       validateProperties([{ ...statut, options: [{ id: "a", name: "Fait", color: "gray" }, { id: "b", name: "fait", color: "red" }] }]),
@@ -109,15 +111,23 @@ describe("sanitizeView", () => {
     expect(view.sorts).toEqual([{ prop: "prop_date", dir: "desc" }]);
   });
 
-  it("groupe par défaut sur la première sélection, ou sur rien s'il n'y en a pas", () => {
+  it("groupe par défaut sur la première propriété discrète, ou sur rien s'il n'y en a pas", () => {
     expect(sanitizeView({ kind: "board" }, veille).group_by).toBe("prop_statut");
-    expect(sanitizeView({ kind: "board", group_by: "prop_tags" }, veille).group_by).toBe("prop_statut");
-    expect(sanitizeView({ kind: "board" }, [note]).group_by).toBeNull();
+    expect(sanitizeView({ kind: "board", group_by: "prop_tags" }, veille).group_by).toBe("prop_tags");
+    expect(sanitizeView({ kind: "board" }, [tags, note]).group_by).toBe("prop_tags");
+    expect(sanitizeView({ kind: "board" }, [lu, note]).group_by).toBe("prop_lu");
+    expect(sanitizeView({ kind: "board" }, [note, source]).group_by).toBeNull();
   });
 
   it("garde les colonnes masquées qui existent, une seule fois, et rien d'une vue ancienne", () => {
     expect(sanitizeView({ hidden: ["prop_note", "prop_disparue", "prop_note", 7, "title"] }, veille).hidden).toEqual(["prop_note"]);
     expect(sanitizeView({ kind: "table" }, veille).hidden).toEqual([]);
+  });
+
+  it("garde les colonnes du Kanban masquées par propriété de regroupement", () => {
+    const view = sanitizeView({ hidden_columns: { prop_statut: ["s1", "s1", 7], prop_inconnue: ["x"] } }, veille);
+    expect(view.hidden_columns).toEqual({ prop_statut: ["s1"] });
+    expect(sanitizeView({}, veille).hidden_columns).toEqual({});
   });
 });
 
@@ -263,6 +273,24 @@ describe("groupEntries", () => {
     const columns = groupEntries([entry("x", { prop_statut: "s2" }), entry("y", {}), entry("z", { prop_statut: "s_partie" })], statut);
     expect(columns.map((c) => c.name)).toEqual(["Sans statut", "À lire", "En cours", "Traité"]);
     expect(columns.map((c) => c.entries.map((e) => e.id))).toEqual([["y", "z"], [], ["x"], []]);
+    expect(columns.map((c) => c.value)).toEqual([null, "s1", "s2", "s3"]);
+  });
+
+  it("groupe une sélection multiple par combinaison de valeurs, après « Sans »", () => {
+    const columns = groupEntries(
+      [entry("x", { prop_tags: ["t1", "t2"] }), entry("y", { prop_tags: ["t2", "t1"] }), entry("z", {})],
+      tags,
+    );
+    expect(columns.map((column) => column.name)).toEqual(["Sans tags", "IA, esprit critique"]);
+    expect(columns.map((column) => column.entries.map((e) => e.id))).toEqual([["z"], ["x", "y"]]);
+    expect(columns.map((column) => column.value)).toEqual([null, ["t1", "t2"]]);
+  });
+
+  it("groupe une case à cocher en deux colonnes fixes", () => {
+    const columns = groupEntries([entry("x", { prop_lu: true }), entry("y", {})], lu);
+    expect(columns.map((column) => column.name)).toEqual(["Non coché", "Coché"]);
+    expect(columns.map((column) => column.entries.map((e) => e.id))).toEqual([["y"], ["x"]]);
+    expect(columns.map((column) => column.value)).toEqual([null, true]);
   });
 });
 
@@ -300,74 +328,58 @@ describe("boardOrder", () => {
   });
 });
 
-describe("propriété Statut", () => {
-  const etat: Property = {
-    id: "prop_etat",
-    name: "État",
-    type: "status",
-    options: [
-      { id: "b", name: "Bloqué", color: "red", group: "in_progress" },
-      { id: "a", name: "À faire", color: "gray", group: "todo" },
-      { id: "c", name: "Fini", color: "green", group: "complete" },
-    ],
-  };
-
-  it("lit et regroupe ses options dans l'ordre des groupes", () => {
-    expect(orderedOptions(etat).map((option) => option.name)).toEqual(["À faire", "Bloqué", "Fini"]);
-    const columns = groupEntries([entry("x", { prop_etat: "c" })], etat);
-    expect(columns.map((column) => column.name)).toEqual(["Sans état", "À faire", "Bloqué", "Fini"]);
-    expect(columns[3].entries.map((e) => e.id)).toEqual(["x"]);
-  });
-
-  it("valide le groupe d'une option, et pose « à faire » s'il manque", () => {
-    const checked = validateProperties([
+describe("configurations héritées et sélections", () => {
+  it("relit un ancien Statut comme une Sélection, options dans l'ordre des groupes", () => {
+    const config = parseConfig({
+      properties: [
+        {
+          id: "prop_etat",
+          name: "État",
+          type: "status",
+          options: [
+            { id: "b", name: "Bloqué", color: "red", group: "in_progress" },
+            { id: "a", name: "À faire", color: "gray", group: "todo" },
+            { id: "c", name: "Fini", color: "green", group: "complete" },
+          ],
+        },
+      ],
+      view: { kind: "board", group_by: "prop_etat" },
+    });
+    expect(config.properties).toEqual([
       {
         id: "prop_etat",
         name: "État",
-        type: "status",
+        type: "select",
         options: [
           { id: "a", name: "À faire", color: "gray" },
-          { id: "c", name: "Fini", color: "green", group: "complete" },
+          { id: "b", name: "Bloqué", color: "red" },
+          { id: "c", name: "Fini", color: "green" },
         ],
       },
     ]);
-    expect(typeof checked).not.toBe("string");
-    expect((checked as Property[])[0].options?.map((option) => option.group)).toEqual(["todo", "complete"]);
-    const wrong = validateProperties([{ id: "p", name: "État", type: "status", options: [{ id: "a", name: "X", color: "gray", group: "ailleurs" }] }]);
-    expect(typeof wrong).toBe("string");
-  });
-
-  it("change de type sans perdre les options, et pose ou retire le groupe", () => {
-    const fromSelect = changeType({ id: "p", name: "Statut", type: "select", options: [{ id: "s1", name: "À lire", color: "gray" }] }, "status", []);
-    expect(fromSelect.options).toEqual([{ id: "s1", name: "À lire", color: "gray", group: "todo" }]);
-    const back = changeType(etat, "select", []);
-    expect(back.options?.every((option) => option.group === undefined)).toBe(true);
-    expect(convertValue(etat, { ...etat, id: "prop_etat" }, "c")).toBe("c");
-  });
-
-  it("naît avec trois options, une par groupe, quand rien ne lui en donne", () => {
-    let n = 0;
-    const makeId = (prefix: string) => `${prefix}_${n++}`;
-    const fromText = changeType(note, "status", [{}, {}], makeId);
-    expect(fromText.options?.map((option) => [option.name, option.group])).toEqual([
-      ["À faire", "todo"],
-      ["En cours", "in_progress"],
-      ["Terminé", "complete"],
+    expect(config.view.group_by).toBe("prop_etat");
+    expect(groupEntries([entry("x", { prop_etat: "c" })], config.properties[0]).map((column) => column.name)).toEqual([
+      "Sans état",
+      "À faire",
+      "Bloqué",
+      "Fini",
     ]);
-    expect(new Set(fromText.options?.map((option) => option.id)).size).toBe(3);
-    expect(changeType({ id: "p", name: "Vide", type: "select", options: [] }, "status", []).options).toHaveLength(3);
-    // Les valeurs saisies priment sur les options de départ.
-    expect(changeType(note, "status", [{ prop_note: "Idée" }]).options?.map((option) => option.name)).toEqual(["Idée"]);
-    // Une sélection, elle, peut rester vide.
-    expect(changeType(note, "select", [])).toEqual({ ...note, type: "select", options: [] });
   });
 
-  it("ajoute une option de statut dans le groupe « à faire »", () => {
-    const added = withNewOption([etat], etat.id, "Nouveau", () => "opt_x");
-    expect(added?.option).toEqual({ id: "opt_x", name: "Nouveau", color: "brown", group: "todo" });
+  it("donne trois options de départ à la sélection créée par le Kanban", () => {
+    let n = 0;
+    const options = defaultSelectOptions((prefix) => `${prefix}_${n++}`);
+    expect(options.map((option) => option.name)).toEqual(["À faire", "En cours", "Terminé"]);
+    expect(new Set(options.map((option) => option.id)).size).toBe(3);
+  });
+
+  it("laisse une sélection vide et ajoute une option sans groupe", () => {
+    expect(changeType(note, "select", [])).toEqual({ ...note, type: "select", options: [] });
+    const added = withNewOption([statut], statut.id, "Nouveau", () => "opt_x");
+    expect(added?.option).toEqual({ id: "opt_x", name: "Nouveau", color: "brown" });
     expect(added?.properties[0].options).toHaveLength(4);
-    expect(withNewOption([etat], etat.id, "  fini ")).toBeNull();
-    expect(withNewOption([etat], "prop_inconnue", "Nouveau")).toBeNull();
+    expect(withNewOption([statut], statut.id, "  À lire ")).toBeNull();
+    expect(withNewOption([statut], "prop_inconnue", "Nouveau")).toBeNull();
   });
 });
 

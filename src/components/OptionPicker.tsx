@@ -1,5 +1,5 @@
 "use client";
-// Choix d'options d'une statut ou d'une sélection (simple ou multiple), avec
+// Choix d'options d'une sélection (simple ou multiple), avec
 // création à la volée : taper un nom absent propose « Créer … ». Entrée
 // choisit l'option exacte, sinon la première trouvée, sinon crée.
 // Le menu est monté dans <body> et positionné en fixe : dans une cellule de
@@ -7,7 +7,7 @@
 // fait défiler horizontalement.
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { fold, nextColor, optionById, orderedOptions, type Property } from "@/lib/properties";
+import { fold, nextColor, optionById, type Property } from "@/lib/properties";
 import { OptionChip } from "./propertyUi";
 
 type Props = {
@@ -32,8 +32,8 @@ export function OptionPicker({ prop, selected, multiple, onChange, onCreate }: P
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
 
-  // Pour un statut, le menu suit l'ordre des colonnes (groupes puis options).
-  const options = orderedOptions(prop);
+  // Le menu suit l'ordre des options, le même que les colonnes du Kanban.
+  const options = prop.options ?? [];
   const typed = query.trim();
   const matches = options.filter((option) => fold(option.name).includes(fold(typed)));
   const exact = options.find((option) => fold(option.name) === fold(typed));

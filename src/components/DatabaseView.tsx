@@ -7,8 +7,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   countLosses,
-  defaultStatusOptions,
-  isSingleOptionType,
+  defaultSelectOptions,
+  groupEntries,
+  isGroupableType,
   localId,
   matchesFilters,
   sortEntries,
@@ -77,7 +78,7 @@ export function DatabaseView({ database, config, entries }: Props) {
   );
 
   const properties = localProperties;
-  const groupProp = properties.find((prop) => prop.id === view.group_by && isSingleOptionType(prop.type)) ?? null;
+  const groupProp = properties.find((prop) => prop.id === view.group_by && isGroupableType(prop.type)) ?? null;
   const valuesList = useMemo<Values[]>(() => live.map((entry) => entry.values), [live]);
   const visible = useMemo(
     () =>
@@ -89,6 +90,10 @@ export function DatabaseView({ database, config, entries }: Props) {
     [live, view, properties],
   );
   const hidden = live.length - visible.length;
+  // Colonnes du Kanban calculées sur toutes les entrées, filtres compris : une
+  // colonne ne doit pas disparaître du menu de masquage quand un filtre vide
+  // ses cartes.
+  const boardColumns = useMemo(() => (groupProp ? groupEntries(live, groupProp) : []), [live, groupProp]);
 
   function changeView(next: View, delay = 0) {
     setView(next);
@@ -129,7 +134,7 @@ export function DatabaseView({ database, config, entries }: Props) {
 
   // Déplacement Kanban : valeur de groupe et ordre manuel partent dans la même
   // transaction, pour qu'une carte ne change jamais de colonne sans sa place.
-  async function moveCard(entryId: string, value: string | null, order: string[]) {
+  async function moveCard(entryId: string, value: Value | null, order: string[]) {
     setMessage(null);
     const values = groupProp ? { [groupProp.id]: value } : {};
     const result = await send(`/api/entries/${entryId}`, "PATCH", { values, order });
@@ -147,8 +152,8 @@ export function DatabaseView({ database, config, entries }: Props) {
     const statut: Property = {
       id: localId("prop"),
       name: uniqueName(properties, "Statut"),
-      type: "status",
-      options: defaultStatusOptions(),
+      type: "select",
+      options: defaultSelectOptions(),
     };
     // Le serveur rattache la vue à la première propriété groupable.
     await saveProperties([...properties, statut]);
@@ -250,7 +255,7 @@ export function DatabaseView({ database, config, entries }: Props) {
       )}
       {schemaOpen && <PropertySchemaEditor properties={properties} valuesList={valuesList} onChange={(next) => saveProperties(next)} />}
 
-      <ViewControls properties={properties} view={view} onChange={changeView} />
+      <ViewControls properties={properties} view={view} columns={boardColumns} onChange={changeView} />
       {view.kind === "table" && (
         <TableView
           properties={properties.filter((prop) => !view.hidden.includes(prop.id))}
@@ -265,6 +270,8 @@ export function DatabaseView({ database, config, entries }: Props) {
         (groupProp ? (
           <KanbanView
             groupProp={groupProp}
+            properties={properties.filter((prop) => !view.hidden.includes(prop.id))}
+            hiddenKeys={view.hidden_columns[groupProp.id] ?? []}
             entries={visible}
             allIds={entries.map((entry) => entry.id)}
             onCreate={createEntry}
@@ -272,7 +279,7 @@ export function DatabaseView({ database, config, entries }: Props) {
           />
         ) : (
           <div className="board-invite">
-            <p>Le Kanban groupe les entrées par une propriété Statut ou Sélection.</p>
+            <p>Le Kanban groupe les entrées par une propriété à valeurs discrètes : Sélection, Sélection multiple ou Case à cocher.</p>
             <button type="button" onClick={createGroupProperty}>
               Créer la propriété « Statut »
             </button>
