@@ -8,8 +8,10 @@ import { fr } from "@blocknote/core/locales";
 import { BlockNoteView } from "@blocknote/mantine";
 import { getDefaultReactSlashMenuItems, SuggestionMenuController, useCreateBlockNote } from "@blocknote/react";
 import { useEffect, useRef } from "react";
+import { columnStructure } from "@/lib/blocks";
 import { checkUpload } from "@/lib/upload_rules";
 import { youtubeId } from "@/lib/youtube";
+import { columnBlock, columnListBlock } from "./columnsBlock";
 import { youtubeBlock } from "./mediaBlocks";
 import { subpageBlock } from "./subpageBlock";
 
@@ -44,6 +46,8 @@ const schema = BlockNoteSchema.create({
     file,
     youtube: youtubeBlock(),
     subpage: subpageBlock(),
+    columnList: columnListBlock(),
+    column: columnBlock(),
   },
 });
 
@@ -63,7 +67,22 @@ type Props = {
   onUploadState: (state: UploadState) => void;
 };
 
-type EditorInstance = typeof schema.BlockNoteEditor;
+export type EditorInstance = typeof schema.BlockNoteEditor;
+
+// Le menu « / » pose le nombre de colonnes ; les commandes du bloc permettent
+// ensuite d'en ajouter une (jusqu'à quatre) ou d'en retirer une.
+const COLUMNS_GROUP = "Mise en page";
+
+function columnItems(editor: EditorInstance) {
+  return [2, 3, 4].map((count) => ({
+    title: `${count} colonnes`,
+    subtext: `${count} colonnes de blocs côte à côte`,
+    aliases: ["colonne", "colonnes", "column", "columns", String(count)],
+    group: COLUMNS_GROUP,
+    icon: <span aria-hidden>{"❙".repeat(count)}</span>,
+    onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, columnStructure(count)),
+  }));
+}
 
 // La traduction française range l'image dans « Médias » et le fichier dans
 // « Média ». Le menu regroupe les éléments consécutifs de même rubrique :
@@ -99,7 +118,8 @@ function slashItems(editor: EditorInstance, onCreateChild?: (kind: ChildKind) =>
   const items = getDefaultReactSlashMenuItems(editor).map((item) =>
     item.group === "Média" ? { ...item, group: MEDIA_GROUP } : item,
   );
-  if (onCreateChild) items.unshift(...childItems(editor, onCreateChild));
+  // Pages, puis colonnes, puis les blocs courants.
+  items.unshift(...(onCreateChild ? childItems(editor, onCreateChild) : []), ...columnItems(editor));
   const youtube = {
     title: "Vidéo YouTube",
     subtext: "Intégrer une vidéo par son lien",

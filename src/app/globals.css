@@ -395,6 +395,81 @@ a {
   background: transparent;
 }
 
+/* Colonnes : deux à quatre blocs côte à côte, empilés sur écran étroit.
+   Les commandes restent effacées, nettes au survol et au clavier. */
+.bn-columns {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.bn-columns-row {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: flex-start;
+  gap: 1.5rem;
+  min-width: 0;
+}
+
+.bn-column {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.bn-column-tools {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+}
+
+.bn-column-tools,
+.bn-columns-tools {
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.bn-column:hover .bn-column-tools,
+.bn-column-tools:focus-within,
+.bn-columns:hover .bn-columns-tools,
+.bn-columns-tools:focus-within {
+  opacity: 1;
+}
+
+.bn-column-remove,
+.bn-columns-add {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  line-height: 1;
+  color: var(--ink-soft);
+}
+
+.bn-column-remove:hover,
+.bn-columns-add:hover {
+  color: var(--ink);
+}
+
+.bn-column-confirm {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  white-space: nowrap;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgb(13 22 23 / 12%);
+}
+
+.bn-column-confirm button {
+  padding: 0.15rem 0.5rem;
+  font-size: 0.85rem;
+}
+
 .yt-embed {
   position: relative;
   width: 100%;
@@ -1718,6 +1793,47 @@ mark.hit {
 
 .public-body .block-children {
   padding-left: 1.5rem;
+}
+
+/* Même mise en page que dans l'éditeur, sans les commandes. */
+.public-body .body-columns {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.public-body .body-column {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  .bn-columns-row,
+  .public-body .body-columns {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .bn-columns {
+    flex-direction: column;
+  }
+
+  .bn-column:not(.bn-column-first),
+  .public-body .body-column + .body-column {
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--line);
+  }
+
+  .bn-column-tools,
+  .bn-columns-tools {
+    opacity: 0.7;
+  }
+
+  .bn-columns-add {
+    width: 100%;
+  }
 }
 
 .public-body figure {

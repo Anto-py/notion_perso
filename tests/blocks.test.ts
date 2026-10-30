@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendOrphans, flattenToText, refChanges, renderHtml, safeHref, subpageRefs } from "@/lib/blocks";
+import { appendOrphans, columnHasContent, columnStructure, flattenToText, refChanges, renderHtml, safeHref, subpageRefs } from "@/lib/blocks";
 
 describe("flattenToText", () => {
   it("aplatit titres, paragraphes et liens, un bloc par ligne", () => {
@@ -251,5 +251,53 @@ describe("renderHtml, sous-pages", () => {
 
   it("ne rend rien sans résolveur", () => {
     expect(renderHtml([sub("pg_a")])).toBe("");
+  });
+});
+
+const column = (children: unknown[]) => block("column", [], {}, children);
+
+describe("colonnes", () => {
+  it("pose une liste de deux à quatre colonnes, chacune habitée d'un paragraphe", () => {
+    const two = columnStructure(2);
+    expect(two.type).toBe("columnList");
+    expect(two.children).toHaveLength(2);
+    expect(two.children[0]).toEqual({ type: "column", children: [{ type: "paragraph" }] });
+  });
+
+  it("ramène toute demande hors bornes entre deux et quatre colonnes", () => {
+    expect(columnStructure(1).children).toHaveLength(2);
+    expect(columnStructure(9).children).toHaveLength(4);
+    expect(columnStructure(3.7).children).toHaveLength(3);
+  });
+
+  it("ne compte pas une colonne vide, compte texte, média, bloc-lien et séparateur", () => {
+    expect(columnHasContent(column([block("paragraph", [text("  ")])]))).toBe(false);
+    expect(columnHasContent(column([block("paragraph", [text("Une phrase")])]))).toBe(true);
+    expect(columnHasContent(column([block("image", [], { url: "" })]))).toBe(false);
+    expect(columnHasContent(column([block("image", [], { url: "/api/media/up_x.png" })]))).toBe(true);
+    expect(columnHasContent(column([block("divider")]))).toBe(true);
+    expect(columnHasContent(column([block("paragraph", [], {}, [sub("pg_a")])]))).toBe(true);
+  });
+
+  it("rend les colonnes côte à côte dans la vue publique", () => {
+    const body = [
+      block("columnList", [], {}, [
+        column([block("paragraph", [text("gauche")])]),
+        column([block("paragraph", [text("droite")])]),
+      ]),
+    ];
+    expect(renderHtml(body)).toBe(
+      '<div class="body-columns"><div class="body-column"><p>gauche</p></div><div class="body-column"><p>droite</p></div></div>',
+    );
+  });
+
+  it("garde le texte des colonnes dans la recherche", () => {
+    const body = [
+      block("columnList", [], {}, [
+        column([block("paragraph", [text("gauche")])]),
+        column([block("paragraph", [text("droite")])]),
+      ]),
+    ];
+    expect(flattenToText(body)).toBe("gauche\ndroite");
   });
 });

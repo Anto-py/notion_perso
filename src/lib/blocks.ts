@@ -93,6 +93,51 @@ export function appendOrphans(body: Json, orphans: readonly Orphan[]): Json[] {
   return blocks;
 }
 
+// --- Listes de colonnes ---------------------------------------------------------
+//
+// Deux blocs de mise en page, sans contenu propre : « columnList » tient deux à
+// quatre « column », chacune tenant des blocs ordinaires. BlockNote dissout une
+// liste réduite à une colonne (son contenu remonte à sa place) et retire une
+// colonne dont il ne reste qu'un paragraphe vide.
+
+export const COLUMNS_MIN = 2;
+export const COLUMNS_MAX = 4;
+
+// Ce que le menu « / » pose : une liste de `count` colonnes, chacune habitée
+// d'un paragraphe vide où le curseur peut se loger.
+export function columnStructure(count: number) {
+  const columns = Math.min(COLUMNS_MAX, Math.max(COLUMNS_MIN, Math.trunc(count)));
+  return {
+    type: "columnList" as const,
+    children: Array.from({ length: columns }, () => ({
+      type: "column" as const,
+      children: [{ type: "paragraph" as const }],
+    })),
+  };
+}
+
+const MEDIA_BLOCKS = new Set(["image", "file", "youtube"]);
+
+// Une colonne « pèse » si elle porte du texte, un média pourvu d'une adresse,
+// un bloc-lien vers une page, ou un séparateur. Retirer une colonne vide ne
+// demande donc pas de confirmation.
+export function columnHasContent(block: Json): boolean {
+  if (!isObject(block)) return false;
+  const props = propsOf(block);
+  if (typeof block.type === "string") {
+    if (MEDIA_BLOCKS.has(block.type)) return typeof props.url === "string" && props.url.trim() !== "";
+    if (block.type === SUBPAGE_BLOCK) return typeof props.pageId === "string" && props.pageId !== "";
+    if (block.type === "divider") return true;
+  }
+  const { content } = block;
+  if (isObject(content) && content.type === "tableContent") {
+    if (tableText(content).some((cell) => cell.trim())) return true;
+  } else if (inlineText(content).trim()) {
+    return true;
+  }
+  return childrenOf(block).some(columnHasContent);
+}
+
 // --- Blocs-liens vers les sous-pages --------------------------------------------
 //
 // Une sous-page créée par le menu « / » laisse dans le corps de sa mère un bloc
@@ -318,6 +363,10 @@ function blockHtml(block: Json, options: RenderOptions): string {
         ' referrerpolicy="strict-origin-when-cross-origin"></iframe></div>'
       );
     }
+    case "columnList":
+      return `<div class="body-columns">${blocksHtml(children, options)}</div>`;
+    case "column":
+      return `<div class="body-column">${blocksHtml(children, options)}</div>`;
     default: {
       // Bloc inconnu (tableau importé, type futur) : son texte, s'il en a.
       const { content } = block;
