@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { media, pages } from "@/db/schema";
 import { flattenToText } from "./blocks";
 import { newId } from "./ids";
+import { emptyConfig } from "./properties";
 import { wouldCreateCycle, type TreeRow } from "./tree";
 
 export const TRASH_RETENTION_DAYS = 30;
@@ -50,13 +51,14 @@ async function checkParent(parentId: string): Promise<Outcome> {
   return { ok: true };
 }
 
-export async function createPage(parentId: string | null): Promise<Outcome & { id?: string }> {
+// Page vierge ou base vide, à la racine ou sous parentId.
+export async function createPage(parentId: string | null, type: "page" | "database" = "page"): Promise<Outcome & { id?: string }> {
   if (parentId) {
     const check = await checkParent(parentId);
     if (!check.ok) return check;
   }
   const id = newId("pg");
-  await db.insert(pages).values({ id, parentId, type: "page" });
+  await db.insert(pages).values({ id, parentId, type, dbConfig: type === "database" ? emptyConfig() : null });
   return { ok: true, id };
 }
 
@@ -155,8 +157,17 @@ export async function listTrash(): Promise<TrashItem[]> {
 
 // Restaure le lot. Si le parent est resté en corbeille, la page remonte à la
 // racine plutôt que de rester invisible (parent purgé : déjà null, par la FK).
+// Une entrée ne vit que dans sa base : tant que la base est en corbeille,
+// l'entrée y reste aussi.
 export async function restorePage(id: string): Promise<Outcome> {
   return db.transaction(async (tx) => {
+    const [base] = await tx
+      .select({ title: pages.title, trashedAt: pages.trashedAt })
+      .from(pages)
+      .where(sql`${pages.id} = (SELECT db_id FROM pages WHERE id = ${id} AND type = 'entry')`);
+    if (base?.trashedAt) {
+      return { ok: false, status: 409, error: `Restaurez d'abord sa base, « ${base.title || "Sans titre"} ».` } as const;
+    }
     const restored = await tx.execute(sql`
       UPDATE pages SET trashed_at = NULL, updated_at = now() WHERE id IN (${trashedBatch(id)})`);
     if (!restored.rowCount) return NOT_FOUND;

@@ -401,6 +401,374 @@ a {
   gap: 0.4rem;
 }
 
+/* --- Bases --------------------------------------------------------------- */
+
+.new-buttons {
+  display: flex;
+  flex-direction: column;
+}
+
+.page-wide {
+  max-width: 80rem;
+}
+
+.page-wide .page-title {
+  padding: 0;
+}
+
+.back-link {
+  margin-right: auto;
+  text-decoration: none;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.back-link:hover {
+  color: var(--ink);
+}
+
+.db-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.view-switch {
+  display: inline-flex;
+}
+
+.view-switch button {
+  border-radius: 0;
+}
+
+.view-switch button:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.view-switch button:last-child {
+  border-radius: 0 6px 6px 0;
+  border-left: none;
+}
+
+.view-switch button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.view-switch button:disabled {
+  cursor: not-allowed;
+  color: var(--ink-soft);
+  opacity: 0.6;
+}
+
+.badge {
+  font-size: 0.85rem;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+}
+
+.confirm-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 0.75rem;
+  background: #fdecea;
+  border-radius: 6px;
+}
+
+.schema input,
+.schema select,
+.view-controls input,
+.view-controls select,
+.prop-input,
+.picker-menu input {
+  font: inherit;
+  color: inherit;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  background: var(--bg);
+}
+
+.schema {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.schema-prop {
+  width: 100%;
+}
+
+.schema-head,
+.schema-options li,
+.control-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.schema .schema-name {
+  font-weight: 600;
+}
+
+.schema-options {
+  list-style: none;
+  margin: 0.5rem 0 0 1.5rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.view-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.control-label {
+  min-width: 3rem;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.control-actions button {
+  color: var(--ink-soft);
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.db-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.95rem;
+}
+
+.db-table th,
+.db-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+  max-width: 22rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.db-table th + th,
+.db-table td + td {
+  border-left: 1px solid var(--line);
+}
+
+.db-table th {
+  font-weight: 500;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  vertical-align: middle;
+}
+
+.db-table tbody tr {
+  cursor: pointer;
+}
+
+.db-table tbody tr:hover {
+  background: var(--bg-side);
+}
+
+.cell-title a {
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.prop-icon {
+  display: inline-block;
+  min-width: 1.1rem;
+  margin-right: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.add-entry {
+  margin-top: 0.25rem;
+  color: var(--ink-soft);
+}
+
+.url-view,
+.check-view {
+  color: var(--ink-soft);
+}
+
+.chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.chip {
+  display: inline-block;
+  padding: 0.05rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.chip-gray { background: #e3e2e0; color: #32302c; }
+.chip-brown { background: #eee0da; color: #442a1e; }
+.chip-orange { background: #fadec9; color: #49290e; }
+.chip-yellow { background: #fdecc8; color: #402c1b; }
+.chip-green { background: #dbeddb; color: #1c3829; }
+.chip-blue { background: #d3e5ef; color: #183347; }
+.chip-purple { background: #e8deee; color: #412454; }
+.chip-pink { background: #f5e0e9; color: #4c2337; }
+.chip-red { background: #ffe2dd; color: #5d1715; }
+
+/* Propriétés d'une entrée, alignées sur le texte de BlockNote. */
+.props {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0 54px 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.props-empty {
+  margin: 0 54px 1rem;
+}
+
+.prop-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  min-height: 2rem;
+}
+
+.prop-name {
+  flex: 0 0 11rem;
+  padding-top: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.prop-value {
+  flex: 1;
+  min-width: 0;
+}
+
+.prop-input {
+  width: 100%;
+  max-width: 28rem;
+  border-color: transparent;
+}
+
+.prop-input:hover {
+  background: var(--hover);
+}
+
+.prop-input:focus {
+  outline: none;
+  border-color: var(--line);
+  background: var(--bg);
+}
+
+.prop-input::placeholder,
+.empty-value {
+  color: #b9b9b7;
+}
+
+.prop-url {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.prop-row input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  margin: 0.55rem 0.5rem 0;
+}
+
+.picker {
+  position: relative;
+}
+
+.picker-value {
+  min-width: 8rem;
+  min-height: 2rem;
+  padding: 0.3rem 0.5rem;
+  text-align: left;
+  border-color: transparent;
+  background: transparent;
+}
+
+.picker-menu {
+  position: absolute;
+  z-index: 10;
+  top: 100%;
+  left: 0;
+  width: min(18rem, 80vw);
+  padding: 0.4rem;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+}
+
+.picker-menu input {
+  width: 100%;
+  margin-bottom: 0.3rem;
+}
+
+.picker-menu ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 16rem;
+  overflow-y: auto;
+}
+
+.picker-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+}
+
+.picker-option:hover,
+.picker-option:focus-visible {
+  background: var(--hover);
+}
+
+.picker-hint {
+  padding: 0.3rem 0.5rem;
+}
+
 /* --- Mobile -------------------------------------------------------------- */
 
 @media (max-width: 760px) {
@@ -439,5 +807,15 @@ a {
   .page-title {
     font-size: 1.9rem;
     padding: 0 0.5rem;
+  }
+
+  .props,
+  .props-empty {
+    margin-left: 0.5rem;
+    margin-right: 0.5rem;
+  }
+
+  .prop-name {
+    flex-basis: 7rem;
   }
 }

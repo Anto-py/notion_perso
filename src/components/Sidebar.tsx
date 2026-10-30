@@ -26,7 +26,7 @@ type Props = { rows: TreeRow[]; username: string };
 export function Sidebar({ rows, username }: Props) {
   const router = useRouter();
   const pathname = usePathname();
-  const activeId = pathname.startsWith("/page/") ? decodeURIComponent(pathname.split("/")[2]) : null;
+  const activeId = /^\/(page|db)\//.test(pathname) ? decodeURIComponent(pathname.split("/")[2]) : null;
 
   const tree = useMemo(() => buildTree(rows), [rows]);
   const parentOf = useMemo(() => new Map(rows.map((row) => [row.id, row.parentId])), [rows]);
@@ -69,12 +69,12 @@ export function Sidebar({ rows, username }: Props) {
     return data ?? {};
   }
 
-  async function createPage(parentId: string | null) {
-    const data = await post("/api/pages", { parentId });
+  async function createPage(parentId: string | null, type: "page" | "database" = "page") {
+    const data = await post("/api/pages", { parentId, type });
     if (!data?.id) return;
     if (parentId && !expanded.has(parentId)) setExpanded(new Set([...expanded, parentId]));
     router.refresh();
-    router.push(`/page/${data.id}`);
+    router.push(type === "database" ? `/db/${data.id}` : `/page/${data.id}`);
   }
 
   // Un léger déplacement avant de saisir : un simple clic reste un clic. Au
@@ -118,9 +118,14 @@ export function Sidebar({ rows, username }: Props) {
         <Link href="/" className="sidebar-home">
           notion_perso
         </Link>
-        <button type="button" className="new-page" onClick={() => createPage(null)}>
-          + Nouvelle page
-        </button>
+        <div className="new-buttons">
+          <button type="button" className="new-page" onClick={() => createPage(null)}>
+            + Nouvelle page
+          </button>
+          <button type="button" className="new-page" onClick={() => createPage(null, "database")}>
+            + Nouvelle base
+          </button>
+        </div>
         {message && (
           <p className="sidebar-message" role="alert">
             {message}
