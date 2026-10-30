@@ -3,10 +3,11 @@
 // données ; chaque route d'API fait son propre contrôle.
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, sessionCookieOptions } from "@/lib/session_cookie";
+import { loginPath } from "@/lib/share";
 
-// Chemins ouverts sans session (SPECS.md, « Rôle des fichiers clés »). /share
-// et /api/media décident eux-mêmes : refus explicite ou média d'une page publiée.
-const PUBLIC_PATHS = [/^\/login$/, /^\/p\//, /^\/api\/auth\//, /^\/share$/, /^\/api\/media\//];
+// Chemins ouverts sans session (SPECS.md, « Rôle des fichiers clés »).
+// /api/media décide lui-même : média d'une page publiée ou refus.
+const PUBLIC_PATHS = [/^\/login$/, /^\/p\//, /^\/api\/auth\//, /^\/api\/media\//];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -17,7 +18,9 @@ export function proxy(request: NextRequest) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Non connecté" }, { status: 401 });
     }
-    return NextResponse.redirect(new URL("/login", request.url));
+    // L'adresse demandée suit la connexion : un partage reçu du téléphone
+    // (/share?url=…) ne se perd pas quand la session a expiré.
+    return NextResponse.redirect(new URL(loginPath(pathname + request.nextUrl.search), request.url));
   }
 
   // Prolonge la durée de vie du cookie dans le navigateur à chaque visite.
@@ -27,9 +30,10 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Exclut les fichiers statiques et ceux de public/ (manifest, sw.js, icônes).
+  // Exclut les fichiers statiques et ceux de public/ (sw.js, icônes), ainsi
+  // que le manifeste, que le navigateur demande sans cookie.
   // Exclut aussi api/upload : le proxy met tout corps en mémoire et le tronque
   // sans erreur au-delà de 10 Mo (proxyClientMaxBodySize). La route vérifie
   // elle-même la session.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|icons/|api/upload).*)"],
+  matcher: ["/((?!_next/static|_next/image|manifest.webmanifest|sw.js|icons/|api/upload).*)"],
 };

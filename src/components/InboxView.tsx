@@ -150,7 +150,7 @@ export function InboxView({
 // publient pas à /favicon.ico, et une réponse 200 peut contenir du HTML : un
 // échec de décodage déclenche aussi onError. L'état évite de relancer la
 // requête à chaque rendu.
-function SiteIcon({ url }: { url: string }) {
+export function SiteIcon({ url }: { url: string }) {
   const [failed, setFailed] = useState(false);
   const src = faviconUrl(url);
   if (!src || failed) return <span className="inbox-glyph">🌐</span>;

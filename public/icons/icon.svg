@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Icône de notion_perso, charte atelier : une page en papier aux coins
+       asymétriques, ombre décalée sans flou, case à cocher jaune. Source des
+       PNG dérivés par scripts/generate_icons.sh. -->
+  <rect width="512" height="512" fill="#127676"/>
+  <path transform="translate(16 16)" fill="#0d1617"
+        d="M176 112H364A12 12 0 0 1 376 124V360A40 40 0 0 1 336 400H148A12 12 0 0 1 136 388V152A40 40 0 0 1 176 112Z"/>
+  <path fill="#f2efe6" stroke="#0d1617" stroke-width="12"
+        d="M176 112H364A12 12 0 0 1 376 124V360A40 40 0 0 1 336 400H148A12 12 0 0 1 136 388V152A40 40 0 0 1 176 112Z"/>
+  <rect x="172" y="152" width="140" height="28" rx="5" fill="#0d1617"/>
+  <rect x="172" y="208" width="168" height="16" rx="8" fill="#66655f"/>
+  <rect x="172" y="240" width="124" height="16" rx="8" fill="#66655f"/>
+  <rect x="174" y="292" width="44" height="44" rx="8" fill="#e3a535" stroke="#0d1617" stroke-width="8"/>
+  <path d="M184 314l10 10 15-20" fill="none" stroke="#0d1617" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="236" y="306" width="104" height="16" rx="8" fill="#66655f"/>
+</svg>

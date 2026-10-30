@@ -1282,6 +1282,83 @@ a {
   box-shadow: 0 6px 20px rgb(0 0 0 / 0.1);
 }
 
+/* --- Partage depuis le téléphone ---------------------------------------- */
+
+/* Écran /share : hors de la coquille, sans sidebar, pensé pour un pouce. */
+.share {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 2rem 1rem 3rem;
+}
+
+.share-heading {
+  font-size: 1.6rem;
+  margin: 0 0 1rem;
+}
+
+.share-form,
+.share-done {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-surface);
+  background: var(--bg-side);
+}
+
+.share-mention {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.share-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.share-field input,
+.share-field textarea,
+.share-field select {
+  font: inherit;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-inner);
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.share-field textarea {
+  resize: vertical;
+}
+
+.share-submit {
+  align-self: flex-end;
+  padding: 0.6rem 1.4rem;
+  font-size: 0.95rem;
+}
+
+.share-done-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.share-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.share-links a {
+  color: var(--accent);
+}
+
+.share-empty {
+  color: var(--ink-soft);
+}
+
 /* --- Mobile -------------------------------------------------------------- */
 
 @media (max-width: 760px) {

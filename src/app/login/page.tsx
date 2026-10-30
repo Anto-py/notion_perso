@@ -21,7 +21,7 @@ export default function LoginPage({ searchParams }: PageProps<"/login">) {
           <input name="password" type="password" autoComplete="current-password" required />
         </label>
         <Suspense fallback={null}>
-          <LoginError searchParams={searchParams} />
+          <LoginState searchParams={searchParams} />
         </Suspense>
         <button type="submit">Se connecter</button>
       </form>
@@ -30,9 +30,16 @@ export default function LoginPage({ searchParams }: PageProps<"/login">) {
 }
 
 // Lire searchParams est une donnée de requête : sous Suspense, comme l'exige
-// cacheComponents, pour que le reste du formulaire reste statique.
-async function LoginError({ searchParams }: Pick<PageProps<"/login">, "searchParams">) {
-  const { erreur } = await searchParams;
+// cacheComponents, pour que le reste du formulaire reste statique. La suite
+// (adresse à rejoindre après connexion) voyage dans un champ caché ; la route
+// la revalide, ce champ venant de l'URL.
+async function LoginState({ searchParams }: Pick<PageProps<"/login">, "searchParams">) {
+  const { erreur, suite } = await searchParams;
   const message = typeof erreur === "string" ? MESSAGES[erreur] : undefined;
-  return message ? <p role="alert">{message}</p> : null;
+  return (
+    <>
+      {typeof suite === "string" && <input type="hidden" name="suite" value={suite} />}
+      {message && <p role="alert">{message}</p>}
+    </>
+  );
 }
