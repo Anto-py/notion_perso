@@ -23,6 +23,7 @@ import {
   type View,
 } from "@/lib/properties";
 import { IconPicker } from "./IconPicker";
+import { CoverPicker } from "./CoverPicker";
 import { KanbanView } from "./KanbanView";
 import { SaveIndicator, TitleField } from "./PageView";
 import { PropertySchemaEditor } from "./PropertySchemaEditor";
@@ -33,7 +34,14 @@ import { useAutosave } from "./useAutosave";
 import { ViewControls } from "./ViewControls";
 
 type Props = {
-  database: { id: string; title: string; icon: string | null; publicId: string | null };
+  database: {
+    id: string;
+    title: string;
+    icon: string | null;
+    cover: string | null;
+    coverPosition: number | null;
+    publicId: string | null;
+  };
   config: DbConfig;
   entries: EntryRow[];
 };
@@ -217,6 +225,7 @@ export function DatabaseView({ database, config, entries }: Props) {
           Supprimer la base
         </button>
       </div>
+      <CoverPicker pageId={database.id} initial={database.cover} initialPosition={database.coverPosition} />
       <IconPicker pageId={database.id} type="database" initial={database.icon} />
       <TitleField initial={database.title} ariaLabel="Titre de la base" onChange={(title) => queue({ title })} />
 

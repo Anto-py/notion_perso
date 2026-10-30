@@ -72,13 +72,21 @@ export async function createPage(parentId: string | null, type: "page" | "databa
   return { ok: true, id };
 }
 
-export type PagePatch = { title?: string; icon?: string | null; body?: unknown[] };
+export type PagePatch = {
+  title?: string;
+  icon?: string | null;
+  cover?: string | null;
+  coverPosition?: number | null;
+  body?: unknown[];
+};
 
 // body_text suit toujours body : c'est lui que lit la recherche.
 export async function updatePage(id: string, patch: PagePatch): Promise<Outcome & { updatedAt?: Date }> {
   const values: Partial<typeof pages.$inferInsert> = {};
   if (patch.title !== undefined) values.title = patch.title;
   if (patch.icon !== undefined) values.icon = patch.icon;
+  if (patch.cover !== undefined) values.cover = patch.cover;
+  if (patch.coverPosition !== undefined) values.coverPosition = patch.coverPosition;
   if (patch.body !== undefined) {
     values.body = patch.body;
     values.bodyText = flattenToText(patch.body);

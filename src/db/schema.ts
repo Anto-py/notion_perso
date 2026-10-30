@@ -54,6 +54,11 @@ export const pages = pgTable(
     type: text("type", { enum: ["page", "database", "entry"] }).notNull(),
     title: text("title").notNull().default(""),
     icon: text("icon"),
+    // Bandeau : "color:<teinte>" ou "image:<fichier>", comme icon (lib/covers.ts).
+    cover: text("cover"),
+    // Recadrage vertical de l'image du bandeau, 0 en haut et 100 en bas. Une
+    // couleur l'ignore ; le défaut reste 50 pour ne pas dépendre de l'affichage.
+    coverPosition: integer("cover_position"),
     body: jsonb("body").notNull().default(sql`'[]'::jsonb`),
     bodyText: text("body_text").notNull().default(""),
     dbConfig: jsonb("db_config"),

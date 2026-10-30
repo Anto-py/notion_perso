@@ -93,9 +93,9 @@ export async function listChildren(pageId: string) {
 }
 
 // Un média est public s'il figure dans le corps d'une page lisible par un
-// lien, ou s'il en est l'icône. C'est le corps qui compte, pas
-// media.page_id : une image copiée dans une autre page y apparaît, une image
-// retirée du corps n'est plus servie.
+// lien, s'il en est l'icône, ou s'il est l'image de son bandeau. C'est le corps
+// qui compte, pas media.page_id : une image copiée dans une autre page y
+// apparaît, une image retirée du corps n'est plus servie.
 export async function isMediaPublic(filename: string): Promise<boolean> {
   const rows = await db
     .select({ id: pages.id })
@@ -103,8 +103,12 @@ export async function isMediaPublic(filename: string): Promise<boolean> {
     .where(
       and(
         isNull(pages.trashedAt),
-        // Cité dans le corps, ou icône de la page (lib/icons.ts).
-        or(sql`strpos(${pages.body}::text, ${filename}) > 0`, eq(pages.icon, imageIcon(filename))),
+        // Cité dans le corps, icône de la page ou image de son bandeau.
+        or(
+          sql`strpos(${pages.body}::text, ${filename}) > 0`,
+          eq(pages.icon, imageIcon(filename)),
+          eq(pages.cover, imageIcon(filename)),
+        ),
       ),
     );
   if (!rows.length) return false;

@@ -23,6 +23,16 @@
   --r-command: 3px 8px 3px 8px;
   --sidebar-width: 260px;
   --text-width: 46rem;
+  /* Palette des bandeaux (lib/covers.ts) : tons désaturés de la charte, jamais
+     choisis en dur dans un composant. */
+  --cover-sable: linear-gradient(120deg, #f6f1e4, #e6d9bd);
+  --cover-teal: linear-gradient(120deg, #e6f1ee, #bfd8d2);
+  --cover-ardoise: linear-gradient(120deg, #eceef0, #cbd2d8);
+  --cover-brique: linear-gradient(120deg, #fbeee6, #efcdb8);
+  --cover-soleil: linear-gradient(120deg, #fdf4dc, #f1dda4);
+  --cover-olive: linear-gradient(120deg, #eff1e2, #d3d8b3);
+  --cover-lavande: linear-gradient(120deg, #f0edf6, #d7d0e7);
+  --cover-brume: linear-gradient(120deg, #e6ecec, #b8c9c9);
 }
 
 * {
@@ -337,9 +347,11 @@ a {
 /* --- Page ---------------------------------------------------------------- */
 
 .page {
-  max-width: calc(var(--text-width) + 6rem);
-  margin: 0 auto;
-  padding: 1.5rem 3rem 6rem;
+  /* Pleine largeur de la zone de contenu : le bandeau touche les bords, le
+     texte respire sur toute la place disponible. */
+  max-width: none;
+  margin: 0;
+  padding: 0.5rem 2rem 6rem;
 }
 
 .page-bar {
@@ -347,8 +359,14 @@ a {
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  min-height: 2rem;
+  gap: 0.6rem;
+  min-height: 1.4rem;
+}
+
+/* Barre d'actions discrète : boutons plus petits que le reste de l'interface. */
+.page-bar button {
+  padding: 0.15rem 0.5rem;
+  font-size: 0.85rem;
 }
 
 .status {
@@ -567,7 +585,7 @@ a {
 }
 
 .page-wide {
-  max-width: 80rem;
+  max-width: none;
 }
 
 .page-wide .page-title {
@@ -1574,7 +1592,9 @@ mark.hit {
 
 /* --- Partage : panneau de l'en-tête ---------------------------------------- */
 
-.share {
+/* Ancrage du panneau dans la barre d'actions. Nom propre à ce contexte : `.share`
+   est le conteneur de l'écran /share, dont le padding gonflerait la barre. */
+.share-bar {
   position: relative;
 }
 
@@ -2251,5 +2271,223 @@ button.link.icon-danger {
 
   .icon-panel {
     left: 0;
+  }
+}
+
+/* --- Bandeau de page (BRAINSTORMING §1 ter) -------------------------------- */
+
+/* Pleine largeur du conteneur de page : les marges négatives reprennent le
+   padding de .page, pour que le bandeau touche les bords plutôt que le texte. */
+.cover-zone {
+  position: relative;
+  margin: 0 -2rem;
+}
+
+.cover-zone-empty {
+  margin: 0;
+}
+
+.cover-surface {
+  position: relative;
+  cursor: grab;
+}
+
+.cover-surface:active {
+  cursor: grabbing;
+}
+
+/* L'icône est posée sur le seuil du bandeau, comme dans Notion : elle chevauche
+   son bas au lieu de s'empiler dessous. Le sélecteur suit l'état réel du
+   bandeau, y compris quand on le retire à la volée. */
+.page:has(.cover-surface) .icon-zone {
+  margin-top: -2.25rem;
+}
+
+.page-cover {
+  height: 190px;
+  overflow: hidden;
+  background: var(--bg-side);
+}
+
+.page-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* recadrage au cadrage choisi, jamais de déformation */
+  pointer-events: none;
+}
+
+/* Les teintes, une classe par couleur de la palette. */
+.cover-sable {
+  background: var(--cover-sable);
+}
+
+.cover-teal {
+  background: var(--cover-teal);
+}
+
+.cover-ardoise {
+  background: var(--cover-ardoise);
+}
+
+.cover-brique {
+  background: var(--cover-brique);
+}
+
+.cover-soleil {
+  background: var(--cover-soleil);
+}
+
+.cover-olive {
+  background: var(--cover-olive);
+}
+
+.cover-lavande {
+  background: var(--cover-lavande);
+}
+
+.cover-brume {
+  background: var(--cover-brume);
+}
+
+/* Commandes du bandeau, effacées jusqu'au survol, nettes au clavier. */
+.cover-tools {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  gap: 0.35rem;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.cover-surface:hover .cover-tools,
+.cover-tools:focus-within {
+  opacity: 1;
+}
+
+.cover-tools button {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-inner);
+  font-size: 0.8rem;
+  padding: 0.25rem 0.5rem;
+}
+
+/* Poignée de recadrage : toute la largeur du bas, pour viser au doigt. */
+.cover-handle {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 1.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  background: linear-gradient(to top, rgb(0 0 0 / 35%), transparent);
+  touch-action: none; /* le glissement vertical ne doit pas faire défiler */
+  opacity: 0;
+  transition: opacity 0.15s;
+  cursor: ns-resize;
+}
+
+.cover-surface:hover .cover-handle,
+.cover-handle:focus-visible {
+  opacity: 1;
+}
+
+.cover-handle span {
+  color: #fff;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 60%);
+}
+
+.cover-add {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  opacity: 0;
+  transition: opacity 0.15s;
+  margin: 0 54px; /* aligné sur le titre */
+}
+
+.page-wide .cover-add {
+  margin: 0;
+}
+
+.page:hover .cover-add,
+.cover-add:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .cover-add {
+    opacity: 0.7;
+  }
+}
+
+.cover-panel {
+  position: absolute;
+  z-index: 40;
+  top: 100%;
+  left: 0;
+  min-width: 17rem;
+  padding: 0.6rem;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-surface);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.14);
+}
+
+.cover-zone-empty .cover-panel {
+  left: 54px;
+}
+
+.page-wide .cover-zone-empty .cover-panel {
+  left: 0;
+}
+
+.cover-swatches {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+}
+
+.cover-swatch {
+  height: 2.2rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-inner);
+  cursor: pointer;
+}
+
+.cover-swatch:hover,
+.cover-swatch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Vue publique : le bandeau occupe la largeur du contenu, sous l'en-tête. */
+.public-cover {
+  margin: 0 -1.5rem 1.5rem;
+}
+
+@media (max-width: 760px) {
+  .cover-zone {
+    margin: 0 -1rem;
+  }
+
+  .page-cover {
+    height: 150px;
+  }
+
+  .cover-add {
+    margin: 0 0.5rem;
+  }
+
+  .cover-zone-empty .cover-panel {
+    left: 0.5rem;
+  }
+
+  .public-cover {
+    margin: 0 -1rem 1rem;
   }
 }

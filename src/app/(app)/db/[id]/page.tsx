@@ -24,7 +24,14 @@ async function DatabaseLoader({ params }: Pick<PageProps<"/db/[id]">, "params">)
   return (
     <DatabaseView
       key={page.id}
-      database={{ id: page.id, title: page.title, icon: page.icon, publicId: page.shareEnabled ? page.publicId : null }}
+      database={{
+        id: page.id,
+        title: page.title,
+        icon: page.icon,
+        cover: page.cover,
+        coverPosition: page.coverPosition,
+        publicId: page.shareEnabled ? page.publicId : null,
+      }}
       config={configOf(page)}
       entries={entries}
     />

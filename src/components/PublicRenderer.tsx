@@ -12,6 +12,7 @@ import { publicHref, type PublicNode } from "@/lib/publication";
 import { listChildren, resolvePublication, type Publication } from "@/lib/publication_query";
 import { faviconHref } from "@/lib/icons";
 import { PageIcon, PageLabel } from "./PageIcon";
+import { PageCover } from "./PageCover";
 import { TYPE_ICONS, ValueView } from "./propertyUi";
 
 export type PublicParams = Promise<{ publicId: string; pageId?: string }>;
@@ -74,6 +75,7 @@ async function PublicContent({ publicId, found }: { publicId: string; found: Pub
   const linked = subpageRefs(page.body);
   return (
     <article>
+      <PageCover cover={page.cover} position={page.coverPosition} className="page-cover public-cover" />
       {chain.length > 1 && <Crumbs chain={chain.slice(0, -1)} href={href} />}
       <h1 className="public-title">
         <PageIcon icon={page.icon} type={page.type} /> {page.title || "Sans titre"}

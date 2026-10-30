@@ -66,7 +66,7 @@ export function SharePanel({ pageId, initialPublicId }: Props) {
   }
 
   return (
-    <div className="share" ref={rootRef}>
+    <div className="share-bar" ref={rootRef}>
       <button type="button" className="ghost" aria-expanded={open} onClick={() => setOpen(!open)}>
         Partager{publicId ? " · publié" : ""}
       </button>
