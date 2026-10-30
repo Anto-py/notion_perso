@@ -1,2 +1,101 @@
-// Tables Drizzle : users, sessions, pages, media (étape 1 du plan, voir SPECS.md).
-export {};
+// Tables Drizzle (SPECS.md, « Modèle de données »). L'extension unaccent et
+// f_unaccent viennent de la migration SQL 0000_extensions.
+import { sql } from "drizzle-orm";
+import {
+  boolean,
+  customType,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  type AnyPgColumn,
+} from "drizzle-orm/pg-core";
+
+const tsvector = customType<{ data: string }>({
+  dataType: () => "tsvector",
+});
+
+const createdAt = () =>
+  timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
+
+export const users = pgTable("users", {
+  id: text("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  createdAt: createdAt(),
+});
+
+// On stocke l'empreinte du jeton, jamais le jeton : une fuite de la base ne
+// donne aucune session utilisable.
+export const sessions = pgTable(
+  "sessions",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("sessions_user_id_idx").on(t.userId)],
+);
+
+export const pages = pgTable(
+  "pages",
+  {
+    id: text("id").primaryKey(),
+    // set null : une page dont le parent est purgé remonte à la racine.
+    parentId: text("parent_id").references((): AnyPgColumn => pages.id, {
+      onDelete: "set null",
+    }),
+    type: text("type", { enum: ["page", "database", "entry"] }).notNull(),
+    title: text("title").notNull().default(""),
+    icon: text("icon"),
+    body: jsonb("body").notNull().default(sql`'[]'::jsonb`),
+    bodyText: text("body_text").notNull().default(""),
+    dbConfig: jsonb("db_config"),
+    // cascade : purger une base purge ses entrées.
+    dbId: text("db_id").references((): AnyPgColumn => pages.id, {
+      onDelete: "cascade",
+    }),
+    propertyValues: jsonb("property_values"),
+    // Valeurs des propriétés aplaties, remplies à l'écriture comme body_text :
+    // une colonne générée ne sait pas parcourir property_values selon db_config.
+    valuesText: text("values_text").notNull().default(""),
+    inboxKind: text("inbox_kind", { enum: ["link", "note"] }),
+    manualOrder: integer("manual_order").notNull().default(0),
+    searchVector: tsvector("search_vector").generatedAlwaysAs(
+      sql`to_tsvector('french', f_unaccent(title || ' ' || body_text || ' ' || values_text))`,
+    ),
+    shareEnabled: boolean("share_enabled").notNull().default(false),
+    publicId: text("public_id").unique(),
+    shareIncludeSubpages: boolean("share_include_subpages")
+      .notNull()
+      .default(true),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    trashedAt: timestamp("trashed_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("pages_search_vector_idx").using("gin", t.searchVector),
+    index("pages_parent_id_idx").on(t.parentId),
+    index("pages_db_id_idx").on(t.dbId),
+    index("pages_trashed_at_idx").on(t.trashedAt),
+  ],
+);
+
+export const media = pgTable("media", {
+  id: text("id").primaryKey(),
+  filename: text("filename").notNull(),
+  originalName: text("original_name").notNull(),
+  mime: text("mime").notNull(),
+  size: integer("size").notNull(),
+  // set null : le fichier orphelin reste repérable pour le nettoyage disque.
+  pageId: text("page_id").references(() => pages.id, { onDelete: "set null" }),
+  createdAt: createdAt(),
+});

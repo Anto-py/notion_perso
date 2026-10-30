@@ -14,7 +14,8 @@
     "typecheck": "next typegen && tsc --noEmit",
     "verify": "bash scripts/verify.sh",
     "review:file": "bash scripts/review_file.sh",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:seed": "node --env-file=.env --experimental-strip-types --no-warnings scripts/seed_user.mts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.4",
