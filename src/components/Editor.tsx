@@ -11,6 +11,7 @@ import { useEffect, useRef } from "react";
 import { checkUpload } from "@/lib/upload_rules";
 import { youtubeId } from "@/lib/youtube";
 import { youtubeBlock } from "./mediaBlocks";
+import { subpageBlock } from "./subpageBlock";
 
 // Blocs proposés : ceux de BRAINSTORMING §2. Ni audio ni vidéo déposée (la
 // vidéo passe par YouTube), d'où une liste explicite plutôt que tout le défaut.
@@ -42,6 +43,7 @@ const schema = BlockNoteSchema.create({
     image,
     file,
     youtube: youtubeBlock(),
+    subpage: subpageBlock(),
   },
 });
 
@@ -49,9 +51,14 @@ export type EditorBlocks = (typeof schema.Block)[];
 
 export type UploadState = { progress: number } | { error: string } | null;
 
+export type ChildKind = "page" | "database";
+
 type Props = {
   pageId: string;
   initialBody: unknown[];
+  // Présent seulement là où une sous-page peut naître (une page, pas une
+  // entrée) : crée l'enfant et rend son id, null en cas d'échec.
+  onCreateChild?: (kind: ChildKind) => Promise<string | null>;
   onChange: (body: EditorBlocks) => void;
   onUploadState: (state: UploadState) => void;
 };
@@ -63,10 +70,36 @@ type EditorInstance = typeof schema.BlockNoteEditor;
 // on unifie le nom, et YouTube se glisse juste après le dernier média.
 const MEDIA_GROUP = "Médias";
 
-function slashItems(editor: EditorInstance) {
+// Le bloc s'insère aussitôt, en attente, puis reçoit l'id de l'enfant créé :
+// le curseur reste à sa place pendant la requête. Un échec retire le bloc.
+function childItems(editor: EditorInstance, onCreateChild: (kind: ChildKind) => Promise<string | null>) {
+  const item = (kind: ChildKind, title: string, subtext: string, aliases: string[], icon: string) => ({
+    title,
+    subtext,
+    aliases,
+    group: "Pages",
+    icon: <span aria-hidden>{icon}</span>,
+    onItemClick: () => {
+      const inserted = insertOrUpdateBlockForSlashMenu(editor, { type: "subpage", props: { kind } });
+      void onCreateChild(kind).then((id) => {
+        const block = editor.getBlock(inserted.id);
+        if (!block) return;
+        if (id) editor.updateBlock(block, { props: { pageId: id } });
+        else editor.removeBlocks([block]);
+      });
+    },
+  });
+  return [
+    item("page", "Page", "Créer une sous-page ici", ["page", "sous-page", "subpage"], "📄"),
+    item("database", "Base", "Créer une base de données ici", ["base", "database", "tableau", "kanban"], "🗃️"),
+  ];
+}
+
+function slashItems(editor: EditorInstance, onCreateChild?: (kind: ChildKind) => Promise<string | null>) {
   const items = getDefaultReactSlashMenuItems(editor).map((item) =>
     item.group === "Média" ? { ...item, group: MEDIA_GROUP } : item,
   );
+  if (onCreateChild) items.unshift(...childItems(editor, onCreateChild));
   const youtube = {
     title: "Vidéo YouTube",
     subtext: "Intégrer une vidéo par son lien",
@@ -80,7 +113,7 @@ function slashItems(editor: EditorInstance) {
   return items;
 }
 
-export default function Editor({ pageId, initialBody, onChange, onUploadState }: Props) {
+export default function Editor({ pageId, initialBody, onCreateChild, onChange, onUploadState }: Props) {
   // uploadFile n'est appelé qu'après la création de l'éditeur : la ref est
   // alors remplie (effet ci-dessous).
   const editorRef = useRef<EditorInstance | null>(null);
@@ -122,7 +155,7 @@ export default function Editor({ pageId, initialBody, onChange, onUploadState }:
     <BlockNoteView editor={editor} theme="light" slashMenu={false} onChange={() => onChange(editor.document)}>
       <SuggestionMenuController
         triggerCharacter="/"
-        getItems={async (query) => filterSuggestionItems(slashItems(editor), query)}
+        getItems={async (query) => filterSuggestionItems(slashItems(editor, onCreateChild), query)}
       />
     </BlockNoteView>
   );

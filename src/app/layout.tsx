@@ -22,6 +22,9 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#f2efe6",
+  // Le clavier d'un téléphone réduit la page au lieu de la recouvrir : ce que
+  // BlockNote demande en console, et ce qui garde la saisie visible.
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

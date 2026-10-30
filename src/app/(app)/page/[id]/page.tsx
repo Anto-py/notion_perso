@@ -4,7 +4,7 @@ import { PageView, type EntryContext } from "@/components/PageView";
 import { canAccess } from "@/lib/access";
 import { getCurrentUser } from "@/lib/auth";
 import { configOf } from "@/lib/databases";
-import { getPage, listDatabases } from "@/lib/pages";
+import { getPage, listDatabases, listTreeRows } from "@/lib/pages";
 import { normalizeValues } from "@/lib/properties";
 
 // Page normale ou entrée de base ; une entrée affiche en plus ses propriétés.
@@ -37,5 +37,14 @@ async function PageLoader({ params }: Pick<PageProps<"/page/[id]">, "params">) {
     };
   }
   // key : changer de page recrée l'éditeur au lieu de recycler le précédent.
-  return <PageView key={page.id} page={{ id: page.id, title: page.title, body: page.body as unknown[] }} entry={entry} />;
+  const publicId = page.shareEnabled ? page.publicId : null;
+  const directory = (await listTreeRows()).filter((row) => canAccess(user, row, "read"));
+  return (
+    <PageView
+      key={page.id}
+      page={{ id: page.id, title: page.title, body: page.body as unknown[], publicId }}
+      entry={entry}
+      directory={directory}
+    />
+  );
 }

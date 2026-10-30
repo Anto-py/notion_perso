@@ -1,10 +1,12 @@
 // Corps BlockNote (jsonb) → texte brut, pour alimenter body_text et donc la
-// recherche, et ajout de blocs lors d'un déplacement d'entrée. Le rendu HTML
-// de la vue publique viendra ici à l'étape 5.
+// recherche ; → HTML, pour la vue publique ; ajout de blocs lors d'un
+// déplacement d'entrée ; blocs-liens vers les sous-pages.
 //
 // Le corps arrive du navigateur : on le parcourt sans lui faire confiance,
 // chaque champ inattendu est simplement ignoré.
 import type { Orphan } from "./properties";
+import { isStoredName } from "./upload_rules";
+import { youtubeEmbedUrl, youtubeId } from "./youtube";
 
 type Json = unknown;
 
@@ -88,4 +90,267 @@ export function appendOrphans(body: Json, orphans: readonly Orphan[]): Json[] {
   const blocks: Json[] = Array.isArray(body) ? [...body] : [];
   for (const orphan of orphans) blocks.push(orphanBlock(orphan));
   return blocks;
+}
+
+// --- Blocs-liens vers les sous-pages --------------------------------------------
+//
+// Une sous-page créée par le menu « / » laisse dans le corps de sa mère un bloc
+// « subpage » qui ne garde que son id. Effacer le dernier bloc d'une sous-page
+// l'envoie en corbeille ; le voir revenir (Ctrl + Z, collage) la restaure.
+
+export const SUBPAGE_BLOCK = "subpage";
+
+// Nombre de blocs-liens par sous-page, enfants compris. Un bloc en attente
+// (id vide, création en cours) ne compte pas.
+export function subpageRefs(body: Json): Map<string, number> {
+  const counts = new Map<string, number>();
+  const visit = (blocks: Json) => {
+    if (!Array.isArray(blocks)) return;
+    for (const block of blocks) {
+      if (!isObject(block)) continue;
+      const pageId = isObject(block.props) ? block.props.pageId : undefined;
+      if (block.type === SUBPAGE_BLOCK && typeof pageId === "string" && pageId) {
+        counts.set(pageId, (counts.get(pageId) ?? 0) + 1);
+      }
+      visit(block.children);
+    }
+  };
+  visit(body);
+  return counts;
+}
+
+// Sous-pages dont le dernier bloc vient de disparaître, et celles qui
+// retrouvent un bloc. Un bloc déplacé ou dupliqué ne change rien.
+export function refChanges(
+  before: ReadonlyMap<string, number>,
+  after: ReadonlyMap<string, number>,
+): { gone: string[]; back: string[] } {
+  return {
+    gone: [...before.keys()].filter((id) => !after.has(id)),
+    back: [...after.keys()].filter((id) => !before.has(id)),
+  };
+}
+
+// --- Rendu HTML de la vue publique -------------------------------------------
+//
+// Le HTML produit est injecté tel quel dans la page publique : tout texte est
+// échappé, toute adresse filtrée, toute classe prise dans une liste fermée.
+
+const COLORS = new Set(["gray", "brown", "red", "orange", "yellow", "green", "blue", "purple", "pink"]);
+const ALIGNMENTS = new Set(["center", "right", "justify"]);
+const ENTITIES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, (char) => ENTITIES[char]);
+}
+
+// Adresse admise dans un lien : web, courriel, ou chemin du site. Tout le
+// reste (javascript:, data:, //autre-hôte, que le navigateur lit comme un
+// autre site) est refusé.
+export function safeHref(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const href = raw.trim();
+  if (/^\/(?![/\\])/.test(href)) return href;
+  try {
+    const url = new URL(href);
+    return ["http:", "https:", "mailto:"].includes(url.protocol) ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+// Source d'une image ou d'un fichier : un média déposé, ou une adresse web.
+function safeSrc(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const media = raw.match(/^\/api\/media\/([^/?#]+)$/);
+  if (media) return isStoredName(media[1]) ? raw : null;
+  const href = safeHref(raw);
+  return href && /^https?:/.test(href) ? href : null;
+}
+
+function linkAttrs(href: string): string {
+  const external = /^https?:/.test(href) || href.startsWith("/api/media/");
+  return `href="${escapeHtml(href)}"${external ? ' target="_blank" rel="noopener noreferrer"' : ""}`;
+}
+
+function colorClasses(record: Record<string, Json>): string[] {
+  const classes: string[] = [];
+  if (typeof record.textColor === "string" && COLORS.has(record.textColor)) classes.push(`tc-${record.textColor}`);
+  if (typeof record.backgroundColor === "string" && COLORS.has(record.backgroundColor)) classes.push(`bg-${record.backgroundColor}`);
+  return classes;
+}
+
+function styledText(text: string, styles: Record<string, Json>): string {
+  let html = escapeHtml(text).replace(/\n/g, "<br>");
+  if (styles.code === true) html = `<code>${html}</code>`;
+  if (styles.strike === true) html = `<s>${html}</s>`;
+  if (styles.underline === true) html = `<u>${html}</u>`;
+  if (styles.italic === true) html = `<em>${html}</em>`;
+  if (styles.bold === true) html = `<strong>${html}</strong>`;
+  const classes = colorClasses(styles);
+  return classes.length ? `<span class="${classes.join(" ")}">${html}</span>` : html;
+}
+
+function inlineHtml(content: Json): string {
+  if (typeof content === "string") return styledText(content, {});
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((item) => {
+      if (typeof item === "string") return styledText(item, {});
+      if (!isObject(item)) return "";
+      if (item.type === "text" && typeof item.text === "string") {
+        return styledText(item.text, isObject(item.styles) ? item.styles : {});
+      }
+      if (item.type === "link") {
+        const inner = inlineHtml(item.content);
+        const href = safeHref(item.href);
+        return href ? `<a ${linkAttrs(href)}>${inner}</a>` : inner;
+      }
+      return "";
+    })
+    .join("");
+}
+
+// Classes d'un bloc : alignement et couleurs, chacun pris dans sa liste.
+function blockAttrs(props: Record<string, Json>, extra: string[] = []): string {
+  const classes = [...extra];
+  if (typeof props.textAlignment === "string" && ALIGNMENTS.has(props.textAlignment)) {
+    classes.push(`align-${props.textAlignment}`);
+  }
+  classes.push(...colorClasses(props));
+  return classes.length ? ` class="${classes.join(" ")}"` : "";
+}
+
+// Lien d'un bloc de sous-page dans la vue publique ; null : la sous-page n'est
+// pas lisible par ce lien (corbeille, déplacée hors du sous-arbre), le bloc
+// disparaît.
+export type RenderOptions = { subpage?: (pageId: string) => { href: string; label: string } | null };
+
+const LISTS: Record<string, { tag: "ul" | "ol"; extra: string[] }> = {
+  bulletListItem: { tag: "ul", extra: [] },
+  numberedListItem: { tag: "ol", extra: [] },
+  checkListItem: { tag: "ul", extra: ["checklist"] },
+};
+
+function propsOf(block: Record<string, Json>): Record<string, Json> {
+  return isObject(block.props) ? block.props : {};
+}
+
+function childrenOf(block: Record<string, Json>): Json[] {
+  return Array.isArray(block.children) ? block.children : [];
+}
+
+function listItemHtml(block: Record<string, Json>, options: RenderOptions): string {
+  const props = propsOf(block);
+  const nested = blocksHtml(childrenOf(block), options);
+  if (block.type === "checkListItem") {
+    const checked = props.checked === true;
+    const box = `<input type="checkbox" disabled${checked ? " checked" : ""} aria-label="${checked ? "Cochée" : "Non cochée"}">`;
+    return `<li${blockAttrs(props, checked ? ["checked"] : [])}>${box} ${inlineHtml(block.content)}${nested}</li>`;
+  }
+  return `<li${blockAttrs(props)}>${inlineHtml(block.content)}${nested}</li>`;
+}
+
+function captionHtml(props: Record<string, Json>): string {
+  return typeof props.caption === "string" && props.caption ? `<figcaption>${escapeHtml(props.caption)}</figcaption>` : "";
+}
+
+function blockHtml(block: Json, options: RenderOptions): string {
+  if (!isObject(block)) return "";
+  const props = propsOf(block);
+  const children = childrenOf(block);
+  const nested = children.length ? `<div class="block-children">${blocksHtml(children, options)}</div>` : "";
+  switch (block.type) {
+    case "paragraph":
+      return `<p${blockAttrs(props)}>${inlineHtml(block.content)}</p>${nested}`;
+    case "heading": {
+      // Le titre de la page est le h1 : un titre de niveau 1 du corps est un h2.
+      const level = typeof props.level === "number" && props.level >= 1 ? Math.min(Math.floor(props.level) + 1, 6) : 2;
+      const heading = `<h${level}${blockAttrs(props)}>${inlineHtml(block.content)}</h${level}>`;
+      return props.isToggleable === true ? `<details><summary>${heading}</summary>${blocksHtml(children, options)}</details>` : heading + nested;
+    }
+    case "quote":
+      return `<blockquote${blockAttrs(props)}>${inlineHtml(block.content)}</blockquote>${nested}`;
+    case "toggleListItem":
+      return `<details${blockAttrs(props)}><summary>${inlineHtml(block.content)}</summary>${blocksHtml(children, options)}</details>`;
+    case "codeBlock":
+      // Le code s'affiche tel qu'écrit : ni style ni lien.
+      return `<pre><code>${escapeHtml(inlineText(block.content))}</code></pre>${nested}`;
+    case "divider":
+      return "<hr>";
+    case "image": {
+      const src = safeSrc(props.url);
+      if (!src) return "";
+      const alt = typeof props.caption === "string" && props.caption ? props.caption : typeof props.name === "string" ? props.name : "";
+      const width = typeof props.previewWidth === "number" && props.previewWidth > 0 ? ` style="width:${Math.round(props.previewWidth)}px"` : "";
+      return `<figure class="media-image"><img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" loading="lazy"${width}>${captionHtml(props)}</figure>`;
+    }
+    case "file": {
+      const src = safeSrc(props.url);
+      if (!src) return "";
+      const name = typeof props.name === "string" && props.name ? props.name : "Fichier";
+      return `<p class="media-file"><a ${linkAttrs(src)}>${escapeHtml(name)}</a></p>${captionHtml(props)}`;
+    }
+    case SUBPAGE_BLOCK: {
+      const pageId = typeof props.pageId === "string" ? props.pageId : "";
+      const link = pageId && options.subpage ? options.subpage(pageId) : null;
+      return link ? `<p class="subpage-link"><a href="${escapeHtml(link.href)}">${escapeHtml(link.label)}</a></p>` : "";
+    }
+    case "youtube": {
+      const id = typeof props.url === "string" ? youtubeId(props.url) : null;
+      if (!id) return "";
+      return (
+        `<div class="yt-embed"><iframe src="${youtubeEmbedUrl(id)}" title="Vidéo YouTube" loading="lazy"` +
+        ' allow="accelerometer; encrypted-media; gyroscope; picture-in-picture" allowfullscreen' +
+        ' referrerpolicy="strict-origin-when-cross-origin"></iframe></div>'
+      );
+    }
+    default: {
+      // Bloc inconnu (tableau importé, type futur) : son texte, s'il en a.
+      const { content } = block;
+      if (isObject(content) && content.type === "tableContent") {
+        const rows = Array.isArray(content.rows) ? content.rows : [];
+        const body = rows
+          .map((row) => {
+            const cells = isObject(row) && Array.isArray(row.cells) ? row.cells : [];
+            return `<tr>${cells.map((cell) => `<td>${inlineHtml(isObject(cell) ? cell.content : cell)}</td>`).join("")}</tr>`;
+          })
+          .join("");
+        return `<table class="body-table"><tbody>${body}</tbody></table>`;
+      }
+      const inner = inlineHtml(content);
+      return inner ? `<p>${inner}</p>${nested}` : nested;
+    }
+  }
+}
+
+// Les éléments de liste consécutifs de même type forment une seule liste.
+function blocksHtml(blocks: Json[], options: RenderOptions): string {
+  let html = "";
+  let i = 0;
+  while (i < blocks.length) {
+    const first = blocks[i];
+    const list = isObject(first) && typeof first.type === "string" ? LISTS[first.type] : undefined;
+    if (!list || !isObject(first)) {
+      html += blockHtml(first, options);
+      i++;
+      continue;
+    }
+    let items = "";
+    while (i < blocks.length) {
+      const item = blocks[i];
+      if (!isObject(item) || item.type !== first.type) break;
+      items += listItemHtml(item, options);
+      i++;
+    }
+    const start = propsOf(first).start;
+    const startAttr = first.type === "numberedListItem" && typeof start === "number" && start > 1 ? ` start="${Math.floor(start)}"` : "";
+    const classAttr = list.extra.length ? ` class="${list.extra.join(" ")}"` : "";
+    html += `<${list.tag}${classAttr}${startAttr}>${items}</${list.tag}>`;
+  }
+  return html;
+}
+
+export function renderHtml(body: Json, options: RenderOptions = {}): string {
+  return Array.isArray(body) ? blocksHtml(body, options) : "";
 }

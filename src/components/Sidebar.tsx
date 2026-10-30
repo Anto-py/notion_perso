@@ -70,10 +70,10 @@ export function Sidebar({ rows, username, inboxCount }: Props) {
     return data ?? {};
   }
 
-  async function createPage(parentId: string | null, type: "page" | "database" = "page") {
-    const data = await post("/api/pages", { parentId, type });
+  // À la racine seulement : une sous-page naît du menu « / » de sa mère.
+  async function createPage(type: "page" | "database" = "page") {
+    const data = await post("/api/pages", { parentId: null, type });
     if (!data?.id) return;
-    if (parentId && !expanded.has(parentId)) setExpanded(new Set([...expanded, parentId]));
     router.refresh();
     router.push(type === "database" ? `/db/${data.id}` : `/page/${data.id}`);
   }
@@ -121,10 +121,10 @@ export function Sidebar({ rows, username, inboxCount }: Props) {
         </Link>
         <SearchBar>
           <div className="new-buttons">
-            <button type="button" className="new-page" onClick={() => createPage(null)}>
+            <button type="button" className="new-page" onClick={() => createPage()}>
               + Nouvelle page
             </button>
-            <button type="button" className="new-page" onClick={() => createPage(null, "database")}>
+            <button type="button" className="new-page" onClick={() => createPage("database")}>
               + Nouvelle base
             </button>
           </div>
@@ -158,7 +158,6 @@ export function Sidebar({ rows, username, inboxCount }: Props) {
                       activeId={activeId}
                       expanded={expanded}
                       onToggle={toggle}
-                      onCreateChild={createPage}
                     />
                   ))}
                 </ul>

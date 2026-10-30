@@ -8,10 +8,12 @@ import { useRef, useState } from "react";
 import type { UploadState } from "./Editor";
 import type { Property, Values } from "@/lib/properties";
 import type { SaveStatus } from "@/lib/saver";
-import { label } from "@/lib/tree";
+import { label, type TreeRow } from "@/lib/tree";
 import { PropertyPanel } from "./PropertyPanel";
+import { SharePanel } from "./SharePanel";
 import { useAutosave } from "./useAutosave";
 import { useSearchHighlight } from "./useSearchHighlight";
+import { useSubpages } from "./useSubpages";
 
 const Editor = dynamic(() => import("./Editor"), {
   ssr: false,
@@ -26,9 +28,14 @@ export type EntryContext = {
   databases: { id: string; title: string; icon: string | null }[];
 };
 
-type Props = { page: { id: string; title: string; body: unknown[] }; entry?: EntryContext };
+type Props = {
+  page: { id: string; title: string; body: unknown[]; publicId: string | null };
+  entry?: EntryContext;
+  // Pages et bases de l'arbre : titres des blocs-liens de sous-page.
+  directory: TreeRow[];
+};
 
-export function PageView({ page, entry }: Props) {
+export function PageView({ page, entry, directory }: Props) {
   const router = useRouter();
   const [upload, setUpload] = useState<UploadState>(null);
   const [trashError, setTrashError] = useState<string | null>(null);
@@ -38,6 +45,7 @@ export function PageView({ page, entry }: Props) {
   const { status, queue, cancel } = useAutosave(page.id, (patch) => {
     if (patch.title !== undefined) router.refresh();
   });
+  const subpages = useSubpages(page.id, page.body, directory, setTrashError);
 
   async function moveToTrash() {
     cancel();
@@ -61,6 +69,7 @@ export function PageView({ page, entry }: Props) {
         <SaveIndicator status={status} />
         <UploadIndicator state={upload} onDismiss={() => setUpload(null)} />
         {trashError && <span className="status status-error">{trashError}</span>}
+        <SharePanel pageId={page.id} initialPublicId={page.publicId} />
         <button type="button" className="ghost" onClick={moveToTrash}>
           Supprimer
         </button>
@@ -76,7 +85,17 @@ export function PageView({ page, entry }: Props) {
           databases={entry.databases}
         />
       )}
-      <Editor pageId={page.id} initialBody={page.body} onChange={(body) => queue({ body })} onUploadState={setUpload} />
+      <Editor
+        pageId={page.id}
+        initialBody={page.body}
+        // Une entrée n'a pas de sous-pages (seule une page en reçoit).
+        onCreateChild={entry ? undefined : subpages.createChild}
+        onChange={(body) => {
+          queue({ body });
+          if (!entry) subpages.bodyChanged(body);
+        }}
+        onUploadState={setUpload}
+      />
     </main>
   );
 }

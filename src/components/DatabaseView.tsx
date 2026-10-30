@@ -26,12 +26,13 @@ import { KanbanView } from "./KanbanView";
 import { SaveIndicator, TitleField } from "./PageView";
 import { PropertySchemaEditor } from "./PropertySchemaEditor";
 import { send } from "./request";
+import { SharePanel } from "./SharePanel";
 import { TableView } from "./TableView";
 import { useAutosave } from "./useAutosave";
 import { ViewControls } from "./ViewControls";
 
 type Props = {
-  database: { id: string; title: string; icon: string | null };
+  database: { id: string; title: string; icon: string | null; publicId: string | null };
   config: DbConfig;
   entries: EntryRow[];
 };
@@ -210,6 +211,7 @@ export function DatabaseView({ database, config, entries }: Props) {
     <main className="page page-wide">
       <div className="page-bar">
         <SaveIndicator status={status} />
+        <SharePanel pageId={database.id} initialPublicId={database.publicId} />
         <button type="button" className="ghost" onClick={moveToTrash}>
           Supprimer la base
         </button>

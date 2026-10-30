@@ -285,8 +285,7 @@ a {
   opacity: 0.4;
 }
 
-.chevron,
-.add-child {
+.chevron {
   border: none;
   background: transparent;
   padding: 0;
@@ -309,15 +308,6 @@ a {
   white-space: nowrap;
   text-decoration: none;
   padding: 0.2rem 0;
-}
-
-.add-child {
-  visibility: hidden;
-}
-
-.tree-row:hover .add-child,
-.add-child:focus-visible {
-  visibility: visible;
 }
 
 .root-drop {
@@ -1466,10 +1456,6 @@ mark.hit {
     transform: none;
   }
 
-  .add-child {
-    visibility: visible;
-  }
-
   .page {
     padding: 3.2rem 1rem 4rem;
   }
@@ -1509,4 +1495,397 @@ mark.hit {
     justify-content: flex-end;
     gap: 0.5rem;
   }
+}
+
+/* --- Partage : panneau de l'en-tête ---------------------------------------- */
+
+.share {
+  position: relative;
+}
+
+.share-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  width: min(24rem, 90vw);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.9rem 1rem;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-surface);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+}
+
+.share-panel .hint {
+  margin: 0;
+}
+
+.share-switch {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.share-link {
+  display: flex;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+.share-link input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-inner);
+  background: var(--bg-side);
+}
+
+/* --- Vue publique (/p/…) ----------------------------------------------------
+   Même registre que l'app, un cran plus signé : nom du site en tête, pied de
+   page orné. Ni fond Art Nouveau ni cadre. */
+
+.public {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.public-header {
+  padding: 1.1rem 1.5rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-side);
+}
+
+.public-site {
+  font-family: var(--font-label);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.public-main {
+  flex: 1;
+  width: 100%;
+  max-width: calc(var(--text-width) + 3rem);
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+.public-main:has(.public-table) {
+  max-width: 80rem;
+}
+
+.public-crumbs {
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  margin-bottom: 0.75rem;
+}
+
+.public-crumbs a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.public-crumbs a:hover {
+  text-decoration: underline;
+}
+
+.public-title {
+  font-size: 2.4rem;
+  line-height: 1.2;
+  margin: 0 0 1.25rem;
+}
+
+.public-gone {
+  font-size: 1.1rem;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 4rem;
+}
+
+.public-props {
+  margin: 0 0 1.5rem;
+}
+
+.public-props .prop-value {
+  padding-top: 0.35rem;
+}
+
+.public-body {
+  line-height: 1.65;
+  font-size: 1.02rem;
+}
+
+.public-body p {
+  margin: 0.4rem 0;
+  min-height: 1em;
+}
+
+.public-body h2,
+.public-body h3,
+.public-body h4,
+.public-body h5,
+.public-body h6 {
+  line-height: 1.3;
+  margin: 1.6rem 0 0.5rem;
+}
+
+.public-body blockquote {
+  margin: 0.8rem 0;
+  padding-left: 1rem;
+  border-left: 3px solid var(--accent);
+  color: var(--ink-soft);
+}
+
+.public-body pre {
+  background: var(--bg-side);
+  border-radius: var(--r-inner);
+  padding: 0.8rem 1rem;
+  overflow-x: auto;
+  font-size: 0.9rem;
+}
+
+.public-body code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+}
+
+.public-body :not(pre) > code {
+  background: var(--bg-side);
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+}
+
+.public-body a {
+  color: var(--accent);
+}
+
+.public-body hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 1.5rem 0;
+}
+
+.public-body ul,
+.public-body ol {
+  padding-left: 1.5rem;
+  margin: 0.4rem 0;
+}
+
+.public-body .checklist {
+  list-style: none;
+  padding-left: 0.2rem;
+}
+
+.public-body .checklist input {
+  margin: 0 0.35rem 0 0;
+  vertical-align: -0.1em;
+}
+
+.public-body .checklist li.checked {
+  color: var(--ink-soft);
+  text-decoration: line-through;
+}
+
+.public-body details {
+  margin: 0.4rem 0;
+}
+
+.public-body details > :not(summary) {
+  margin-left: 1.3rem;
+}
+
+.public-body summary {
+  cursor: pointer;
+}
+
+.public-body summary > h2,
+.public-body summary > h3,
+.public-body summary > h4 {
+  display: inline;
+}
+
+.public-body .block-children {
+  padding-left: 1.5rem;
+}
+
+.public-body figure {
+  margin: 1rem 0;
+}
+
+.public-body img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.public-body figcaption {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  margin-top: 0.35rem;
+}
+
+.public-body .media-file a::before {
+  content: "📄 ";
+}
+
+.public-body .yt-embed {
+  margin: 1rem 0;
+}
+
+.public-body .body-table td {
+  border: 1px solid var(--line);
+  padding: 0.35rem 0.6rem;
+}
+
+.public-body .body-table {
+  border-collapse: collapse;
+}
+
+.align-center {
+  text-align: center;
+}
+
+.align-right {
+  text-align: right;
+}
+
+.align-justify {
+  text-align: justify;
+}
+
+/* Couleurs du texte et du fond posées dans l'éditeur : la palette par défaut
+   de BlockNote, pour que la page publiée ressemble à la page écrite. */
+.tc-gray { color: #9b9a97; }
+.tc-brown { color: #64473a; }
+.tc-red { color: #e03e3e; }
+.tc-orange { color: #d9730d; }
+.tc-yellow { color: #dfab01; }
+.tc-green { color: #4d6461; }
+.tc-blue { color: #0b6e99; }
+.tc-purple { color: #6940a5; }
+.tc-pink { color: #ad1a72; }
+.bg-gray { background: #ebeced; }
+.bg-brown { background: #e9e5e3; }
+.bg-red { background: #fbe4e4; }
+.bg-orange { background: #f6e9d9; }
+.bg-yellow { background: #fbf3db; }
+.bg-green { background: #ddedea; }
+.bg-blue { background: #ddebf1; }
+.bg-purple { background: #eae4f2; }
+.bg-pink { background: #f4dfeb; }
+
+.public-children {
+  margin-top: 2.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.public-children-title {
+  font-family: var(--font-label);
+  font-weight: 500;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-soft);
+  margin: 0 0 0.5rem;
+}
+
+.public-children ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.public-children li a {
+  display: block;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--r-inner);
+  text-decoration: none;
+}
+
+.public-children li a:hover {
+  background: var(--hover);
+}
+
+.public-table .cell-title a {
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.public-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 1.5rem 1.5rem 2rem;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.public-footer p {
+  margin: 0;
+}
+
+.public-ornament {
+  color: var(--accent);
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+@media (max-width: 760px) {
+  .public-main {
+    padding: 1.25rem 1rem 3rem;
+  }
+
+  .public-title {
+    font-size: 1.9rem;
+  }
+}
+
+/* --- Bloc-lien vers une sous-page (menu « / ») ------------------------------ */
+
+.subpage-block {
+  width: 100%;
+  padding: 0.15rem 0;
+}
+
+.subpage-block a {
+  display: inline-block;
+  padding: 0.15rem 0.35rem;
+  border-radius: var(--r-inner);
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 3px;
+  font-weight: 500;
+}
+
+.subpage-block a:hover {
+  background: var(--hover);
+}
+
+.subpage-pending,
+.subpage-missing {
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+.public-body .subpage-link a {
+  color: var(--ink);
+  font-weight: 500;
+  text-decoration-color: var(--line);
+  text-underline-offset: 3px;
 }

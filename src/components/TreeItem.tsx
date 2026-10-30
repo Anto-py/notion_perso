@@ -1,6 +1,7 @@
 "use client";
 // Un élément de l'arbre : à la fois saisissable (on le déplace) et cible (on
-// dépose une autre page dessus pour l'y ranger).
+// dépose une autre page dessus pour l'y ranger). Une sous-page naît du menu
+// « / » de sa mère, pas d'ici.
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import Link from "next/link";
 import { label, type TreeNode } from "@/lib/tree";
@@ -14,10 +15,9 @@ type Props = {
   activeId: string | null;
   expanded: ReadonlySet<string>;
   onToggle: (id: string) => void;
-  onCreateChild: (parentId: string) => void;
 };
 
-export function TreeItem({ node, depth, activeId, expanded, onToggle, onCreateChild }: Props) {
+export function TreeItem({ node, depth, activeId, expanded, onToggle }: Props) {
   const drag = useDraggable({ id: node.id });
   const drop = useDroppable({ id: node.id, disabled: node.type !== "page" });
   const open = expanded.has(node.id);
@@ -53,11 +53,6 @@ export function TreeItem({ node, depth, activeId, expanded, onToggle, onCreateCh
         <Link href={href} className="tree-link">
           {label(node)}
         </Link>
-        {node.type === "page" && (
-          <button type="button" className="add-child" aria-label="Ajouter une sous-page" onClick={() => onCreateChild(node.id)}>
-            +
-          </button>
-        )}
       </div>
       {open && hasChildren && (
         <ul role="group">
@@ -69,7 +64,6 @@ export function TreeItem({ node, depth, activeId, expanded, onToggle, onCreateCh
               activeId={activeId}
               expanded={expanded}
               onToggle={onToggle}
-              onCreateChild={onCreateChild}
             />
           ))}
         </ul>
