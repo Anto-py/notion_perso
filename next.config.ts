@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Image de production : un serveur autonome, sans node_modules complet
+  // (voir Dockerfile, cible runner).
+  output: "standalone",
   cacheComponents: true,
   partialPrefetching: true,
   // Le service worker se relit à chaque visite : une version en cache

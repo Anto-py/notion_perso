@@ -1,5 +1,6 @@
-import { NextResponse, type NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { deleteSession } from "@/lib/auth";
+import { redirectTo } from "@/lib/redirect";
 import { SESSION_COOKIE } from "@/lib/session_cookie";
 
 export async function POST(request: NextRequest) {
@@ -7,7 +8,7 @@ export async function POST(request: NextRequest) {
   // Supprimer la ligne en base révoque la session, même si le cookie survit.
   if (token) await deleteSession(token);
 
-  const response = NextResponse.redirect(new URL("/login", request.url), 303);
+  const response = redirectTo("/login");
   response.cookies.delete(SESSION_COOKIE);
   return response;
 }

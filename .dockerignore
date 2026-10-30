@@ -1,0 +1,13 @@
+# Rien de local, rien de secret, rien de lourd n'entre dans l'image.
+node_modules
+.next
+.git
+.gitignore
+.env
+.env.*
+uploads
+tests
+docs
+.claude
+*.md
+tsconfig.tsbuildinfo

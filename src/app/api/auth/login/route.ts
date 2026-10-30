@@ -1,6 +1,7 @@
-import { NextResponse, type NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { createSession, verifyLogin } from "@/lib/auth";
 import { createLoginThrottle } from "@/lib/login_throttle";
+import { redirectTo } from "@/lib/redirect";
 import { SESSION_COOKIE, sessionCookieOptions } from "@/lib/session_cookie";
 import { loginPath, safeReturnPath } from "@/lib/share";
 
@@ -13,10 +14,6 @@ function clientKey(request: NextRequest): string {
   return forwarded || "local";
 }
 
-// 303 : après un POST, le navigateur suit la redirection en GET.
-function back(request: NextRequest, path: string) {
-  return NextResponse.redirect(new URL(path, request.url), 303);
-}
 
 export async function POST(request: NextRequest) {
   const key = clientKey(request);
@@ -27,7 +24,7 @@ export async function POST(request: NextRequest) {
   const suite = safeReturnPath(form.get("suite"));
   const retry = (erreur: string) => {
     const path = loginPath(suite);
-    return back(request, `${path}${path.includes("?") ? "&" : "?"}erreur=${erreur}`);
+    return redirectTo(`${path}${path.includes("?") ? "&" : "?"}erreur=${erreur}`);
   };
 
   if (throttle.retryAfter(key) > 0) return retry("attente");
@@ -39,7 +36,8 @@ export async function POST(request: NextRequest) {
   }
 
   throttle.reset(key);
-  const response = back(request, suite);
+  // 303 : après un POST, le navigateur suit la redirection en GET.
+  const response = redirectTo(suite);
   response.cookies.set(SESSION_COOKIE, await createSession(user.id), sessionCookieOptions());
   return response;
 }
