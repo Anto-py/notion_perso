@@ -1,0 +1,195 @@
+// Accès aux pages : arbre, création, modification, déplacement, corbeille.
+// Ce module ne décide d'aucun droit : chaque appelant passe d'abord par
+// canAccess (lib/access.ts), point unique des décisions d'accès.
+import { and, asc, desc, eq, isNull, lt, ne, sql } from "drizzle-orm";
+import { db } from "@/db";
+import { media, pages } from "@/db/schema";
+import { flattenToText } from "./blocks";
+import { newId } from "./ids";
+import { wouldCreateCycle, type TreeRow } from "./tree";
+
+export const TRASH_RETENTION_DAYS = 30;
+
+export type Page = typeof pages.$inferSelect;
+
+export type Outcome = { ok: true } | { ok: false; status: 400 | 404 | 409; error: string };
+
+const NOT_FOUND: Outcome = { ok: false, status: 404, error: "Page introuvable" };
+
+// Pages et bases, hors corbeille. Les entrées de base vivent dans leur base,
+// pas dans la sidebar.
+export async function listTreeRows(): Promise<TreeRow[]> {
+  return db
+    .select({ id: pages.id, parentId: pages.parentId, type: pages.type, title: pages.title, icon: pages.icon })
+    .from(pages)
+    .where(and(isNull(pages.trashedAt), ne(pages.type, "entry")))
+    .orderBy(asc(pages.manualOrder), asc(pages.createdAt));
+}
+
+// Accueil : pages modifiées en dernier.
+export async function listRecent(limit = 10) {
+  return db
+    .select({ id: pages.id, type: pages.type, title: pages.title, icon: pages.icon, updatedAt: pages.updatedAt })
+    .from(pages)
+    .where(and(isNull(pages.trashedAt), ne(pages.type, "entry")))
+    .orderBy(desc(pages.updatedAt))
+    .limit(limit);
+}
+
+export async function getPage(id: string): Promise<Page | null> {
+  const [row] = await db.select().from(pages).where(eq(pages.id, id)).limit(1);
+  return row ?? null;
+}
+
+// Un parent doit exister, être hors corbeille et être une page : une base
+// range ses entrées elle-même, une entrée n'a pas de sous-pages dans l'arbre.
+async function checkParent(parentId: string): Promise<Outcome> {
+  const parent = await getPage(parentId);
+  if (!parent || parent.trashedAt) return { ok: false, status: 404, error: "Page parente introuvable" };
+  if (parent.type !== "page") return { ok: false, status: 400, error: "Seule une page peut recevoir des sous-pages" };
+  return { ok: true };
+}
+
+export async function createPage(parentId: string | null): Promise<Outcome & { id?: string }> {
+  if (parentId) {
+    const check = await checkParent(parentId);
+    if (!check.ok) return check;
+  }
+  const id = newId("pg");
+  await db.insert(pages).values({ id, parentId, type: "page" });
+  return { ok: true, id };
+}
+
+export type PagePatch = { title?: string; icon?: string | null; body?: unknown[] };
+
+// body_text suit toujours body : c'est lui que lit la recherche.
+export async function updatePage(id: string, patch: PagePatch): Promise<Outcome & { updatedAt?: Date }> {
+  const values: Partial<typeof pages.$inferInsert> = {};
+  if (patch.title !== undefined) values.title = patch.title;
+  if (patch.icon !== undefined) values.icon = patch.icon;
+  if (patch.body !== undefined) {
+    values.body = patch.body;
+    values.bodyText = flattenToText(patch.body);
+  }
+  const [row] = await db
+    .update(pages)
+    .set(values)
+    .where(and(eq(pages.id, id), isNull(pages.trashedAt)))
+    .returning({ updatedAt: pages.updatedAt });
+  return row ? { ok: true, updatedAt: row.updatedAt } : NOT_FOUND;
+}
+
+// Reparentage. newParentId null : la page remonte à la racine.
+export async function movePage(id: string, newParentId: string | null): Promise<Outcome> {
+  const page = await getPage(id);
+  if (!page || page.trashedAt || page.type === "entry") return NOT_FOUND;
+  if (newParentId) {
+    const check = await checkParent(newParentId);
+    if (!check.ok) return check;
+  }
+  const rows = await db.select({ id: pages.id, parentId: pages.parentId }).from(pages);
+  const parentOf = new Map(rows.map((row) => [row.id, row.parentId]));
+  if (wouldCreateCycle(parentOf, id, newParentId)) {
+    return { ok: false, status: 409, error: "Une page ne peut pas aller sous elle-même ni sous l'une de ses sous-pages" };
+  }
+  await db.update(pages).set({ parentId: newParentId }).where(eq(pages.id, id));
+  return { ok: true };
+}
+
+// --- Corbeille -------------------------------------------------------------
+//
+// Supprimer une page y envoie tout son sous-arbre (sous-pages, et entrées si
+// c'est une base), marqué d'un même trashed_at. Ce marqueur commun dit ce qui
+// est parti ensemble : restaurer ou purger la page traite ce lot-là, et laisse
+// en corbeille une sous-page supprimée plus tôt, à part.
+
+// Ids du lot parti avec rootId (rootId compris). UNION, et non UNION ALL :
+// arrête la récursion même si la base contenait une boucle.
+function trashedBatch(rootId: string) {
+  return sql`
+    WITH RECURSIVE root AS (
+      SELECT id, trashed_at FROM pages WHERE id = ${rootId} AND trashed_at IS NOT NULL
+    ), batch AS (
+      SELECT id FROM root
+      UNION
+      SELECT p.id FROM pages p JOIN batch b ON p.parent_id = b.id OR p.db_id = b.id
+      WHERE p.trashed_at = (SELECT trashed_at FROM root)
+    )
+    SELECT id FROM batch`;
+}
+
+export async function trashPage(id: string): Promise<Outcome> {
+  const result = await db.execute(sql`
+    WITH RECURSIVE subtree AS (
+      SELECT id FROM pages WHERE id = ${id} AND trashed_at IS NULL
+      UNION
+      SELECT p.id FROM pages p JOIN subtree s ON p.parent_id = s.id OR p.db_id = s.id
+      WHERE p.trashed_at IS NULL
+    )
+    UPDATE pages SET trashed_at = now(), updated_at = now() WHERE id IN (SELECT id FROM subtree)`);
+  return result.rowCount ? { ok: true } : NOT_FOUND;
+}
+
+export type TrashItem = { id: string; title: string; icon: string | null; type: string; trashedAt: Date };
+
+// Ne montre que la tête de chaque lot : une sous-page partie avec son parent
+// se restaure avec lui.
+export async function listTrash(): Promise<TrashItem[]> {
+  const result = await db.execute<{ id: string; title: string; icon: string | null; type: string; trashed_at: Date }>(sql`
+    SELECT p.id, p.title, p.icon, p.type, p.trashed_at
+    FROM pages p
+    LEFT JOIN pages parent ON parent.id = p.parent_id
+    LEFT JOIN pages base ON base.id = p.db_id
+    WHERE p.trashed_at IS NOT NULL
+      AND (parent.id IS NULL OR parent.trashed_at IS DISTINCT FROM p.trashed_at)
+      AND (base.id IS NULL OR base.trashed_at IS DISTINCT FROM p.trashed_at)
+    ORDER BY p.trashed_at DESC`);
+  return result.rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    icon: row.icon,
+    type: row.type,
+    trashedAt: new Date(row.trashed_at),
+  }));
+}
+
+// Restaure le lot. Si le parent est resté en corbeille, la page remonte à la
+// racine plutôt que de rester invisible (parent purgé : déjà null, par la FK).
+export async function restorePage(id: string): Promise<Outcome> {
+  return db.transaction(async (tx) => {
+    const restored = await tx.execute(sql`
+      UPDATE pages SET trashed_at = NULL, updated_at = now() WHERE id IN (${trashedBatch(id)})`);
+    if (!restored.rowCount) return NOT_FOUND;
+    await tx.execute(sql`
+      UPDATE pages p SET parent_id = NULL
+      FROM pages parent
+      WHERE p.id = ${id} AND parent.id = p.parent_id AND parent.trashed_at IS NOT NULL`);
+    return { ok: true } as const;
+  });
+}
+
+// Suppression définitive du lot. Les fichiers liés restent sur le disque,
+// repérables par media.page_id devenu null (nettoyage disque hors v1).
+export async function purgePage(id: string): Promise<Outcome> {
+  const result = await db.execute(sql`DELETE FROM pages WHERE id IN (${trashedBatch(id)})`);
+  return result.rowCount ? { ok: true } : NOT_FOUND;
+}
+
+// Purge des éléments en corbeille depuis plus de 30 jours. Un lot partage son
+// trashed_at, il part donc toujours en entier.
+export async function purgeExpired(): Promise<number> {
+  const limit = new Date(Date.now() - TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  const deleted = await db.delete(pages).where(lt(pages.trashedAt, limit)).returning({ id: pages.id });
+  return deleted.length;
+}
+
+// --- Médias ----------------------------------------------------------------
+
+export async function recordMedia(values: typeof media.$inferInsert): Promise<void> {
+  await db.insert(media).values(values);
+}
+
+export async function getMedia(filename: string) {
+  const [row] = await db.select().from(media).where(eq(media.filename, filename)).limit(1);
+  return row ?? null;
+}

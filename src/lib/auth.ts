@@ -2,6 +2,7 @@
 // l'utilisateur dans l'application (Data Access Layer, SPECS.md).
 import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
+import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { and, eq, gt } from "drizzle-orm";
@@ -66,9 +67,22 @@ async function userFromToken(token: string): Promise<User | null> {
 
 // cache() de React : une seule lecture de session par requête, même si dix
 // composants la demandent. Lit un cookie, donc à appeler sous un <Suspense>.
-export const getCurrentUser = cache(async (): Promise<User> => {
+// Renvoie null sans session valide : c'est la forme qu'attendent les routes
+// d'API, qui répondent 401 au lieu de rediriger.
+export const getSessionUser = cache(async (): Promise<User | null> => {
+  // connection() : jamais dans un pré-rendu. Avec partialPrefetching, Next
+  // pré-rend aussi ce qui lit les cookies ; or la vérification compare
+  // l'expiration à l'heure courante et prolonge la session en base, deux
+  // gestes propres à chaque requête (« new Date() while prerendering », mesuré
+  // en dev le 2026-10-30, invisible au build).
+  await connection();
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  const user = token ? await userFromToken(token) : null;
+  return token ? await userFromToken(token) : null;
+});
+
+// Pour les pages : sans session valide, redirige vers /login.
+export const getCurrentUser = cache(async (): Promise<User> => {
+  const user = await getSessionUser();
   if (!user) redirect("/login");
   return user;
 });

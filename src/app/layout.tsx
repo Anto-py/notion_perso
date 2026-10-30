@@ -8,7 +8,9 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="fr">
+    // suppressHydrationWarning ne vaut que pour les attributs de <html>, où
+    // des extensions (LanguageTool : data-lt-installed) écrivent avant React.
+    <html lang="fr" suppressHydrationWarning>
       <body>{children}</body>
     </html>
   );

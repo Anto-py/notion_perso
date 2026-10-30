@@ -28,5 +28,8 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   // Exclut les fichiers statiques et ceux de public/ (manifest, sw.js, icônes).
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|icons/).*)"],
+  // Exclut aussi api/upload : le proxy met tout corps en mémoire et le tronque
+  // sans erreur au-delà de 10 Mo (proxyClientMaxBodySize). La route vérifie
+  // elle-même la session.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|icons/|api/upload).*)"],
 };
