@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { flattenToText } from "@/lib/blocks";
+import { appendOrphans, flattenToText } from "@/lib/blocks";
 
 describe("flattenToText", () => {
   it("aplatit titres, paragraphes et liens, un bloc par ligne", () => {
@@ -50,5 +50,30 @@ describe("flattenToText", () => {
     expect(flattenToText(null)).toBe("");
     expect(flattenToText("texte")).toBe("");
     expect(flattenToText([null, 3, { type: "paragraph", content: [{ type: "mystère" }] }])).toBe("");
+  });
+});
+
+describe("appendOrphans", () => {
+  it("ajoute un paragraphe par valeur, le lien restant cliquable", () => {
+    const body = appendOrphans(
+      [{ type: "paragraph", content: [{ type: "text", text: "Note existante", styles: {} }], children: [] }],
+      [
+        { name: "URL", type: "url", text: "https://exemple.org" },
+        { name: "Source", type: "text", text: "Exemple" },
+      ],
+    );
+    expect(body).toHaveLength(3);
+    expect(body[1]).toMatchObject({
+      type: "paragraph",
+      content: [
+        { type: "text", text: "URL : " },
+        { type: "link", href: "https://exemple.org", content: [{ type: "text", text: "https://exemple.org" }] },
+      ],
+    });
+    expect(flattenToText(body)).toBe("Note existante\nURL : https://exemple.org\nSource : Exemple");
+  });
+
+  it("part d'un corps vide quand il n'y en a pas", () => {
+    expect(appendOrphans(null, [{ name: "Aperçu", type: "text", text: "Une phrase" }])).toHaveLength(1);
   });
 });

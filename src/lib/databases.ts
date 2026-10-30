@@ -9,14 +9,17 @@
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { pages } from "@/db/schema";
+import { appendOrphans, flattenToText } from "./blocks";
 import { newId } from "./ids";
 import type { Outcome, Page } from "./pages";
 import {
   checkValue,
   migrateValues,
   normalizeValues,
+  orphanValues,
   parseConfig,
   sanitizeView,
+  transferValues,
   valuesToText,
   type DbConfig,
   type EntryRow,
@@ -145,6 +148,61 @@ export async function createEntry(dbId: string, raw: Record<string, unknown>): P
       valuesText: valuesToText(config.properties, values),
       manualOrder: Number(next),
     });
+    return { ok: true, id } as const;
+  });
+}
+
+// Déplacement d'une entrée vers une autre base. Les valeurs suivent quand la
+// propriété de destination porte le même nom et le même type (transferValues,
+// pur) ; les autres sont laissées. Les deux bases sont verrouillées dans
+// l'ordre de leurs ids, pour qu'un déplacement croisé ne s'interbloque pas.
+export async function moveEntry(id: string, targetDbId: string): Promise<Outcome & { id?: string }> {
+  return db.transaction(async (tx) => {
+    const [entry] = await tx
+      .select({ dbId: pages.dbId })
+      .from(pages)
+      .where(and(eq(pages.id, id), eq(pages.type, "entry"), isNull(pages.trashedAt)));
+    if (!entry?.dbId) return { ok: false, status: 404, error: "Entrée introuvable" } as const;
+    if (entry.dbId === targetDbId) return { ok: false, status: 400, error: "L'entrée est déjà dans cette base." } as const;
+
+    const [firstId, secondId] = entry.dbId < targetDbId ? [entry.dbId, targetDbId] : [targetDbId, entry.dbId];
+    const first = await lockDatabase(tx, firstId);
+    const second = await lockDatabase(tx, secondId);
+    const source = entry.dbId === firstId ? first : second;
+    const target = targetDbId === firstId ? first : second;
+    if (!source) return { ok: false, status: 404, error: "Base d'origine introuvable" } as const;
+    if (!target) return { ok: false, status: 404, error: "Base de destination introuvable" } as const;
+
+    const [row] = await tx
+      .select({ propertyValues: pages.propertyValues, body: pages.body })
+      .from(pages)
+      .where(eq(pages.id, id));
+    const previous = asValues(row?.propertyValues);
+    const values = transferValues(source.properties, target.properties, previous);
+    const [{ next }] = await tx
+      .select({ next: sql<number>`coalesce(max(${pages.manualOrder}), -1) + 1` })
+      .from(pages)
+      .where(eq(pages.dbId, targetDbId));
+    const [targetMeta] = await tx.select({ isInbox: pages.isInbox }).from(pages).where(eq(pages.id, targetDbId));
+
+    const patch: Partial<typeof pages.$inferInsert> = {
+      dbId: targetDbId,
+      propertyValues: values,
+      valuesText: valuesToText(target.properties, values),
+      manualOrder: Number(next),
+    };
+    // Une valeur sans propriété d'accueil n'est pas jetée : elle rejoint le
+    // corps de la page, préfixée de son nom, l'URL restant cliquable.
+    const orphans = orphanValues(source.properties, target.properties, previous, values);
+    if (orphans.length > 0) {
+      const body = appendOrphans(row?.body, orphans);
+      patch.body = body;
+      patch.bodyText = flattenToText(body);
+    }
+    // La nature d'une capture (lien ou note) ne suit pas l'entrée dans une
+    // base ordinaire.
+    if (!targetMeta?.isInbox) patch.inboxKind = null;
+    await tx.update(pages).set(patch).where(eq(pages.id, id));
     return { ok: true, id } as const;
   });
 }

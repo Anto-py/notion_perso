@@ -11,11 +11,13 @@ import {
   moveInOrder,
   nextColor,
   normalizeValue,
+  orphanValues,
   parseConfig,
   withNewOption,
   checkValue,
   sanitizeView,
   sortEntries,
+  transferValues,
   uniqueName,
   validateProperties,
   valuesToText,
@@ -394,6 +396,58 @@ describe("moveInOrder", () => {
   it("ne change rien si l'ancre est l'entrée elle-même ou inconnue", () => {
     expect(moveInOrder(ids, "b", { before: "b" })).toEqual(ids);
     expect(moveInOrder(ids, "b", { after: "zz" })).toEqual(ids);
+  });
+});
+
+describe("transferValues", () => {
+  const inboxUrls: Property = { id: "prop_lien", name: "URL", type: "url" };
+  const inboxApercu: Property = { id: "prop_apercu", name: "Aperçu", type: "text" };
+  const veilleUrls: Property = { id: "prop_src", name: "url", type: "url" };
+  const veilleApercu: Property = { id: "prop_note2", name: "apercu", type: "text" };
+  const veilleStatut: Property = { id: "prop_st2", name: "Statut", type: "select", options: [{ id: "t1", name: "À lire", color: "gray" }] };
+
+  it("reporte les propriétés de même nom et même type, casse et accents ignorés", () => {
+    expect(
+      transferValues(
+        [inboxUrls, inboxApercu],
+        [veilleUrls, veilleApercu],
+        { prop_lien: "https://exemple.org", prop_apercu: "Une réflexion" },
+      ),
+    ).toEqual({ prop_src: "https://exemple.org", prop_note2: "Une réflexion" });
+  });
+
+  it("ignore une propriété absente de la cible ou d'un type différent", () => {
+    expect(transferValues(veille, [inboxUrls], { prop_date: "2026-10-30" })).toEqual({});
+    expect(transferValues([{ ...inboxUrls, type: "text" }], [veilleUrls], { prop_lien: "https://exemple.org" })).toEqual({});
+  });
+
+  it("retrouve les options d'une sélection par leur nom", () => {
+    const source: Property = { id: "prop_s", name: "Statut", type: "select", options: [{ id: "autre", name: "À LIRE", color: "blue" }] };
+    expect(transferValues([source], [veilleStatut], { prop_s: "autre" })).toEqual({ prop_st2: "t1" });
+  });
+});
+
+describe("orphanValues", () => {
+  const inboxUrl: Property = { id: "prop_lien", name: "URL", type: "url" };
+  const inboxSource: Property = { id: "prop_src", name: "Source", type: "text" };
+  const target: Property = { id: "prop_autre", name: "Auteur", type: "text" };
+
+  it("signale les valeurs sans propriété d'accueil, pour les écrire dans le corps", () => {
+    expect(orphanValues([inboxUrl, inboxSource], [target], { prop_lien: "https://exemple.org", prop_src: "Exemple" })).toEqual([
+      { name: "URL", type: "url", text: "https://exemple.org" },
+      { name: "Source", type: "text", text: "Exemple" },
+    ]);
+  });
+
+  it("ne signale rien quand la cible accueille la valeur", () => {
+    const same: Property = { id: "prop_source2", name: "source", type: "text" };
+    expect(orphanValues([inboxSource], [same], { prop_src: "Exemple" })).toEqual([]);
+  });
+
+  it("signale une option absente de la cible, que le transfert a laissée derrière", () => {
+    const source: Property = { id: "prop_s", name: "Statut", type: "select", options: [{ id: "a", name: "À lire", color: "gray" }] };
+    const cible: Property = { id: "prop_c", name: "Statut", type: "select", options: [{ id: "b", name: "Traité", color: "green" }] };
+    expect(orphanValues([source], [cible], { prop_s: "a" })).toEqual([{ name: "Statut", type: "select", text: "À lire" }]);
   });
 });
 

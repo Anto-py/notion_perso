@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { canAccess } from "@/lib/access";
 import { getCurrentUser } from "@/lib/auth";
+import { countInbox } from "@/lib/inbox";
 import { listTreeRows } from "@/lib/pages";
 
 // Zone protégée : sidebar à gauche, page ouverte au centre.
@@ -21,8 +22,8 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
 // redirige vers /login depuis ce composant.
 async function SidebarData() {
   const user = await getCurrentUser();
-  const rows = (await listTreeRows()).filter((row) => canAccess(user, row, "read"));
-  return <Sidebar rows={rows} username={user.username} />;
+  const [rows, inboxCount] = await Promise.all([listTreeRows(), countInbox()]);
+  return <Sidebar rows={rows.filter((row) => canAccess(user, row, "read"))} username={user.username} inboxCount={inboxCount} />;
 }
 
 function SidebarSkeleton() {

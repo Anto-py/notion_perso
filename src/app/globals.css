@@ -64,6 +64,19 @@ a {
   font-size: 0.9rem;
 }
 
+/* Texte lu par un lecteur d'écran, absent de l'écran. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* --- Coquille ------------------------------------------------------------ */
 
 .app-shell {
@@ -951,6 +964,245 @@ a {
   padding: 0.3rem 0.5rem;
 }
 
+/* --- Vide-cerveau et capture -------------------------------------------- */
+
+.inbox-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.inbox-link:hover {
+  background: var(--hover);
+}
+
+.inbox-link.active {
+  background: var(--hover);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.inbox-count {
+  min-width: 1.4rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.inbox-heading {
+  margin: 0 54px 1rem;
+  font-size: 1.6rem;
+}
+
+.capture-card {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  margin: 0 54px 0.6rem;
+  padding: 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.capture-card textarea,
+.capture-card input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  resize: vertical;
+}
+
+.capture-card textarea:focus,
+.capture-card input:focus {
+  outline: none;
+}
+
+.capture-link {
+  padding: 0.35rem 0.6rem;
+}
+
+.capture-hint {
+  margin: 0 54px 1.2rem;
+}
+
+.inbox-list {
+  list-style: none;
+  margin: 0 54px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Une mention de lien : l'icône du site, le titre de l'entrée, le domaine et
+   l'aperçu. La note porte le même cadre avec un glyphe. */
+.inbox-item {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.inbox-side {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+}
+
+.inbox-side .move-trigger {
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  padding: 0.1rem 0.3rem;
+}
+
+.inbox-side .move-trigger:hover {
+  color: var(--ink);
+  background: var(--hover);
+}
+
+.inbox-item:hover {
+  border-color: #d8d8d6;
+}
+
+.inbox-icon {
+  flex: 0 0 1.25rem;
+  height: 1.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+}
+
+.inbox-favicon {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+}
+
+.inbox-glyph {
+  line-height: 1;
+}
+
+.inbox-body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* La source occupe le début de la ligne, le titre prend la place restante et
+   se tronque : c'est la disposition d'une mention, source en gris puis
+   titre souligné. */
+.inbox-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.inbox-source {
+  flex: 0 0 auto;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.inbox-title {
+  min-width: 0;
+  font-weight: 600;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inbox-title:hover {
+  text-decoration: underline;
+}
+
+.inbox-item.is-link .inbox-title {
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: #d3d3d1;
+  text-underline-offset: 2px;
+}
+
+.inbox-item.is-link .inbox-title:hover {
+  text-decoration-color: var(--ink);
+}
+
+.inbox-url {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--accent);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inbox-preview {
+  margin: 0.15rem 0 0;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+.inbox-date {
+  flex: 0 0 auto;
+  padding-top: 0.15rem;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.inbox-empty {
+  margin: 1rem 54px;
+  color: var(--ink-soft);
+}
+
+.move-entry {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.move-entry select {
+  max-width: 18rem;
+}
+
+/* Depuis une carte de l'Inbox, le menu flotte sous la carte plutôt que de
+   déplacer le contenu des cartes voisines. */
+.move-entry.popover {
+  position: absolute;
+  right: 0.75rem;
+  top: calc(100% - 0.35rem);
+  z-index: 10;
+  max-width: calc(100% - 1.5rem);
+  margin-top: 0;
+  padding: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.1);
+}
+
 /* --- Mobile -------------------------------------------------------------- */
 
 @media (max-width: 760px) {
@@ -999,5 +1251,26 @@ a {
 
   .prop-name {
     flex-basis: 7rem;
+  }
+
+  .inbox-heading,
+  .capture-card,
+  .capture-hint,
+  .inbox-list,
+  .inbox-empty {
+    margin-left: 0.5rem;
+    margin-right: 0.5rem;
+  }
+
+  .inbox-item {
+    flex-wrap: wrap;
+  }
+
+  .inbox-side {
+    flex-basis: 100%;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
   }
 }

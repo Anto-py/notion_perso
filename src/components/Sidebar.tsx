@@ -21,9 +21,9 @@ import { TreeItem } from "./TreeItem";
 
 export const ROOT_DROP_ID = "__racine__";
 
-type Props = { rows: TreeRow[]; username: string };
+type Props = { rows: TreeRow[]; username: string; inboxCount: number };
 
-export function Sidebar({ rows, username }: Props) {
+export function Sidebar({ rows, username, inboxCount }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const activeId = /^\/(page|db)\//.test(pathname) ? decodeURIComponent(pathname.split("/")[2]) : null;
@@ -126,6 +126,14 @@ export function Sidebar({ rows, username }: Props) {
             + Nouvelle base
           </button>
         </div>
+        <Link href="/inbox" className={pathname === "/inbox" ? "inbox-link active" : "inbox-link"}>
+          <span>Vide-cerveau</span>
+          {inboxCount > 0 && (
+            <span className="inbox-count" aria-label={`${inboxCount} à traiter`}>
+              {inboxCount}
+            </span>
+          )}
+        </Link>
         {message && (
           <p className="sidebar-message" role="alert">
             {message}

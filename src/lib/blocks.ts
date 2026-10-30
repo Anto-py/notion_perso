@@ -1,8 +1,10 @@
 // Corps BlockNote (jsonb) → texte brut, pour alimenter body_text et donc la
-// recherche. Le rendu HTML de la vue publique viendra ici à l'étape 5.
+// recherche, et ajout de blocs lors d'un déplacement d'entrée. Le rendu HTML
+// de la vue publique viendra ici à l'étape 5.
 //
 // Le corps arrive du navigateur : on le parcourt sans lui faire confiance,
 // chaque champ inattendu est simplement ignoré.
+import type { Orphan } from "./properties";
 
 type Json = unknown;
 
@@ -58,4 +60,32 @@ export function flattenToText(body: Json): string {
     .map((line) => line.trim())
     .filter(Boolean)
     .join("\n");
+}
+
+// Un paragraphe par valeur orpheline : « URL : » suivi d'un lien cliquable
+// pour une adresse, le texte nu pour les autres. Le nom de la propriété reste
+// visible, sans quoi la valeur flotterait sans dire d'où elle vient.
+function orphanBlock(orphan: Orphan) {
+  const content =
+    orphan.type === "url"
+      ? [
+          { type: "text", text: `${orphan.name} : `, styles: {} },
+          { type: "link", href: orphan.text, content: [{ type: "text", text: orphan.text, styles: {} }] },
+        ]
+      : [{ type: "text", text: `${orphan.name} : ${orphan.text}`, styles: {} }];
+  return {
+    id: globalThis.crypto.randomUUID(),
+    type: "paragraph",
+    props: { textColor: "default", textAlignment: "left", backgroundColor: "default" },
+    content,
+    children: [],
+  };
+}
+
+// Corps d'une entrée déplacée : le corps reçu, suivi des valeurs qui n'ont pas
+// trouvé de propriété d'accueil dans la base cible.
+export function appendOrphans(body: Json, orphans: readonly Orphan[]): Json[] {
+  const blocks: Json[] = Array.isArray(body) ? [...body] : [];
+  for (const orphan of orphans) blocks.push(orphanBlock(orphan));
+  return blocks;
 }

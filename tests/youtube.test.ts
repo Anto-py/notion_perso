@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { youtubeEmbedUrl, youtubeId } from "@/lib/youtube";
+import { youtubeEmbedUrl, youtubeId, youtubeOEmbedUrl } from "@/lib/youtube";
 
 describe("youtubeId", () => {
   it.each([
@@ -26,4 +26,10 @@ describe("youtubeId", () => {
 
 it("intègre par youtube-nocookie", () => {
   expect(youtubeEmbedUrl("dQw4w9WgXcQ")).toBe("https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ");
+});
+
+it("demande l'aperçu à oEmbed avec l'identifiant vérifié", () => {
+  expect(youtubeOEmbedUrl("dQw4w9WgXcQ")).toBe(
+    "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DdQw4w9WgXcQ&format=json",
+  );
 });

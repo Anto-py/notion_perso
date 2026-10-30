@@ -4,7 +4,7 @@ import { PageView, type EntryContext } from "@/components/PageView";
 import { canAccess } from "@/lib/access";
 import { getCurrentUser } from "@/lib/auth";
 import { configOf } from "@/lib/databases";
-import { getPage } from "@/lib/pages";
+import { getPage, listDatabases } from "@/lib/pages";
 import { normalizeValues } from "@/lib/properties";
 
 // Page normale ou entrée de base ; une entrée affiche en plus ses propriétés.
@@ -28,10 +28,12 @@ async function PageLoader({ params }: Pick<PageProps<"/page/[id]">, "params">) {
     const base = page.dbId ? await getPage(page.dbId) : null;
     if (!base || base.trashedAt || !canAccess(user, base, "read")) notFound();
     const { properties } = configOf(base);
+    const others = (await listDatabases()).filter((database) => database.id !== base.id);
     entry = {
       database: { id: base.id, title: base.title, icon: base.icon },
       properties,
       values: normalizeValues(properties, page.propertyValues),
+      databases: others.filter((database) => canAccess(user, database, "read")),
     };
   }
   // key : changer de page recrée l'éditeur au lieu de recycler le précédent.

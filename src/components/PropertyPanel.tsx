@@ -3,17 +3,25 @@
 // types, options) est commun ; seules les valeurs sont propres à l'entrée.
 // Chaque changement part tout de suite (texte et lien : en quittant le champ),
 // un envoi à la fois pour que deux clics rapides arrivent dans l'ordre. Créer
-// une option l'ajoute d'abord à la base, puis la choisit.
+// une option l'ajoute d'abord à la base, puis la choisit. Une entrée peut
+// aussi changer de base : les propriétés de même nom et type suivent.
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { withNewOption, type DbConfig, type Property, type Value, type Values } from "@/lib/properties";
+import { MoveToDatabase } from "./MoveToDatabase";
 import { PropertyInput } from "./PropertyInput";
 import { TYPE_ICONS } from "./propertyUi";
 import { send } from "./request";
 
-type Props = { dbId: string; entryId: string; properties: Property[]; values: Values };
+type Props = {
+  dbId: string;
+  entryId: string;
+  properties: Property[];
+  values: Values;
+  databases: { id: string; title: string; icon: string | null }[];
+};
 
-export function PropertyPanel({ dbId, entryId, properties: initialProperties, values: initialValues }: Props) {
+export function PropertyPanel({ dbId, entryId, properties: initialProperties, values: initialValues, databases }: Props) {
   const [properties, setProperties] = useState(initialProperties);
   const [values, setValues] = useState(initialValues);
   const [error, setError] = useState<string | null>(null);
@@ -44,16 +52,13 @@ export function PropertyPanel({ dbId, entryId, properties: initialProperties, va
     return added.option.id;
   }
 
-  if (properties.length === 0) {
-    return (
-      <p className="hint props-empty">
-        Cette base n&apos;a pas encore de propriétés. <Link href={`/db/${dbId}`}>Les définir depuis la base</Link>
-      </p>
-    );
-  }
-
   return (
     <div className="props">
+      {properties.length === 0 && (
+        <p className="hint props-empty">
+          Cette base n&apos;a pas encore de propriétés. <Link href={`/db/${dbId}`}>Les définir depuis la base</Link>
+        </p>
+      )}
       {properties.map((prop) => (
         <div className="prop-row" key={prop.id}>
           <span className="prop-name">
@@ -72,6 +77,7 @@ export function PropertyPanel({ dbId, entryId, properties: initialProperties, va
           </div>
         </div>
       ))}
+      <MoveToDatabase entryId={entryId} databases={databases} />
       {error && (
         <p className="status status-error" role="alert">
           {error}

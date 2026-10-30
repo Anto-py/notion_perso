@@ -482,6 +482,55 @@ export function convertValue(from: Property, to: Property, value: unknown): Valu
   }
 }
 
+// Report des valeurs d'une entrée qui change de base. Seule une propriété de
+// même nom (casse et accents ignorés) ET de même type reçoit sa valeur ; une
+// sélection retrouve ses options par leur nom, puisque les ids diffèrent d'une
+// base à l'autre. Rien n'est converti : un type différent laisse la valeur.
+export function transferValues(from: readonly Property[], to: readonly Property[], values: Values): Values {
+  const transferred: Values = {};
+  for (const target of to) {
+    const source = from.find((prop) => fold(prop.name) === fold(target.name));
+    if (!source || source.type !== target.type || values[source.id] === undefined) continue;
+    const current = normalizeValue(source, values[source.id]);
+    if (current === undefined) continue;
+    if (isOptionType(target.type)) {
+      const ids = Array.isArray(current) ? current : [current as string];
+      const mapped = ids.map((id) => mapOption(source, target, id)).filter((id): id is string => id !== undefined);
+      const value = normalizeValue(target, Array.isArray(current) ? mapped : mapped[0]);
+      if (value !== undefined) transferred[target.id] = value;
+    } else {
+      transferred[target.id] = current;
+    }
+  }
+  return transferred;
+}
+
+// Propriété de la source qui n'a pas d'accueil dans la cible : même nom et
+// même type, sinon sa valeur n'a plus de case où vivre.
+export type Orphan = { name: string; type: PropertyType; text: string };
+
+// Valeurs qui ne suivront pas le déplacement. Elles sont écrites dans le corps
+// de la page par moveEntry, plutôt que perdues en silence. Une propriété
+// accueillie dont l'option n'existe pas dans la cible compte aussi comme
+// orpheline : transferValues l'a laissée derrière.
+export function orphanValues(
+  from: readonly Property[],
+  to: readonly Property[],
+  values: Values,
+  transferred: Values = transferValues(from, to, values),
+): Orphan[] {
+  const orphans: Orphan[] = [];
+  for (const prop of from) {
+    const value = normalizeValue(prop, values[prop.id]);
+    if (value === undefined) continue;
+    const hosted = to.find((target) => fold(target.name) === fold(prop.name) && target.type === prop.type);
+    if (hosted && transferred[hosted.id] !== undefined) continue;
+    const text = valueText(prop, value).trim();
+    if (text) orphans.push({ name: prop.name, type: prop.type, text });
+  }
+  return orphans;
+}
+
 // Valeurs d'une entrée après un changement de la liste des propriétés : les
 // propriétés retirées emportent leurs valeurs, les autres sont converties.
 export function migrateValues(before: readonly Property[], after: readonly Property[], values: Values): Values {

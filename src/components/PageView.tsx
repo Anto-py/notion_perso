@@ -21,6 +21,8 @@ export type EntryContext = {
   database: { id: string; title: string; icon: string | null };
   properties: Property[];
   values: Values;
+  // Bases vers lesquelles l'entrée peut être déplacée.
+  databases: { id: string; title: string; icon: string | null }[];
 };
 
 type Props = { page: { id: string; title: string; body: unknown[] }; entry?: EntryContext };
@@ -61,7 +63,16 @@ export function PageView({ page, entry }: Props) {
         </button>
       </div>
       <TitleField initial={page.title} ariaLabel={entry ? "Titre de l'entrée" : "Titre de la page"} onChange={(title) => queue({ title })} />
-      {entry && <PropertyPanel dbId={entry.database.id} entryId={page.id} properties={entry.properties} values={entry.values} />}
+      {entry && (
+        <PropertyPanel
+          key={entry.database.id}
+          dbId={entry.database.id}
+          entryId={page.id}
+          properties={entry.properties}
+          values={entry.values}
+          databases={entry.databases}
+        />
+      )}
       <Editor pageId={page.id} initialBody={page.body} onChange={(body) => queue({ body })} onUploadState={setUpload} />
     </main>
   );

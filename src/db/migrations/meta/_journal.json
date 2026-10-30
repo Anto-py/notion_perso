@@ -15,6 +15,13 @@
       "when": 1793356907126,
       "tag": "0001_socle",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793374805886,
+      "tag": "0002_peaceful_mongoose",
+      "breakpoints": true
     }
   ]
 }

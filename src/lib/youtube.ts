@@ -30,3 +30,10 @@ export function youtubeId(input: string): string | null {
 export function youtubeEmbedUrl(id: string): string {
   return `https://www.youtube-nocookie.com/embed/${id}`;
 }
+
+// oEmbed : le point d'entrée public de YouTube pour les agrégateurs. Il donne
+// le titre et l'auteur d'une vidéo là où la page, servie à un serveur sans
+// cookies, ne renvoie qu'un mur de consentement.
+export function youtubeOEmbedUrl(id: string): string {
+  return `https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${id}`)}&format=json`;
+}

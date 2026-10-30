@@ -18,12 +18,22 @@ export type Outcome = { ok: true } | { ok: false; status: 400 | 404 | 409; error
 const NOT_FOUND: Outcome = { ok: false, status: 404, error: "Page introuvable" };
 
 // Pages et bases, hors corbeille. Les entrées de base vivent dans leur base,
-// pas dans la sidebar.
+// pas dans la sidebar ; le Vide-cerveau y est épinglé à part, jamais dans
+// l'arbre.
 export async function listTreeRows(): Promise<TreeRow[]> {
   return db
     .select({ id: pages.id, parentId: pages.parentId, type: pages.type, title: pages.title, icon: pages.icon })
     .from(pages)
-    .where(and(isNull(pages.trashedAt), ne(pages.type, "entry")))
+    .where(and(isNull(pages.trashedAt), ne(pages.type, "entry"), eq(pages.isInbox, false)))
+    .orderBy(asc(pages.manualOrder), asc(pages.createdAt));
+}
+
+// Bases hors corbeille, pour le menu « Déplacer vers » d'une entrée.
+export async function listDatabases(): Promise<{ id: string; title: string; icon: string | null }[]> {
+  return db
+    .select({ id: pages.id, title: pages.title, icon: pages.icon })
+    .from(pages)
+    .where(and(eq(pages.type, "database"), isNull(pages.trashedAt)))
     .orderBy(asc(pages.manualOrder), asc(pages.createdAt));
 }
 

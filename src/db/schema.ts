@@ -10,6 +10,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
@@ -65,6 +66,9 @@ export const pages = pgTable(
     // une colonne générée ne sait pas parcourir property_values selon db_config.
     valuesText: text("values_text").notNull().default(""),
     inboxKind: text("inbox_kind", { enum: ["link", "note"] }),
+    // La base Vide-cerveau, une seule : l'index unique partiel ci-dessous
+    // garantit qu'une seconde ligne ne peut pas porter le rôle.
+    isInbox: boolean("is_inbox").notNull().default(false),
     manualOrder: integer("manual_order").notNull().default(0),
     searchVector: tsvector("search_vector").generatedAlwaysAs(
       sql`to_tsvector('french', f_unaccent(title || ' ' || body_text || ' ' || values_text))`,
@@ -86,6 +90,7 @@ export const pages = pgTable(
     index("pages_parent_id_idx").on(t.parentId),
     index("pages_db_id_idx").on(t.dbId),
     index("pages_trashed_at_idx").on(t.trashedAt),
+    uniqueIndex("pages_inbox_idx").on(t.isInbox).where(sql`is_inbox`),
   ],
 );
 
