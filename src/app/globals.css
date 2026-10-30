@@ -551,6 +551,17 @@ a {
   color: var(--ink-soft);
 }
 
+.column-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.schema-hint {
+  margin: 0.4rem 0 0 1.5rem;
+}
+
 .table-wrap {
   overflow-x: auto;
 }

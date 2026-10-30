@@ -1,11 +1,15 @@
 "use client";
-// Filtres (combinés par « et ») et tris de la vue. Chaque changement remonte
-// la vue entière ; delay > 0 pour une frappe, enregistrée après un temps de calme.
+// Filtres (combinés par « et »), tris et colonnes affichées de la vue. Chaque
+// changement remonte la vue entière ; delay > 0 pour une frappe, enregistrée
+// après un temps de calme.
+import { useState } from "react";
 import {
+  isOptionType,
   isSingleOptionType,
   OP_LABELS,
   OPS_BY_TYPE,
   opNeedsValue,
+  orderedOptions,
   SORT_BUILTINS,
   TITLE_PROP,
   type Filter,
@@ -20,6 +24,7 @@ type Props = { properties: Property[]; view: View; onChange: (view: View, delay?
 const TYPING_DELAY = 500;
 
 export function ViewControls({ properties, view, onChange }: Props) {
+  const [columnsOpen, setColumnsOpen] = useState(false);
   const filterable = [TITLE_PROP, ...properties];
   const groupables = properties.filter((prop) => isSingleOptionType(prop.type));
   const sortable = [
@@ -36,6 +41,10 @@ export function ViewControls({ properties, view, onChange }: Props) {
   }
 
   const unusedSort = sortable.find((key) => !view.sorts.some((sort) => sort.prop === key.id));
+
+  function setShown(propId: string, shown: boolean) {
+    onChange({ ...view, hidden: shown ? view.hidden.filter((id) => id !== propId) : [...view.hidden, propId] });
+  }
 
   return (
     <div className="view-controls">
@@ -113,6 +122,18 @@ export function ViewControls({ properties, view, onChange }: Props) {
           </div>
         ))}
 
+      {view.kind === "table" && columnsOpen && properties.length > 0 && (
+        <div className="control-row" role="group" aria-label="Colonnes affichées">
+          <span className="control-label">Colonnes</span>
+          {properties.map((prop) => (
+            <label key={prop.id} className="column-toggle">
+              <input type="checkbox" checked={!view.hidden.includes(prop.id)} onChange={(event) => setShown(prop.id, event.target.checked)} />
+              {prop.name}
+            </label>
+          ))}
+        </div>
+      )}
+
       <div className="control-actions">
         <button type="button" className="ghost" onClick={() => onChange({ ...view, filters: [...view.filters, { prop: TITLE_PROP.id, op: "contains", value: "" }] })}>
           + Filtre
@@ -122,6 +143,12 @@ export function ViewControls({ properties, view, onChange }: Props) {
             + Tri
           </button>
         )}
+        {view.kind === "table" && properties.length > 0 && (
+          <button type="button" className="ghost" aria-expanded={columnsOpen} onClick={() => setColumnsOpen(!columnsOpen)}>
+            Colonnes
+            {view.hidden.length > 0 && ` (${view.hidden.length} ${view.hidden.length > 1 ? "masquées" : "masquée"})`}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -129,11 +156,13 @@ export function ViewControls({ properties, view, onChange }: Props) {
 
 function FilterValue({ prop, filter, onChange }: { prop: Property; filter: Filter; onChange: (value: string, delay?: number) => void }) {
   const value = filter.value ?? "";
-  if (prop.type === "select" || prop.type === "multiselect") {
+  // Le filtre compare des ids d'option : un statut se choisit dans sa liste,
+  // comme une sélection, jamais en texte libre.
+  if (isOptionType(prop.type)) {
     return (
       <select aria-label="Valeur du filtre" value={value} onChange={(event) => onChange(event.target.value)}>
         <option value="">choisir…</option>
-        {(prop.options ?? []).map((option) => (
+        {orderedOptions(prop).map((option) => (
           <option key={option.id} value={option.id}>
             {option.name}
           </option>

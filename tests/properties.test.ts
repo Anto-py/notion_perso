@@ -114,6 +114,11 @@ describe("sanitizeView", () => {
     expect(sanitizeView({ kind: "board", group_by: "prop_tags" }, veille).group_by).toBe("prop_statut");
     expect(sanitizeView({ kind: "board" }, [note]).group_by).toBeNull();
   });
+
+  it("garde les colonnes masquées qui existent, une seule fois, et rien d'une vue ancienne", () => {
+    expect(sanitizeView({ hidden: ["prop_note", "prop_disparue", "prop_note", 7, "title"] }, veille).hidden).toEqual(["prop_note"]);
+    expect(sanitizeView({ kind: "table" }, veille).hidden).toEqual([]);
+  });
 });
 
 describe("valeurs", () => {
@@ -338,6 +343,23 @@ describe("propriété Statut", () => {
     const back = changeType(etat, "select", []);
     expect(back.options?.every((option) => option.group === undefined)).toBe(true);
     expect(convertValue(etat, { ...etat, id: "prop_etat" }, "c")).toBe("c");
+  });
+
+  it("naît avec trois options, une par groupe, quand rien ne lui en donne", () => {
+    let n = 0;
+    const makeId = (prefix: string) => `${prefix}_${n++}`;
+    const fromText = changeType(note, "status", [{}, {}], makeId);
+    expect(fromText.options?.map((option) => [option.name, option.group])).toEqual([
+      ["À faire", "todo"],
+      ["En cours", "in_progress"],
+      ["Terminé", "complete"],
+    ]);
+    expect(new Set(fromText.options?.map((option) => option.id)).size).toBe(3);
+    expect(changeType({ id: "p", name: "Vide", type: "select", options: [] }, "status", []).options).toHaveLength(3);
+    // Les valeurs saisies priment sur les options de départ.
+    expect(changeType(note, "status", [{ prop_note: "Idée" }]).options?.map((option) => option.name)).toEqual(["Idée"]);
+    // Une sélection, elle, peut rester vide.
+    expect(changeType(note, "select", [])).toEqual({ ...note, type: "select", options: [] });
   });
 
   it("ajoute une option de statut dans le groupe « à faire »", () => {

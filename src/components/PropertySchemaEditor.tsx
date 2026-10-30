@@ -5,6 +5,7 @@
 import {
   changeType,
   COLOR_LABELS,
+  isSingleOptionType,
   localId,
   nextColor,
   OPTION_COLORS,
@@ -78,59 +79,63 @@ function OptionsEditor({ prop, onChange }: { prop: Property; onChange: (options:
   }
 
   return (
-    <ul className="schema-options" aria-label={`Options de ${prop.name}`}>
-      {options.map((option) => (
-        <li key={option.id}>
-          <OptionChip option={option} />
-          <CommitInput
-            key={option.name}
-            aria-label={`Renommer l'option ${option.name}`}
-            value={option.name}
-            maxLength={100}
-            allowEmpty={false}
-            onCommit={(name) => update(option.id, { name })}
-          />
-          <select aria-label={`Couleur de ${option.name}`} value={option.color} onChange={(event) => update(option.id, { color: event.target.value as OptionColor })}>
-            {OPTION_COLORS.map((color) => (
-              <option key={color} value={color}>
-                {COLOR_LABELS[color]}
-              </option>
-            ))}
-          </select>
-          {prop.type === "status" && (
-            <select
-              aria-label={`Groupe de ${option.name}`}
-              value={option.group ?? "todo"}
-              onChange={(event) => update(option.id, { group: event.target.value as StatusGroup })}
-            >
-              {STATUS_GROUPS.map((group) => (
-                <option key={group} value={group}>
-                  {STATUS_GROUP_LABELS[group]}
+    <>
+      {/* Une propriété n'est pas une colonne du Kanban : ce sont ses options. */}
+      {isSingleOptionType(prop.type) && <p className="hint schema-hint">Chaque option est une valeur possible, et une colonne du Kanban.</p>}
+      <ul className="schema-options" aria-label={`Options de ${prop.name}`}>
+        {options.map((option) => (
+          <li key={option.id}>
+            <OptionChip option={option} />
+            <CommitInput
+              key={option.name}
+              aria-label={`Renommer l'option ${option.name}`}
+              value={option.name}
+              maxLength={100}
+              allowEmpty={false}
+              onCommit={(name) => update(option.id, { name })}
+            />
+            <select aria-label={`Couleur de ${option.name}`} value={option.color} onChange={(event) => update(option.id, { color: event.target.value as OptionColor })}>
+              {OPTION_COLORS.map((color) => (
+                <option key={color} value={color}>
+                  {COLOR_LABELS[color]}
                 </option>
               ))}
             </select>
-          )}
-          <button type="button" className="ghost" aria-label={`Supprimer l'option ${option.name}`} onClick={() => onChange(options.filter((o) => o.id !== option.id))}>
-            ✕
-          </button>
+            {prop.type === "status" && (
+              <select
+                aria-label={`Groupe de ${option.name}`}
+                value={option.group ?? "todo"}
+                onChange={(event) => update(option.id, { group: event.target.value as StatusGroup })}
+              >
+                {STATUS_GROUPS.map((group) => (
+                  <option key={group} value={group}>
+                    {STATUS_GROUP_LABELS[group]}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button type="button" className="ghost" aria-label={`Supprimer l'option ${option.name}`} onClick={() => onChange(options.filter((o) => o.id !== option.id))}>
+              ✕
+            </button>
+          </li>
+        ))}
+        <li>
+          <CommitInput
+            // Recréé vide après chaque ajout.
+            key={options.length}
+            aria-label={`Nouvelle option de ${prop.name}`}
+            placeholder="+ Nouvelle option"
+            value=""
+            maxLength={100}
+            onCommit={(name) => {
+              if (!name) return;
+              const option: SelectOption = { id: localId("opt"), name, color: nextColor(options) };
+              if (prop.type === "status") option.group = "todo";
+              onChange([...options, option]);
+            }}
+          />
         </li>
-      ))}
-      <li>
-        <CommitInput
-          // Recréé vide après chaque ajout.
-          key={options.length}
-          aria-label={`Nouvelle option de ${prop.name}`}
-          placeholder="+ Nouvelle option"
-          value=""
-          maxLength={100}
-          onCommit={(name) => {
-            if (!name) return;
-            const option: SelectOption = { id: localId("opt"), name, color: nextColor(options) };
-            if (prop.type === "status") option.group = "todo";
-            onChange([...options, option]);
-          }}
-        />
-      </li>
-    </ul>
+      </ul>
+    </>
   );
 }

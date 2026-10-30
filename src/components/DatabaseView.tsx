@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   countLosses,
+  defaultStatusOptions,
   isSingleOptionType,
   localId,
   matchesFilters,
@@ -147,11 +148,7 @@ export function DatabaseView({ database, config, entries }: Props) {
       id: localId("prop"),
       name: uniqueName(properties, "Statut"),
       type: "status",
-      options: [
-        { id: localId("opt"), name: "À faire", color: "gray", group: "todo" },
-        { id: localId("opt"), name: "En cours", color: "yellow", group: "in_progress" },
-        { id: localId("opt"), name: "Terminé", color: "green", group: "complete" },
-      ],
+      options: defaultStatusOptions(),
     };
     // Le serveur rattache la vue à la première propriété groupable.
     await saveProperties([...properties, statut]);
@@ -256,7 +253,7 @@ export function DatabaseView({ database, config, entries }: Props) {
       <ViewControls properties={properties} view={view} onChange={changeView} />
       {view.kind === "table" && (
         <TableView
-          properties={properties}
+          properties={properties.filter((prop) => !view.hidden.includes(prop.id))}
           entries={visible}
           filtered={view.filters.length > 0}
           onCreate={() => createEntry()}

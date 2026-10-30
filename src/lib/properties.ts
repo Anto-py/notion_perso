@@ -108,8 +108,10 @@ export function opNeedsValue(op: FilterOp): boolean {
 
 export type Filter = { prop: string; op: FilterOp; value?: string };
 export type Sort = { prop: string; dir: "asc" | "desc" };
-// group_by : id d'une propriété select (vue Kanban). Une seule vue par base.
-export type View = { kind: "table" | "board"; group_by: string | null; filters: Filter[]; sorts: Sort[] };
+// group_by : id d'une propriété select (vue Kanban). hidden : ids des
+// propriétés absentes du tableau, toujours modifiables dans l'entrée. Une
+// seule vue par base.
+export type View = { kind: "table" | "board"; group_by: string | null; filters: Filter[]; sorts: Sort[]; hidden: string[] };
 export type DbConfig = { properties: Property[]; view: View };
 
 // Une entrée telle que la lisent les vues (dates en ISO).
@@ -166,7 +168,17 @@ export function localId(prefix: string): string {
 }
 
 export function emptyConfig(): DbConfig {
-  return { properties: [], view: { kind: "table", group_by: null, filters: [], sorts: [] } };
+  return { properties: [], view: { kind: "table", group_by: null, filters: [], sorts: [], hidden: [] } };
+}
+
+// Options de départ d'un statut : un statut sans option ne range rien, et le
+// Kanban n'y montrerait qu'une colonne « Sans … ».
+export function defaultStatusOptions(makeId: (prefix: string) => string = localId): SelectOption[] {
+  return [
+    { id: makeId("opt"), name: "À faire", color: "gray", group: "todo" },
+    { id: makeId("opt"), name: "En cours", color: "yellow", group: "in_progress" },
+    { id: makeId("opt"), name: "Terminé", color: "green", group: "complete" },
+  ];
 }
 
 export function optionById(prop: Property, id: string): SelectOption | undefined {
@@ -290,7 +302,11 @@ export function sanitizeView(raw: unknown, properties: readonly Property[]): Vie
     if (sorts.length === LIMITS.sorts) break;
   }
 
-  return { kind: view.kind === "board" ? "board" : "table", group_by: groupBy, filters, sorts };
+  const hidden = (Array.isArray(view.hidden) ? view.hidden : []).filter(
+    (id, index, all): id is string => typeof id === "string" && all.indexOf(id) === index && properties.some((prop) => prop.id === id),
+  );
+
+  return { kind: view.kind === "board" ? "board" : "table", group_by: groupBy, filters, sorts, hidden };
 }
 
 function sanitizeFilter(raw: unknown, properties: readonly Property[]): Filter | null {
@@ -518,10 +534,21 @@ export function changeType(
       return copy;
     });
   };
-  if (prop.options) {
-    next.options = settle(prop.options);
-    return next;
-  }
+  next.options = settle(prop.options ?? optionsFromValues(prop, type, valuesList, makeId));
+  // Qu'il vienne d'une sélection vide ou d'un champ jamais rempli, un statut
+  // sans option reçoit celles de départ.
+  if (type === "status" && next.options.length === 0) next.options = defaultStatusOptions(makeId);
+  return next;
+}
+
+// Options tirées des valeurs saisies, quand une propriété sans options (texte,
+// lien…) devient une sélection : chaque texte distinct devient une option.
+function optionsFromValues(
+  prop: Property,
+  type: PropertyType,
+  valuesList: readonly Values[],
+  makeId: (prefix: string) => string,
+): SelectOption[] {
   const options: SelectOption[] = [];
   const seen = new Set<string>();
   for (const values of valuesList) {
@@ -534,8 +561,7 @@ export function changeType(
       options.push(option);
     }
   }
-  next.options = settle(options);
-  return next;
+  return options;
 }
 
 // Liste complète de propriétés après l'ajout d'une option à l'une d'elles.

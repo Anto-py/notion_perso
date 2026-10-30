@@ -1,6 +1,6 @@
 "use client";
-// Vue Tableau : une ligne par entrée, une colonne par propriété, le titre en
-// tête. Chaque cellule porte l'éditeur de son type : la valeur se règle là,
+// Vue Tableau : une ligne par entrée, une colonne par propriété affichée (la
+// vue peut en masquer), le titre en tête. Chaque cellule porte l'éditeur de son type : la valeur se règle là,
 // sans ouvrir l'entrée. Cliquer ailleurs sur la ligne ouvre l'entrée.
 import Link from "next/link";
 import { useRouter } from "next/navigation";
