@@ -4,13 +4,14 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { UploadState } from "./Editor";
 import type { Property, Values } from "@/lib/properties";
 import type { SaveStatus } from "@/lib/saver";
 import { label } from "@/lib/tree";
 import { PropertyPanel } from "./PropertyPanel";
 import { useAutosave } from "./useAutosave";
+import { useSearchHighlight } from "./useSearchHighlight";
 
 const Editor = dynamic(() => import("./Editor"), {
   ssr: false,
@@ -31,6 +32,8 @@ export function PageView({ page, entry }: Props) {
   const router = useRouter();
   const [upload, setUpload] = useState<UploadState>(null);
   const [trashError, setTrashError] = useState<string | null>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  useSearchHighlight(mainRef);
   // Un titre enregistré change la sidebar, rendue par le serveur.
   const { status, queue, cancel } = useAutosave(page.id, (patch) => {
     if (patch.title !== undefined) router.refresh();
@@ -48,7 +51,7 @@ export function PageView({ page, entry }: Props) {
   }
 
   return (
-    <main className="page">
+    <main className="page" ref={mainRef}>
       <div className="page-bar">
         {entry && (
           <Link href={`/db/${entry.database.id}`} className="back-link">

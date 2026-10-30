@@ -17,6 +17,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { ancestorsOf, buildTree, label, wouldCreateCycle, type TreeRow } from "@/lib/tree";
+import { SearchBar } from "./SearchBar";
 import { TreeItem } from "./TreeItem";
 
 export const ROOT_DROP_ID = "__racine__";
@@ -118,55 +119,57 @@ export function Sidebar({ rows, username, inboxCount }: Props) {
         <Link href="/" className="sidebar-home">
           notion_perso
         </Link>
-        <div className="new-buttons">
-          <button type="button" className="new-page" onClick={() => createPage(null)}>
-            + Nouvelle page
-          </button>
-          <button type="button" className="new-page" onClick={() => createPage(null, "database")}>
-            + Nouvelle base
-          </button>
-        </div>
-        <Link href="/inbox" className={pathname === "/inbox" ? "inbox-link active" : "inbox-link"}>
-          <span>Vide-cerveau</span>
-          {inboxCount > 0 && (
-            <span className="inbox-count" aria-label={`${inboxCount} à traiter`}>
-              {inboxCount}
-            </span>
-          )}
-        </Link>
-        {message && (
-          <p className="sidebar-message" role="alert">
-            {message}
-          </p>
-        )}
-        {/* id explicite : l'identifiant d'accessibilité de dnd-kit est sinon
-            tiré d'un compteur global, différent au rendu serveur et au rendu
-            client, d'où un avertissement d'hydratation. */}
-        <DndContext id="tree-dnd" sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
-          <nav className="tree" aria-label="Pages">
-            {tree.length === 0 ? (
-              <p className="tree-empty">Aucune page.</p>
-            ) : (
-              <ul role="tree">
-                {tree.map((node) => (
-                  <TreeItem
-                    key={node.id}
-                    node={node}
-                    depth={0}
-                    activeId={activeId}
-                    expanded={expanded}
-                    onToggle={toggle}
-                    onCreateChild={createPage}
-                  />
-                ))}
-              </ul>
+        <SearchBar>
+          <div className="new-buttons">
+            <button type="button" className="new-page" onClick={() => createPage(null)}>
+              + Nouvelle page
+            </button>
+            <button type="button" className="new-page" onClick={() => createPage(null, "database")}>
+              + Nouvelle base
+            </button>
+          </div>
+          <Link href="/inbox" className={pathname === "/inbox" ? "inbox-link active" : "inbox-link"}>
+            <span>Vide-cerveau</span>
+            {inboxCount > 0 && (
+              <span className="inbox-count" aria-label={`${inboxCount} à traiter`}>
+                {inboxCount}
+              </span>
             )}
-            {dragging && <RootDropZone />}
-          </nav>
-          <DragOverlay dropAnimation={null}>
-            {dragging && <div className="drag-overlay">{label(dragging)}</div>}
-          </DragOverlay>
-        </DndContext>
+          </Link>
+          {message && (
+            <p className="sidebar-message" role="alert">
+              {message}
+            </p>
+          )}
+          {/* id explicite : l'identifiant d'accessibilité de dnd-kit est sinon
+              tiré d'un compteur global, différent au rendu serveur et au rendu
+              client, d'où un avertissement d'hydratation. */}
+          <DndContext id="tree-dnd" sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
+            <nav className="tree" aria-label="Pages">
+              {tree.length === 0 ? (
+                <p className="tree-empty">Aucune page.</p>
+              ) : (
+                <ul role="tree">
+                  {tree.map((node) => (
+                    <TreeItem
+                      key={node.id}
+                      node={node}
+                      depth={0}
+                      activeId={activeId}
+                      expanded={expanded}
+                      onToggle={toggle}
+                      onCreateChild={createPage}
+                    />
+                  ))}
+                </ul>
+              )}
+              {dragging && <RootDropZone />}
+            </nav>
+            <DragOverlay dropAnimation={null}>
+              {dragging && <div className="drag-overlay">{label(dragging)}</div>}
+            </DragOverlay>
+          </DndContext>
+        </SearchBar>
         <div className="sidebar-footer">
           <Link href="/trash" className={pathname === "/trash" ? "active" : undefined}>
             Corbeille

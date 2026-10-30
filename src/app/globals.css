@@ -13,6 +13,7 @@
   --danger: #b8431a; /* orange assombri : l'orange vif ne tient pas en texte */
   --danger-soft: #fbece4;
   --warm: #e3a535; /* jaune : une seule action principale par écran */
+  --hit: rgb(227 165 53 / 45%); /* terme trouvé, un cran plus franc que la sélection */
   --font-body: var(--font-inter), system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-label: var(--font-oswald), "Arial Narrow", sans-serif;
   /* Coins asymétriques doux : une surface et ce qu'elle contient inversent
@@ -1041,6 +1042,85 @@ a {
 
 .picker-hint {
   padding: 0.3rem 0.5rem;
+}
+
+/* --- Recherche ----------------------------------------------------------- */
+
+.search-field input {
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-command);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.search-field input:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.search-results {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.search-results ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.search-status {
+  margin: 0 0.5rem 0.3rem;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.search-hit {
+  display: block;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.search-hit:hover,
+.search-hit.active {
+  background: var(--hover);
+}
+
+.search-hit-title {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.search-hit-excerpt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  margin-top: 0.15rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+mark.hit {
+  background: var(--hit);
+  color: inherit;
+  border-radius: 2px;
+}
+
+/* Terme cherché, surligné dans la page ouverte depuis un résultat
+   (CSS Custom Highlight API : le document de l'éditeur n'est pas touché). */
+::highlight(recherche) {
+  background-color: var(--hit);
 }
 
 /* --- Vide-cerveau et capture -------------------------------------------- */
