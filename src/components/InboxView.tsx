@@ -72,7 +72,7 @@ export function InboxView({
             }
           }}
         />
-        <button type="submit" disabled={busy !== null || !text.trim()}>
+        <button type="submit" className="btn-primary" disabled={busy !== null || !text.trim()}>
           {busy === "note" ? "Capture…" : "Capturer"}
         </button>
       </form>
