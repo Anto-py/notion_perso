@@ -233,9 +233,20 @@ describe("renderHtml, sous-pages", () => {
   it("rend un bloc-lien par le résolveur, et le retire si la sous-page n'est pas lisible", () => {
     const body = [sub("pg_a"), sub("pg_x")];
     const html = renderHtml(body, {
-      subpage: (id) => (id === "pg_a" ? { href: "/p/pub/pg_a", label: '📄 <Notes> & "idées"' } : null),
+      subpage: (id) => (id === "pg_a" ? { href: "/p/pub/pg_a", title: '<Notes> & "idées"', icon: null, type: "page" } : null),
     });
-    expect(html).toBe('<p class="subpage-link"><a href="/p/pub/pg_a">📄 &lt;Notes&gt; &amp; &quot;idées&quot;</a></p>');
+    expect(html).toBe(
+      '<p class="subpage-link"><a href="/p/pub/pg_a"><span class="page-icon" aria-hidden="true">📄</span> &lt;Notes&gt; &amp; &quot;idées&quot;</a></p>',
+    );
+  });
+
+  it("rend l'icône image d'une sous-page, jamais une image au nom invalide", () => {
+    const link = (icon: string) => ({ href: "/p/pub/pg_a", title: "Logo", icon, type: "page" });
+    const image = renderHtml([sub("pg_a")], { subpage: () => link("image:up_AbCdEfGhIjKlMnOp.png") });
+    expect(image).toContain('<img class="page-icon page-icon-img" src="/api/media/up_AbCdEfGhIjKlMnOp.png" alt=""');
+    const forged = renderHtml([sub("pg_a")], { subpage: () => link('image:"><script>') });
+    expect(forged).not.toContain("<script>");
+    expect(forged).toContain(">📄</span>");
   });
 
   it("ne rend rien sans résolveur", () => {

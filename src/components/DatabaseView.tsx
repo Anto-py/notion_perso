@@ -22,6 +22,7 @@ import {
   type Values,
   type View,
 } from "@/lib/properties";
+import { IconPicker } from "./IconPicker";
 import { KanbanView } from "./KanbanView";
 import { SaveIndicator, TitleField } from "./PageView";
 import { PropertySchemaEditor } from "./PropertySchemaEditor";
@@ -216,6 +217,7 @@ export function DatabaseView({ database, config, entries }: Props) {
           Supprimer la base
         </button>
       </div>
+      <IconPicker pageId={database.id} type="database" initial={database.icon} />
       <TitleField initial={database.title} ariaLabel="Titre de la base" onChange={(title) => queue({ title })} />
 
       <div className="db-toolbar">

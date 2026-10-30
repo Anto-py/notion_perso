@@ -10,7 +10,8 @@ import { getPage, type Page } from "@/lib/pages";
 import { matchesFilters, normalizeValues, sortEntries } from "@/lib/properties";
 import { publicHref, type PublicNode } from "@/lib/publication";
 import { listChildren, resolvePublication, type Publication } from "@/lib/publication_query";
-import { label } from "@/lib/tree";
+import { faviconHref } from "@/lib/icons";
+import { PageIcon, PageLabel } from "./PageIcon";
 import { TYPE_ICONS, ValueView } from "./propertyUi";
 
 export type PublicParams = Promise<{ publicId: string; pageId?: string }>;
@@ -35,7 +36,10 @@ export async function publicMetadata(params: PublicParams): Promise<Metadata> {
   const { publicId, pageId } = await params;
   const found = await resolve(publicId, pageId);
   if (!found) return { title: `Contenu indisponible · ${siteName()}`, robots: { index: false } };
-  return { title: `${found.page.title || "Sans titre"} · ${siteName()}` };
+  return {
+    title: `${found.page.title || "Sans titre"} · ${siteName()}`,
+    icons: { icon: faviconHref(found.page.icon, found.page.type) },
+  };
 }
 
 export async function PublicPage({ params }: { params: PublicParams }) {
@@ -72,8 +76,7 @@ async function PublicContent({ publicId, found }: { publicId: string; found: Pub
     <article>
       {chain.length > 1 && <Crumbs chain={chain.slice(0, -1)} href={href} />}
       <h1 className="public-title">
-        {page.icon && <span aria-hidden="true">{page.icon} </span>}
-        {page.title || "Sans titre"}
+        <PageIcon icon={page.icon} type={page.type} /> {page.title || "Sans titre"}
       </h1>
       {page.type === "entry" && <EntryProperties entry={page} />}
       {page.type === "database" ? (
@@ -85,7 +88,7 @@ async function PublicContent({ publicId, found }: { publicId: string; found: Pub
             __html: renderHtml(page.body, {
               subpage: (id) => {
                 const child = byId.get(id);
-                return child ? { href: href(child.id), label: label(child) } : null;
+                return child ? { href: href(child.id), title: child.title, icon: child.icon, type: child.type } : null;
               },
             }),
           }}
@@ -102,7 +105,7 @@ function Crumbs({ chain, href }: { chain: PublicNode[]; href: Href }) {
       {chain.map((node, index) => (
         <span key={node.id}>
           {index > 0 && <span aria-hidden="true"> / </span>}
-          <Link href={href(node.id)}>{label(node)}</Link>
+          <Link href={href(node.id)}><PageLabel row={node} /></Link>
         </span>
       ))}
     </nav>
@@ -166,7 +169,7 @@ async function PublicTable({ database, href }: { database: Page; href: Href }) {
           {entries.map((entry) => (
             <tr key={entry.id}>
               <td className="cell-title">
-                <Link href={href(entry.id)}>{label(entry)}</Link>
+                <Link href={href(entry.id)}><PageLabel row={entry} /></Link>
               </td>
               {columns.map((prop) => (
                 <td key={prop.id}>
@@ -192,7 +195,7 @@ function Children({ rows: children, href }: { rows: { id: string; type: Page["ty
       <ul>
         {children.map((child) => (
           <li key={child.id}>
-            <Link href={href(child.id)}>{label(child)}</Link>
+            <Link href={href(child.id)}><PageLabel row={child} /></Link>
           </li>
         ))}
       </ul>

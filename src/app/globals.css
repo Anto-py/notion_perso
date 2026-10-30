@@ -1889,3 +1889,251 @@ mark.hit {
   text-decoration-color: var(--line);
   text-underline-offset: 3px;
 }
+
+/* --- Icône de page (BRAINSTORMING §1 bis) --------------------------------- */
+
+.page-icon {
+  display: inline-block;
+  line-height: 1;
+}
+
+.page-icon-img {
+  width: 1.15em;
+  height: 1.15em;
+  object-fit: cover; /* carré recadré au centre, sans outil de recadrage */
+  border-radius: 3px;
+  vertical-align: -0.2em;
+}
+
+.page-icon-big {
+  font-size: 4.2rem;
+}
+
+.icon-zone {
+  position: relative;
+  padding: 0 54px; /* aligné sur le titre */
+  margin-top: 1.5rem;
+}
+
+.page-wide .icon-zone {
+  padding: 0;
+}
+
+.icon-zone + .page-title {
+  margin-top: 0.4rem;
+}
+
+.icon-current {
+  border: none;
+  background: transparent;
+  padding: 0.2rem;
+  border-radius: var(--r-inner);
+}
+
+.icon-add {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.page:hover .icon-add,
+.icon-add:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .icon-add {
+    opacity: 0.7;
+  }
+}
+
+.icon-panel {
+  position: absolute;
+  z-index: 40;
+  top: 100%;
+  left: 54px;
+  width: min(360px, calc(100vw - 32px));
+  margin-top: 0.3rem;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-surface);
+  box-shadow: 0 8px 24px rgb(13 22 23 / 14%);
+  overflow: hidden;
+}
+
+.page-wide .icon-panel {
+  left: 0;
+}
+
+.icon-tabs {
+  display: flex;
+  gap: 0.2rem;
+  padding: 0.4rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.icon-tabs [role="tab"] {
+  border-color: transparent;
+  background: transparent;
+  font-family: var(--font-label);
+  letter-spacing: 0.03em;
+}
+
+.icon-tabs [role="tab"][aria-selected="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.icon-remove {
+  margin-left: auto;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+/* em-emoji-picker remplit le panneau, bordure et ombre comprises dans celui-ci. */
+.emoji-host em-emoji-picker {
+  width: 100%;
+  height: 380px;
+  --border-radius: 0;
+  --shadow: none;
+  --rgb-accent: 18, 118, 118;
+  --rgb-background: 252, 251, 247;
+}
+
+.icon-image-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.7rem;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.icon-drop {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.9rem;
+  border: 1px dashed var(--ink-soft);
+  border-radius: var(--r-inner);
+  cursor: pointer;
+  text-align: center;
+}
+
+.icon-drop:hover,
+.icon-drop:focus-within {
+  background: var(--hover);
+}
+
+.icon-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.icon-pending {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 0.6rem;
+  align-items: end;
+}
+
+.icon-pending-preview {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: var(--r-inner);
+}
+
+.icon-pending-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.icon-search {
+  font: inherit;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-inner);
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.icon-library {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 0.6rem;
+}
+
+.icon-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  min-width: 0;
+  font-size: 0.8rem;
+}
+
+.icon-tile-pick {
+  padding: 0.2rem;
+  border-color: transparent;
+  background: transparent;
+}
+
+.icon-tile-pick img {
+  display: block;
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.icon-tile-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+input.icon-tile-name {
+  font: inherit;
+  width: 100%;
+  padding: 0.1rem 0.2rem;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+}
+
+.icon-tile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0 0.5rem;
+}
+
+.icon-tile-uses {
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+button.link.icon-danger {
+  color: var(--danger);
+}
+
+@media (max-width: 760px) {
+  .icon-zone {
+    padding: 0 0.5rem;
+  }
+
+  .icon-panel {
+    left: 0;
+  }
+}

@@ -42,7 +42,7 @@ async function PageLoader({ params }: Pick<PageProps<"/page/[id]">, "params">) {
   return (
     <PageView
       key={page.id}
-      page={{ id: page.id, title: page.title, body: page.body as unknown[], publicId }}
+      page={{ id: page.id, type: page.type, title: page.title, icon: page.icon, body: page.body as unknown[], publicId }}
       entry={entry}
       directory={directory}
     />

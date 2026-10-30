@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { canAccess } from "@/lib/access";
 import { getCurrentUser } from "@/lib/auth";
 import { listRecent } from "@/lib/pages";
-import { label } from "@/lib/tree";
+import { PageLabel } from "@/components/PageIcon";
 
 // Accueil : pages modifiées en dernier. L'invite à l'import viendra à l'étape 6.
 export default function Accueil() {
@@ -31,7 +31,7 @@ async function Recent() {
       <ul className="recent">
         {pages.map((page) => (
           <li key={page.id}>
-            <Link href={page.type === "database" ? `/db/${page.id}` : `/page/${page.id}`}>{label(page)}</Link>
+            <Link href={page.type === "database" ? `/db/${page.id}` : `/page/${page.id}`}><PageLabel row={page} /></Link>
             <span className="hint">{DATE.format(page.updatedAt)}</span>
           </li>
         ))}

@@ -34,6 +34,12 @@ export async function saveFile(source: ReadableStream<Uint8Array>, filename: str
   }
 }
 
+// Seul effacement de fichier déposé : une image d'icône que plus aucune page
+// n'utilise, à la demande d'Antonin (lib/icon_library.ts).
+export async function removeFile(filename: string): Promise<void> {
+  await rm(storedPath(filename), { force: true });
+}
+
 export async function openFile(filename: string): Promise<{ stream: ReadableStream<Uint8Array>; size: number } | null> {
   const target = storedPath(filename);
   try {

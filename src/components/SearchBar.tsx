@@ -7,6 +7,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { highlightSegments, parseHeadline, resultHref, searchTerms, type SearchHit, type Segment } from "@/lib/search";
+import { PageIcon } from "./PageIcon";
 
 type Outcome = { key: string; results: SearchHit[] } | { key: string; error: string };
 
@@ -98,7 +99,7 @@ function Results({ outcome, loading, query, terms, pathname }: ResultsProps) {
             <li key={hit.id}>
               <Link href={href} className={active ? "search-hit active" : "search-hit"}>
                 <span className="search-hit-title">
-                  {hit.icon ?? (hit.type === "database" ? "🗃️" : "📄")}{" "}
+                  <PageIcon icon={hit.icon} type={hit.type} />{" "}
                   {hit.title ? <Highlighted segments={highlightSegments(hit.title, terms)} /> : "Sans titre"}
                 </span>
                 <Excerpt raw={hit.excerpt} />

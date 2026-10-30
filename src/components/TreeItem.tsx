@@ -4,7 +4,8 @@
 // « / » de sa mère, pas d'ici.
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import Link from "next/link";
-import { label, type TreeNode } from "@/lib/tree";
+import type { TreeNode } from "@/lib/tree";
+import { PageLabel } from "./PageIcon";
 
 // Au-delà, l'indentation cesse de croître : l'arbre reste lisible.
 const MAX_INDENT_DEPTH = 6;
@@ -51,7 +52,7 @@ export function TreeItem({ node, depth, activeId, expanded, onToggle }: Props) {
           {hasChildren ? (open ? "▾" : "▸") : "•"}
         </button>
         <Link href={href} className="tree-link">
-          {label(node)}
+          <PageLabel row={node} />
         </Link>
       </div>
       {open && hasChildren && (

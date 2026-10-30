@@ -3,7 +3,7 @@
 // clics (le second confirme, sans boîte de dialogue du navigateur).
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { label } from "@/lib/tree";
+import { PageLabel } from "./PageIcon";
 
 type Item = { id: string; title: string; icon: string | null; trashedAt: string };
 
@@ -42,7 +42,7 @@ export function TrashList({ items }: { items: Item[] }) {
       <ul className="trash-list">
         {items.map((item) => (
           <li key={item.id}>
-            <span className="trash-title">{label(item)}</span>
+            <span className="trash-title"><PageLabel row={item} /></span>
             <span className="trash-date">supprimé le {DATE.format(new Date(item.trashedAt))}</span>
             <span className="trash-actions">
               <button type="button" onClick={() => act(item.id, "POST")}>

@@ -21,6 +21,7 @@ import {
 import { useMemo, useState } from "react";
 import { boardOrder, groupEntries, NO_COLUMN, type Column, type EntryRow, type Property, type Value, type Values } from "@/lib/properties";
 import { KanbanCard } from "./KanbanCard";
+import { PageLabel } from "./PageIcon";
 import { OptionChip } from "./propertyUi";
 
 // Les colonnes sont aussi des cibles (dépôt en fin de colonne) : ce préfixe
@@ -135,7 +136,7 @@ export function KanbanView({ groupProp, properties, hiddenKeys, entries, allIds,
       <DragOverlay dropAnimation={null}>
         {dragging && (
           <div className="board-card drag-overlay-card">
-            {dragging.icon ?? "📄"} {dragging.title || "Sans titre"}
+            <PageLabel row={dragging} />
           </div>
         )}
       </DragOverlay>

@@ -8,7 +8,9 @@ import { useRef, useState } from "react";
 import type { UploadState } from "./Editor";
 import type { Property, Values } from "@/lib/properties";
 import type { SaveStatus } from "@/lib/saver";
-import { label, type TreeRow } from "@/lib/tree";
+import type { TreeRow } from "@/lib/tree";
+import { IconPicker } from "./IconPicker";
+import { PageLabel } from "./PageIcon";
 import { PropertyPanel } from "./PropertyPanel";
 import { SharePanel } from "./SharePanel";
 import { useAutosave } from "./useAutosave";
@@ -29,7 +31,7 @@ export type EntryContext = {
 };
 
 type Props = {
-  page: { id: string; title: string; body: unknown[]; publicId: string | null };
+  page: { id: string; type: string; title: string; icon: string | null; body: unknown[]; publicId: string | null };
   entry?: EntryContext;
   // Pages et bases de l'arbre : titres des blocs-liens de sous-page.
   directory: TreeRow[];
@@ -63,7 +65,7 @@ export function PageView({ page, entry, directory }: Props) {
       <div className="page-bar">
         {entry && (
           <Link href={`/db/${entry.database.id}`} className="back-link">
-            ← {label({ ...entry.database, type: "database" })}
+            ← <PageLabel row={{ ...entry.database, type: "database" }} />
           </Link>
         )}
         <SaveIndicator status={status} />
@@ -74,6 +76,7 @@ export function PageView({ page, entry, directory }: Props) {
           Supprimer
         </button>
       </div>
+      <IconPicker pageId={page.id} type={page.type} initial={page.icon} />
       <TitleField initial={page.title} ariaLabel={entry ? "Titre de l'entrée" : "Titre de la page"} onChange={(title) => queue({ title })} />
       {entry && (
         <PropertyPanel

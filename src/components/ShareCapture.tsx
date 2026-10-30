@@ -5,6 +5,7 @@
 // déplacement d'entrée : les valeurs sans accueil y gagnent le corps de la page.
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { iconText } from "@/lib/icons";
 import type { SharedPayload } from "@/lib/share";
 import { domainOf } from "@/lib/unfurl";
 import { SiteIcon } from "./InboxView";
@@ -150,7 +151,7 @@ export function ShareCapture({
         <select value={target} onChange={(event) => setTarget(event.target.value)}>
           {destinations.map((database) => (
             <option key={database.id} value={database.id}>
-              {database.icon ? `${database.icon} ` : ""}
+              {iconText(database.icon, "database")}
               {database.title || "Sans titre"}
             </option>
           ))}

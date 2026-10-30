@@ -8,6 +8,7 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import Link from "next/link";
 import { normalizeValue, type EntryRow, type Property } from "@/lib/properties";
+import { PageLabel } from "./PageIcon";
 import { ValueView } from "./propertyUi";
 
 type Props = { entry: EntryRow; properties: Property[]; groupId: string; hint: "before" | "after" | null };
@@ -36,7 +37,7 @@ export function KanbanCard({ entry, properties, groupId, hint }: Props) {
       {...drag.listeners}
     >
       <Link href={`/page/${entry.id}`} className="board-card-title" draggable={false}>
-        {entry.icon ?? "📄"} {entry.title || "Sans titre"}
+        <PageLabel row={entry} />
       </Link>
       {fields.length > 0 && (
         <dl className="board-card-fields">

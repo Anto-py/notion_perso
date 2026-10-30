@@ -104,3 +104,18 @@ export const media = pgTable("media", {
   pageId: text("page_id").references(() => pages.id, { onDelete: "set null" }),
   createdAt: createdAt(),
 });
+
+// Bibliothèque des images d'icône. Une page pointe vers le fichier
+// (pages.icon = "image:<filename>") et le nom vit ici seul : renommer vaut
+// partout. cascade : supprimer le média supprime l'entrée de bibliothèque.
+export const iconImages = pgTable("icon_images", {
+  id: text("id").primaryKey(),
+  mediaId: text("media_id")
+    .notNull()
+    .unique()
+    .references(() => media.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  // Retirée de la bibliothèque, toujours servie aux pages qui l'utilisent.
+  hidden: boolean("hidden").notNull().default(false),
+  createdAt: createdAt(),
+});

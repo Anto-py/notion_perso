@@ -54,9 +54,3 @@ export function ancestorsOf(parentOf: ReadonlyMap<string, string | null>, pageId
   }
   return ancestors;
 }
-
-// Libellé affiché d'une page : icône (par défaut, document ou classeur pour
-// une base) et titre.
-export function label(row: Pick<TreeRow, "icon" | "title"> & { type?: string }): string {
-  return `${row.icon ?? (row.type === "database" ? "🗃️" : "📄")} ${row.title || "Sans titre"}`;
-}

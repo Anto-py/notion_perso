@@ -6,7 +6,8 @@
 import Link from "next/link";
 import { useSyncExternalStore } from "react";
 import { createReactBlockSpec } from "@blocknote/react";
-import { label, type TreeRow } from "@/lib/tree";
+import type { TreeRow } from "@/lib/tree";
+import { PageLabel } from "./PageIcon";
 
 // Annuaire hors de React : le bloc est rendu par BlockNote, loin de PageView.
 let directory: ReadonlyMap<string, TreeRow> = new Map();
@@ -64,7 +65,7 @@ function SubpageLink({ pageId, kind }: { pageId: string; kind: "page" | "databas
   }
   return (
     <div className="subpage-block" contentEditable={false}>
-      <Link href={row.type === "database" ? `/db/${row.id}` : `/page/${row.id}`}>{label(row)}</Link>
+      <Link href={row.type === "database" ? `/db/${row.id}` : `/page/${row.id}`}><PageLabel row={row} /></Link>
     </div>
   );
 }

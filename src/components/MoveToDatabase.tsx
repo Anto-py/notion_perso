@@ -4,6 +4,7 @@
 // valeurs sans propriété d'accueil partent dans le corps, côté serveur.
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { iconText } from "@/lib/icons";
 import { send } from "./request";
 
 type Props = {
@@ -57,7 +58,7 @@ export function MoveToDatabase({ entryId, databases, label = "Déplacer vers une
         <option value="">Choisir une base…</option>
         {databases.map((database) => (
           <option key={database.id} value={database.id}>
-            {database.icon ? `${database.icon} ` : ""}
+            {iconText(database.icon, "database")}
             {database.title || "Sans titre"}
           </option>
         ))}

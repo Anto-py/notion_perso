@@ -1,4 +1,6 @@
 import { fail, readJson, reply, requirePage } from "@/lib/api";
+import { isLibraryFile } from "@/lib/icon_library";
+import { checkIconValue } from "@/lib/icons";
 import { trashPage, updatePage, type PagePatch } from "@/lib/pages";
 
 const MAX_TITLE = 500;
@@ -25,8 +27,10 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/pages/[id]
     patch.title = body.title;
   }
   if ("icon" in body) {
-    if (body.icon !== null && (typeof body.icon !== "string" || body.icon.length > 16)) return fail(400, "Icône invalide");
-    patch.icon = body.icon;
+    const icon = checkIconValue(body.icon);
+    if (!icon.ok) return fail(400, "Icône invalide");
+    if (icon.filename && !(await isLibraryFile(icon.filename))) return fail(400, "Image absente de la bibliothèque");
+    patch.icon = icon.value;
   }
   if ("body" in body) {
     if (!Array.isArray(body.body)) return fail(400, "Le corps doit être une liste de blocs");

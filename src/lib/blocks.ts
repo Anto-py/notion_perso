@@ -4,6 +4,7 @@
 //
 // Le corps arrive du navigateur : on le parcourt sans lui faire confiance,
 // chaque champ inattendu est simplement ignoré.
+import { iconSrc, resolveIcon } from "./icons";
 import type { Orphan } from "./properties";
 import { isStoredName } from "./upload_rules";
 import { youtubeEmbedUrl, youtubeId } from "./youtube";
@@ -224,7 +225,17 @@ function blockAttrs(props: Record<string, Json>, extra: string[] = []): string {
 // Lien d'un bloc de sous-page dans la vue publique ; null : la sous-page n'est
 // pas lisible par ce lien (corbeille, déplacée hors du sous-arbre), le bloc
 // disparaît.
-export type RenderOptions = { subpage?: (pageId: string) => { href: string; label: string } | null };
+export type SubpageLink = { href: string; title: string; icon: string | null; type?: string };
+export type RenderOptions = { subpage?: (pageId: string) => SubpageLink | null };
+
+// Double HTML de PageIcon (components/PageIcon.tsx) pour le corps public.
+export function iconHtml(icon: string | null, type?: string): string {
+  const resolved = resolveIcon(icon, type);
+  if (resolved.kind === "image") {
+    return `<img class="page-icon page-icon-img" src="${escapeHtml(iconSrc(resolved.filename))}" alt="" aria-hidden="true">`;
+  }
+  return `<span class="page-icon" aria-hidden="true">${escapeHtml(resolved.emoji)}</span>`;
+}
 
 const LISTS: Record<string, { tag: "ul" | "ol"; extra: string[] }> = {
   bulletListItem: { tag: "ul", extra: [] },
@@ -294,7 +305,9 @@ function blockHtml(block: Json, options: RenderOptions): string {
     case SUBPAGE_BLOCK: {
       const pageId = typeof props.pageId === "string" ? props.pageId : "";
       const link = pageId && options.subpage ? options.subpage(pageId) : null;
-      return link ? `<p class="subpage-link"><a href="${escapeHtml(link.href)}">${escapeHtml(link.label)}</a></p>` : "";
+      if (!link) return "";
+      const label = `${iconHtml(link.icon, link.type)} ${escapeHtml(link.title || "Sans titre")}`;
+      return `<p class="subpage-link"><a href="${escapeHtml(link.href)}">${label}</a></p>`;
     }
     case "youtube": {
       const id = typeof props.url === "string" ? youtubeId(props.url) : null;

@@ -5,7 +5,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { EntryRow, Property, Value } from "@/lib/properties";
-import { label } from "@/lib/tree";
+import { PageLabel } from "./PageIcon";
 import { PropertyInput } from "./PropertyInput";
 import { TYPE_ICONS } from "./propertyUi";
 
@@ -54,7 +54,7 @@ export function TableView({ properties, entries, filtered, onCreate, onSave, onC
               }}
             >
               <td className="cell-title">
-                <Link href={`/page/${entry.id}`}>{label(entry)}</Link>
+                <Link href={`/page/${entry.id}`}><PageLabel row={entry} /></Link>
               </td>
               {properties.map((prop) => (
                 <td key={prop.id} className="cell-edit">

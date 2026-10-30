@@ -16,7 +16,8 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { ancestorsOf, buildTree, label, wouldCreateCycle, type TreeRow } from "@/lib/tree";
+import { ancestorsOf, buildTree, wouldCreateCycle, type TreeRow } from "@/lib/tree";
+import { PageLabel } from "./PageIcon";
 import { SearchBar } from "./SearchBar";
 import { TreeItem } from "./TreeItem";
 
@@ -165,7 +166,7 @@ export function Sidebar({ rows, username, inboxCount }: Props) {
               {dragging && <RootDropZone />}
             </nav>
             <DragOverlay dropAnimation={null}>
-              {dragging && <div className="drag-overlay">{label(dragging)}</div>}
+              {dragging && <div className="drag-overlay"><PageLabel row={dragging} /></div>}
             </DragOverlay>
           </DndContext>
         </SearchBar>

@@ -29,6 +29,13 @@
       "when": 1793379682429,
       "tag": "0003_recherche_fr_unaccent",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793387201514,
+      "tag": "0004_icones_bibliotheque",
+      "breakpoints": true
     }
   ]
 }
