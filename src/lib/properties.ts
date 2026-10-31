@@ -1,19 +1,43 @@
-// Propriétés des bases : types, configuration, valeurs, filtre, tri,
-// regroupement Kanban. Module pur, importé par le serveur (validation,
-// migration des valeurs) comme par le navigateur (affichage, filtre, tri,
-// confirmation avant une perte de valeurs). Formats jsonb : BRAINSTORMING §3-4.
+// Propriétés des bases : types, valeurs, filtre, tri, regroupement Kanban.
+// Module pur, importé par le serveur (validation, migration des valeurs)
+// comme par le navigateur (affichage, filtre, tri, confirmation avant une
+// perte de valeurs). Les vues et la configuration sont dans views.ts.
+// Formats jsonb : BRAINSTORMING §3-4.
 
-export const PROPERTY_TYPES = ["text", "url", "date", "select", "multiselect", "checkbox"] as const;
+export const PROPERTY_TYPES = [
+  "text",
+  "number",
+  "url",
+  "date",
+  "select",
+  "multiselect",
+  "checkbox",
+  "created_time",
+  "updated_time",
+] as const;
 export type PropertyType = (typeof PROPERTY_TYPES)[number];
 
 export const TYPE_LABELS: Record<PropertyType, string> = {
   text: "Texte",
+  number: "Nombre",
   url: "Lien",
   date: "Date",
   select: "Sélection",
   multiselect: "Sélection multiple",
   checkbox: "Case à cocher",
+  created_time: "Créé le",
+  updated_time: "Modifié le",
 };
+
+// Créé le, Modifié le : valeur tirée de created_at et updated_at de l'entrée,
+// jamais stockée ni saisie (withTimes l'ajoute aux valeurs lues).
+export function isTimeType(type: PropertyType): boolean {
+  return type === "created_time" || type === "updated_time";
+}
+
+export const NUMBER_FORMATS = ["number", "euro", "percent"] as const;
+export type NumberFormat = (typeof NUMBER_FORMATS)[number];
+export const FORMAT_LABELS: Record<NumberFormat, string> = { number: "Nombre", euro: "Euro", percent: "Pourcentage" };
 
 // Les types qui portent une liste d'options.
 export function isOptionType(type: PropertyType): boolean {
@@ -48,11 +72,14 @@ export const COLOR_LABELS: Record<OptionColor, string> = {
 };
 
 export type SelectOption = { id: string; name: string; color: OptionColor };
-export type Property = { id: string; name: string; type: PropertyType; options?: SelectOption[] };
+// format : Nombre seulement, « number » à défaut.
+export type Property = { id: string; name: string; type: PropertyType; options?: SelectOption[]; format?: NumberFormat };
 
 // text, url, date (AAAA-MM-JJ), select (id d'option) : chaîne ;
-// multiselect : liste d'ids ; checkbox : true. Une valeur vide est absente.
-export type Value = string | string[] | boolean;
+// multiselect : liste d'ids ; checkbox : true ; number : nombre fini ;
+// created_time, updated_time : horodatage ISO, ajouté à la lecture. Une
+// valeur vide est absente.
+export type Value = string | string[] | boolean | number;
 export type Values = Record<string, Value>;
 
 export const FILTER_OPS = [
@@ -60,6 +87,10 @@ export const FILTER_OPS = [
   "not_contains",
   "is",
   "is_not",
+  "eq",
+  "neq",
+  "gt",
+  "lt",
   "before",
   "after",
   "is_empty",
@@ -71,11 +102,15 @@ export type FilterOp = (typeof FILTER_OPS)[number];
 
 export const OPS_BY_TYPE: Record<PropertyType, FilterOp[]> = {
   text: ["contains", "is_empty", "is_not_empty"],
+  number: ["eq", "neq", "gt", "lt", "is_empty", "is_not_empty"],
   url: ["contains", "is_empty", "is_not_empty"],
   date: ["is", "before", "after", "is_empty", "is_not_empty"],
   select: ["is", "is_not", "is_empty", "is_not_empty"],
   multiselect: ["contains", "not_contains", "is_empty", "is_not_empty"],
   checkbox: ["checked", "unchecked"],
+  // Comparées au jour (heure de Bruxelles) ; jamais vides.
+  created_time: ["is", "before", "after"],
+  updated_time: ["is", "before", "after"],
 };
 
 export const OP_LABELS: Record<FilterOp, string> = {
@@ -83,6 +118,10 @@ export const OP_LABELS: Record<FilterOp, string> = {
   not_contains: "ne contient pas",
   is: "est",
   is_not: "n'est pas",
+  eq: "=",
+  neq: "≠",
+  gt: ">",
+  lt: "<",
   before: "avant le",
   after: "après le",
   is_empty: "est vide",
@@ -99,20 +138,6 @@ export function opNeedsValue(op: FilterOp): boolean {
 
 export type Filter = { prop: string; op: FilterOp; value?: string };
 export type Sort = { prop: string; dir: "asc" | "desc" };
-// group_by : id d'une propriété discrète (vue Kanban). hidden : ids des
-// propriétés absentes de la vue (colonnes du tableau, champs des cartes du
-// Kanban), toujours modifiables dans l'entrée. hidden_columns : colonnes du
-// Kanban masquées, par propriété de regroupement. Une seule vue par base.
-export type View = {
-  kind: "table" | "board";
-  group_by: string | null;
-  filters: Filter[];
-  sorts: Sort[];
-  hidden: string[];
-  hidden_columns: Record<string, string[]>;
-};
-export type DbConfig = { properties: Property[]; view: View };
-
 // Une entrée telle que la lisent les vues (dates en ISO).
 export type EntryRow = {
   id: string;
@@ -134,20 +159,83 @@ export const SORT_BUILTINS: Record<string, string> = {
   updated_at: "Dernière modification",
 };
 
-export const LIMITS = { properties: 50, options: 200, name: 100, text: 5000, url: 2048, filters: 20, sorts: 5 };
+export const LIMITS = { properties: 50, options: 200, name: 100, text: 5000, url: 2048, filters: 20, sorts: 5, number: 1e15 };
 
-const ID_PATTERN = /^[A-Za-z0-9_-]{1,40}$/;
+export const ID_PATTERN = /^[A-Za-z0-9_-]{1,40}$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const TRUTHY = new Set(["oui", "vrai", "true", "yes", "x", "1"]);
 const ID_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 // Comparaison insensible à la casse et aux accents (« Évaluation » = « evaluation »).
 export function fold(text: string): string {
   return text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+}
+
+// --- Nombres et heures ------------------------------------------------------
+
+// Saisie d'un nombre à la française ou à l'anglaise : « 1 234,5 », « 1234.5 »,
+// « 12 % », « 3,50 € ». Avec une virgule, les points sont des séparateurs de
+// milliers ; sans virgule, le point est décimal. null si ce n'est pas un nombre.
+export function parseNumber(text: string): number | null {
+  let cleaned = text.replace(/[\s\u00a0\u202f€%+]/g, "");
+  if (cleaned.includes(",")) cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+  if (!/^-?(\d+(\.\d*)?|\.\d+)$/.test(cleaned)) return null;
+  const value = Number(cleaned);
+  return Number.isFinite(value) && Math.abs(value) < LIMITS.number ? value : null;
+}
+
+// Écriture d'un nombre à la française, à la main plutôt que par Intl : le
+// serveur et le navigateur rendent le même texte (hydratation). Espace fine
+// insécable entre les milliers, virgule décimale ; l'euro garde deux
+// décimales, les autres formats au plus maxDecimals (bruit des flottants
+// effacé).
+export function formatNumber(value: number, format: NumberFormat = "number", maxDecimals = 10): string {
+  const fixed = format === "euro" ? value.toFixed(2) : String(Number(value.toFixed(maxDecimals)));
+  if (/e/i.test(fixed)) return fixed;
+  const negative = fixed.startsWith("-");
+  const [int, dec] = (negative ? fixed.slice(1) : fixed).split(".");
+  const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, "\u202f");
+  const text = `${negative && fixed !== "-0" ? "-" : ""}${grouped}${dec ? `,${dec}` : ""}`;
+  if (format === "euro") return `${text}\u00a0€`;
+  if (format === "percent") return `${text}\u00a0%`;
+  return text;
+}
+
+// Jour et heure d'un horodatage à Bruxelles, en chiffres : formatToParts ne
+// rend que des nombres, identiques côté serveur et navigateur.
+const BRUSSELS = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Europe/Brussels",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+export function brusselsParts(iso: string): { day: string; time: string } | null {
+  const ms = Date.parse(iso);
+  if (Number.isNaN(ms)) return null;
+  const parts = Object.fromEntries(BRUSSELS.formatToParts(new Date(ms)).map((part) => [part.type, part.value]));
+  return { day: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` };
+}
+
+function isTimestamp(raw: unknown): raw is string {
+  return typeof raw === "string" && raw.includes("T") && !Number.isNaN(Date.parse(raw));
+}
+
+// Valeurs d'une entrée complétées de ses propriétés Créé le et Modifié le.
+// Appelé à l'affichage seulement : ces valeurs ne s'écrivent jamais en base.
+export function withTimes(properties: readonly Property[], values: Values, times: { createdAt: string; updatedAt: string }): Values {
+  const timed = properties.filter((prop) => isTimeType(prop.type));
+  if (timed.length === 0) return values;
+  const next = { ...values };
+  for (const prop of timed) next[prop.id] = prop.type === "created_time" ? times.createdAt : times.updatedAt;
+  return next;
 }
 
 export function isIsoDate(text: string): boolean {
@@ -164,10 +252,6 @@ export function localId(prefix: string): string {
   const bytes = new Uint8Array(10);
   globalThis.crypto.getRandomValues(bytes);
   return `${prefix}_${Array.from(bytes, (byte) => ID_ALPHABET[byte % 64]).join("")}`;
-}
-
-export function emptyConfig(): DbConfig {
-  return { properties: [], view: { kind: "table", group_by: null, filters: [], sorts: [], hidden: [], hidden_columns: {} } };
 }
 
 // Options de départ d'une sélection créée pour grouper un Kanban : sans
@@ -229,6 +313,9 @@ export function validateProperties(raw: unknown): Property[] | string {
     ids.add(id);
     names.add(fold(name));
     const prop: Property = { id, name, type: type as PropertyType };
+    if (prop.type === "number") {
+      prop.format = (NUMBER_FORMATS as readonly unknown[]).includes(item.format) ? (item.format as NumberFormat) : "number";
+    }
     if (isOptionType(prop.type)) {
       const options = validateOptions(item.options ?? []);
       if (typeof options === "string") return `${name} : ${options}`;
@@ -260,49 +347,9 @@ function validateOptions(raw: unknown): SelectOption[] | string {
   return options;
 }
 
-// Lecture tolérante de la vue : ce qui pointe vers une propriété disparue,
-// une option supprimée ou un opérateur devenu étranger au type est retiré
-// sans erreur. Une vue Kanban groupe par défaut sur la première sélection.
-export function sanitizeView(raw: unknown, properties: readonly Property[]): View {
-  const view = isRecord(raw) ? raw : {};
-  const groupables = properties.filter((prop) => isGroupableType(prop.type));
-  // À défaut de choix enregistré, une Sélection fait le meilleur regroupement
-  // (une colonne par option) ; sinon la première propriété discrète.
-  const fallback = groupables.find((prop) => isSingleOptionType(prop.type)) ?? groupables[0];
-  const groupBy = groupables.some((prop) => prop.id === view.group_by) ? (view.group_by as string) : (fallback?.id ?? null);
-
-  const filters: Filter[] = [];
-  for (const item of Array.isArray(view.filters) ? view.filters : []) {
-    const filter = sanitizeFilter(item, properties);
-    if (filter) filters.push(filter);
-    if (filters.length === LIMITS.filters) break;
-  }
-
-  const sorts: Sort[] = [];
-  for (const item of Array.isArray(view.sorts) ? view.sorts : []) {
-    if (!isRecord(item) || typeof item.prop !== "string") continue;
-    const known = item.prop in SORT_BUILTINS || properties.some((prop) => prop.id === item.prop);
-    if (!known || sorts.some((sort) => sort.prop === item.prop)) continue;
-    sorts.push({ prop: item.prop, dir: item.dir === "desc" ? "desc" : "asc" });
-    if (sorts.length === LIMITS.sorts) break;
-  }
-
-  const hidden = (Array.isArray(view.hidden) ? view.hidden : []).filter(
-    (id, index, all): id is string => typeof id === "string" && all.indexOf(id) === index && properties.some((prop) => prop.id === id),
-  );
-
-  const hiddenColumns: Record<string, string[]> = {};
-  if (isRecord(view.hidden_columns)) {
-    for (const [propId, keys] of Object.entries(view.hidden_columns)) {
-      if (!properties.some((prop) => prop.id === propId) || !Array.isArray(keys)) continue;
-      hiddenColumns[propId] = keys.filter((key, index, all): key is string => typeof key === "string" && all.indexOf(key) === index);
-    }
-  }
-
-  return { kind: view.kind === "board" ? "board" : "table", group_by: groupBy, filters, sorts, hidden, hidden_columns: hiddenColumns };
-}
-
-function sanitizeFilter(raw: unknown, properties: readonly Property[]): Filter | null {
+// Lecture tolérante d'un filtre : ce qui pointe vers une propriété disparue,
+// une option supprimée ou un opérateur devenu étranger au type est retiré.
+export function sanitizeFilter(raw: unknown, properties: readonly Property[]): Filter | null {
   if (!isRecord(raw) || typeof raw.prop !== "string" || typeof raw.op !== "string") return null;
   const prop = raw.prop === TITLE_PROP.id ? TITLE_PROP : properties.find((p) => p.id === raw.prop);
   if (!prop || !OPS_BY_TYPE[prop.type].includes(raw.op as FilterOp)) return null;
@@ -314,40 +361,13 @@ function sanitizeFilter(raw: unknown, properties: readonly Property[]): Filter |
   if (value === "") return { prop: prop.id, op, value };
   if (isOptionType(prop.type)) {
     if (!optionById(prop, value)) return null;
-  } else if (prop.type === "date" && !isIsoDate(value)) {
+  } else if ((prop.type === "date" || isTimeType(prop.type)) && !isIsoDate(value)) {
     return null;
+  } else if (prop.type === "number" && parseNumber(value) === null) {
+    // Saisie en cours (« 1, ») : le filtre reste, inactif.
+    return { prop: prop.id, op, value: "" };
   }
   return { prop: prop.id, op, value };
-}
-
-// Configurations écrites avant la suppression du type « Statut » : le type
-// devient « Sélection » et les options reprennent l'ordre qu'elles avaient à
-// l'écran (groupes à faire, en cours, terminé), avant que validateOptions ne
-// reconstruise chaque option sans groupe. Une modification ultérieure de la
-// base réécrit la configuration migrée.
-const LEGACY_STATUS_GROUPS = ["todo", "in_progress", "complete"];
-
-function legacyGroupRank(option: unknown): number {
-  const group = isRecord(option) && typeof option.group === "string" ? option.group : "";
-  const rank = LEGACY_STATUS_GROUPS.indexOf(group);
-  return rank === -1 ? LEGACY_STATUS_GROUPS.length : rank;
-}
-
-function migrateLegacyProperties(raw: unknown): unknown {
-  if (!Array.isArray(raw)) return raw;
-  return raw.map((item) => {
-    if (!isRecord(item) || item.type !== "status") return item;
-    const options = Array.isArray(item.options) ? [...item.options].sort((a, b) => legacyGroupRank(a) - legacyGroupRank(b)) : item.options;
-    return { ...item, type: "select", options };
-  });
-}
-
-// Lecture tolérante d'une configuration stockée (déjà validée à l'écriture).
-export function parseConfig(raw: unknown): DbConfig {
-  const config = isRecord(raw) ? raw : {};
-  const checked = validateProperties(migrateLegacyProperties(config.properties ?? []));
-  const properties = typeof checked === "string" ? [] : checked;
-  return { properties, view: sanitizeView(config.view, properties) };
 }
 
 // --- Valeurs ---------------------------------------------------------------
@@ -370,6 +390,11 @@ export function normalizeValue(prop: Property, raw: unknown): Value | undefined 
     }
     case "checkbox":
       return raw === true ? true : undefined;
+    case "number":
+      return typeof raw === "number" && Number.isFinite(raw) && Math.abs(raw) < LIMITS.number ? raw : undefined;
+    case "created_time":
+    case "updated_time":
+      return isTimestamp(raw) ? raw : undefined;
   }
 }
 
@@ -403,11 +428,18 @@ export function checkValue(prop: Property, raw: unknown): string | null {
         : `${prop.name} : option inconnue, rechargez la page`;
     case "checkbox":
       return typeof raw === "boolean" ? null : `${prop.name} : vrai ou faux attendu`;
+    case "number":
+      return normalizeValue(prop, raw) !== undefined ? null : `${prop.name} : nombre attendu`;
+    case "created_time":
+    case "updated_time":
+      return `${prop.name} : valeur en lecture seule`;
   }
 }
 
 // Forme texte canonique d'une valeur : recherche (values_text), conversion
-// de type, filtre « contient ». Une date reste en AAAA-MM-JJ.
+// de type, filtre « contient ». Une date reste en AAAA-MM-JJ, un nombre
+// s'écrit sans séparateur de milliers (« 1234,5 »). Créé le et Modifié le
+// n'en ont pas : ni recherchés, ni convertis.
 export function valueText(prop: Property, value: unknown): string {
   const normalized = normalizeValue(prop, value);
   if (normalized === undefined) return "";
@@ -418,6 +450,11 @@ export function valueText(prop: Property, value: unknown): string {
       return optionById(prop, normalized as string)?.name ?? "";
     case "multiselect":
       return (normalized as string[]).map((id) => optionById(prop, id)?.name ?? "").join(", ");
+    case "number":
+      return String(normalized).replace(".", ",");
+    case "created_time":
+    case "updated_time":
+      return "";
     default:
       return normalized as string;
   }
@@ -479,6 +516,11 @@ export function convertValue(from: Property, to: Property, value: unknown): Valu
         to,
         splitNames(text).map((name) => optionByName(to, name)?.id),
       );
+    case "number":
+      return parseNumber(text) ?? undefined;
+    case "created_time":
+    case "updated_time":
+      return undefined;
   }
 }
 
@@ -489,6 +531,8 @@ export function convertValue(from: Property, to: Property, value: unknown): Valu
 export function transferValues(from: readonly Property[], to: readonly Property[], values: Values): Values {
   const transferred: Values = {};
   for (const target of to) {
+    // Créé le, Modifié le : rien de stocké, rien à reporter.
+    if (isTimeType(target.type)) continue;
     const source = from.find((prop) => fold(prop.name) === fold(target.name));
     if (!source || source.type !== target.type || values[source.id] === undefined) continue;
     const current = normalizeValue(source, values[source.id]);
@@ -578,6 +622,7 @@ export function changeType(
   makeId: (prefix: string) => string = localId,
 ): Property {
   const next: Property = { id: prop.id, name: prop.name, type };
+  if (type === "number") next.format = prop.format ?? "number";
   if (!isOptionType(type)) return next;
   // D'une propriété à options vers une autre, la liste est gardée telle
   // quelle ; depuis un texte, les valeurs saisies font les options.
@@ -634,7 +679,14 @@ function filterProp(id: string, properties: readonly Property[]): Property | und
 function matchesFilter(entry: EntryRow, filter: Filter, properties: readonly Property[]): boolean {
   const prop = filterProp(filter.prop, properties);
   if (!prop) return true;
-  const value = prop === TITLE_PROP ? normalizeValue(prop, entry.title) : normalizeValue(prop, entry.values[prop.id]);
+  const value =
+    prop === TITLE_PROP
+      ? normalizeValue(prop, entry.title)
+      : isTimeType(prop.type)
+        ? prop.type === "created_time"
+          ? entry.createdAt
+          : entry.updatedAt
+        : normalizeValue(prop, entry.values[prop.id]);
   switch (filter.op) {
     case "is_empty":
       return value === undefined;
@@ -647,6 +699,29 @@ function matchesFilter(entry: EntryRow, filter: Filter, properties: readonly Pro
   }
   const target = filter.value ?? "";
   if (target === "") return true;
+  if (prop.type === "number") {
+    const wanted = parseNumber(target);
+    if (wanted === null) return true;
+    // « ≠ » garde les entrées vides, comme « n'est pas » d'une sélection.
+    if (typeof value !== "number") return filter.op === "neq";
+    switch (filter.op) {
+      case "eq":
+        return value === wanted;
+      case "neq":
+        return value !== wanted;
+      case "gt":
+        return value > wanted;
+      case "lt":
+        return value < wanted;
+    }
+  }
+  if (isTimeType(prop.type)) {
+    const day = typeof value === "string" ? brusselsParts(value)?.day : undefined;
+    if (!day) return false;
+    if (filter.op === "is") return day === target;
+    if (filter.op === "before") return day < target;
+    if (filter.op === "after") return day > target;
+  }
   switch (filter.op) {
     case "contains":
       return prop.type === "multiselect"
@@ -662,6 +737,8 @@ function matchesFilter(entry: EntryRow, filter: Filter, properties: readonly Pro
       return typeof value === "string" && value < target;
     case "after":
       return typeof value === "string" && value > target;
+    default:
+      return true;
   }
 }
 
@@ -681,6 +758,14 @@ function sortKey(propId: string, properties: readonly Property[]): SortKey | nul
   switch (prop.type) {
     case "checkbox":
       return (entry) => (entry.values[prop.id] === true ? 1 : 0);
+    case "number":
+      return (entry) => {
+        const value = normalizeValue(prop, entry.values[prop.id]);
+        return typeof value === "number" ? value : undefined;
+      };
+    case "created_time":
+    case "updated_time":
+      return (entry) => Date.parse(prop.type === "created_time" ? entry.createdAt : entry.updatedAt);
     case "date":
       return (entry) => {
         const value = normalizeValue(prop, entry.values[prop.id]);

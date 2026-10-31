@@ -5,6 +5,8 @@
 import {
   changeType,
   COLOR_LABELS,
+  FORMAT_LABELS,
+  NUMBER_FORMATS,
   isSingleOptionType,
   localId,
   nextColor,
@@ -12,6 +14,7 @@ import {
   PROPERTY_TYPES,
   TYPE_LABELS,
   uniqueName,
+  type NumberFormat,
   type OptionColor,
   type Property,
   type PropertyType,
@@ -54,6 +57,19 @@ export function PropertySchemaEditor({ properties, valuesList, onChange }: Props
                 </option>
               ))}
             </select>
+            {prop.type === "number" && (
+              <select
+                aria-label={`Format de ${prop.name}`}
+                value={prop.format ?? "number"}
+                onChange={(event) => update(prop.id, (p) => ({ ...p, format: event.target.value as NumberFormat }))}
+              >
+                {NUMBER_FORMATS.map((format) => (
+                  <option key={format} value={format}>
+                    {FORMAT_LABELS[format]}
+                  </option>
+                ))}
+              </select>
+            )}
             <button type="button" className="ghost" onClick={() => onChange(properties.filter((p) => p.id !== prop.id))}>
               Supprimer
             </button>

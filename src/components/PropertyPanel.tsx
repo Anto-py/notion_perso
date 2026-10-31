@@ -7,7 +7,8 @@
 // aussi changer de base : les propriétés de même nom et type suivent.
 import Link from "next/link";
 import { useRef, useState } from "react";
-import { withNewOption, type DbConfig, type Property, type Value, type Values } from "@/lib/properties";
+import { withNewOption, type Property, type Value, type Values } from "@/lib/properties";
+import type { DbConfig } from "@/lib/views";
 import { MoveToDatabase } from "./MoveToDatabase";
 import { PropertyInput } from "./PropertyInput";
 import { TYPE_ICONS } from "./propertyUi";

@@ -8,14 +8,15 @@ import {
   isIsoDate,
   LIMITS,
   OPTION_COLORS,
-  sanitizeView,
+  parseNumber,
   uniqueName,
-  type DbConfig,
+  type NumberFormat,
   type Property,
   type SelectOption,
   type Value,
   type Values,
 } from "./properties";
+import { sanitizeView, type DbConfig } from "./views";
 
 export type CsvTable = { header: string[]; rows: string[][] };
 
@@ -34,7 +35,7 @@ export type CsvContext = {
   resolveLink: (href: string) => { href: string; title: string } | null;
 };
 
-type ColumnKind = "checkbox" | "date" | "url" | "relation" | "select" | "multiselect" | "text";
+type ColumnKind = "checkbox" | "number" | "date" | "url" | "relation" | "select" | "multiselect" | "text";
 
 const ENGLISH_MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
 const FRENCH_MONTHS = ["janvier", "fevrier", "mars", "avril", "mai", "juin", "juillet", "aout", "septembre", "octobre", "novembre", "decembre"];
@@ -152,10 +153,19 @@ function isRelation(value: string, ctx: CsvContext): boolean {
   return urls.length > 0 && urls.every((url) => ctx.resolveLink(url) !== null);
 }
 
+// Plus strict que la saisie : un numéro de téléphone (« 0470 12 34 56 »,
+// « +32 … ») ou une liste de chiffres (« 1, 2 ») reste du texte ou une
+// sélection.
+function isImportNumber(value: string): boolean {
+  if (/^\+|^0\d|,\s/.test(value.trim())) return false;
+  return parseNumber(value) !== null;
+}
+
 function inferKind(values: string[], ctx: CsvContext): ColumnKind {
   const filled = nonEmpty(values);
   if (filled.length === 0) return "text";
   if (filled.every((value) => TRUTHY.has(fold(value)) || FALSY.has(fold(value)))) return "checkbox";
+  if (filled.every(isImportNumber)) return "number";
   if (filled.every((value) => parseNotionDate(value) !== null)) return "date";
   if (filled.every((value) => isRelation(value, ctx))) return "relation";
   if (filled.every((value) => /^https?:\/\//.test(value))) return "url";
@@ -185,6 +195,14 @@ function inferKind(values: string[], ctx: CsvContext): ColumnKind {
   const plausible = distinctValues.length <= 20 && (distinctValues.length < filled.length || filled.length <= 5);
   if (short && !commaCells && !sentence && plausible) return "select";
   return "text";
+}
+
+// Format d'une colonne numérique : euro ou pourcentage si toutes ses cellules
+// en portent le signe.
+function numberFormat(filled: readonly string[]): NumberFormat {
+  if (filled.every((value) => value.includes("€"))) return "euro";
+  if (filled.every((value) => value.includes("%"))) return "percent";
+  return "number";
 }
 
 function optionColor(index: number) {
@@ -231,6 +249,8 @@ export function buildCsvDatabase(table: CsvTable, ctx: CsvContext): CsvBuild {
 
     if (kind === "checkbox") {
       prop = { id, name, type: "checkbox" };
+    } else if (kind === "number") {
+      prop = { id, name, type: "number", format: numberFormat(filled) };
     } else if (kind === "date") {
       prop = { id, name, type: "date" };
     } else if (kind === "url") {
@@ -263,6 +283,8 @@ export function buildCsvDatabase(table: CsvTable, ctx: CsvContext): CsvBuild {
       let value: Value | undefined;
       if (kind === "checkbox") {
         value = TRUTHY.has(fold(raw)) ? true : undefined;
+      } else if (kind === "number") {
+        value = parseNumber(raw) ?? undefined;
       } else if (kind === "date") {
         const start = parseNotionDate(raw);
         value = start ?? undefined;
@@ -305,7 +327,7 @@ export function buildCsvDatabase(table: CsvTable, ctx: CsvContext): CsvBuild {
 
   const config: DbConfig = {
     properties,
-    view: sanitizeView({ kind: "table" }, properties),
+    views: [sanitizeView({ kind: "table" }, properties)],
   };
   return { config, entries, notes, ignored };
 }

@@ -2,8 +2,9 @@ import { fail, readJson, reply, requirePage } from "@/lib/api";
 import { updateDatabase, type DatabasePatch } from "@/lib/databases";
 import { validateProperties } from "@/lib/properties";
 
-// PATCH { properties?, view? } : liste complète des propriétés (le serveur en
-// déduit la migration des valeurs) et/ou vue (filtres, tris, Tableau/Kanban).
+// PATCH { properties?, views? } : liste complète des propriétés (le serveur en
+// déduit la migration des valeurs) et/ou liste complète des vues (type,
+// filtres, tris, colonnes, calculs ; ordre des onglets).
 // Le titre et l'icône passent par /api/pages/[id], comme pour une page.
 export async function PATCH(request: Request, ctx: RouteContext<"/api/databases/[id]">) {
   const { id } = await ctx.params;
@@ -12,7 +13,8 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/databases/
   if (found.page.type !== "database") return fail(404, "Base introuvable");
 
   const body = await readJson(request);
-  if (!body || (!("properties" in body) && !("view" in body))) return fail(400, "properties ou view attendu");
+  if (!body || (!("properties" in body) && !("views" in body))) return fail(400, "properties ou views attendu");
+  if ("views" in body && !Array.isArray(body.views)) return fail(400, "Liste de vues attendue");
 
   const patch: DatabasePatch = {};
   if ("properties" in body) {
@@ -20,7 +22,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/databases/
     if (typeof properties === "string") return fail(400, properties);
     patch.properties = properties;
   }
-  if ("view" in body) patch.view = body.view;
+  if ("views" in body) patch.views = body.views;
 
   const outcome = await updateDatabase(id, patch);
   return reply(outcome, { config: outcome.config });

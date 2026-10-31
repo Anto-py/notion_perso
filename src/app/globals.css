@@ -620,32 +620,121 @@ a {
   margin-bottom: 0.75rem;
 }
 
-.view-switch {
+/* --- Onglets des vues --------------------------------------------------- */
+
+.view-tabs {
+  position: relative;
+  margin-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+}
+
+/* Une rangée qui défile à l'horizontale quand les onglets débordent. */
+.view-tab-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.15rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.view-tab {
   display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
 }
 
-.view-switch button {
-  border-radius: 0;
-}
-
-.view-switch button:first-child {
-  border-radius: 6px 0 0 6px;
-}
-
-.view-switch button:last-child {
-  border-radius: 0 6px 6px 0;
-  border-left: none;
-}
-
-.view-switch button[aria-pressed="true"] {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.view-switch button:disabled {
-  cursor: not-allowed;
+.view-tab > button {
+  border: none;
+  background: transparent;
+  border-radius: var(--r-command);
+  padding: 0.35rem 0.6rem;
   color: var(--ink-soft);
-  opacity: 0.6;
+  white-space: nowrap;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.view-tab.selected {
+  border-bottom-color: var(--ink);
+}
+
+.view-tab.selected > button {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.view-tab.dragging {
+  opacity: 0.4;
+}
+
+.view-tab.drop-target {
+  background: var(--accent-soft);
+}
+
+.view-tab-icon {
+  margin-right: 0.35rem;
+  font-size: 0.85rem;
+}
+
+.view-tab > .view-tab-more {
+  padding: 0.35rem 0.4rem;
+}
+
+.view-tab-add {
+  flex: 0 0 auto;
+  color: var(--ink-soft);
+}
+
+.view-menu {
+  position: absolute;
+  z-index: 10;
+  top: 100%;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.15rem;
+  min-width: 13rem;
+  padding: 0.4rem;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-inner);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+}
+
+.view-menu > button {
+  text-align: left;
+}
+
+.view-menu > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.view-menu input,
+.view-menu select {
+  font: inherit;
+  color: inherit;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  background: var(--bg);
+}
+
+.view-menu-kind {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.2rem 0.7rem;
+}
+
+.danger-text {
+  color: var(--danger);
 }
 
 .badge {
@@ -838,6 +927,131 @@ a {
 .add-entry {
   margin-top: 0.25rem;
   color: var(--ink-soft);
+}
+
+/* Nombres alignés à droite, chiffres à chasse fixe : les colonnes se lisent. */
+.number-view,
+.db-table td.cell-edit input.number-input {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Calculs en pied de tableau : discrets tant qu'on ne les a pas choisis. */
+.db-table tfoot td {
+  border-bottom: none;
+  padding: 0.15rem 0.3rem;
+}
+
+.calc-cell {
+  position: relative;
+  display: block;
+  padding: 0.2rem 0.3rem;
+  font-size: 0.8rem;
+  color: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.calc-cell.calc-set {
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.db-table tfoot:hover .calc-cell,
+.calc-cell:focus-within {
+  color: var(--ink-soft);
+}
+
+.calc-cell:hover {
+  background: var(--bg-side);
+}
+
+.calc-cell select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* Sans survol (téléphone), « Calculer » reste lisible. */
+@media (hover: none) {
+  .calc-cell {
+    color: var(--ink-soft);
+  }
+}
+
+/* --- Vue Liste ----------------------------------------------------------- */
+
+.list-view ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.list-view li {
+  border-bottom: 1px solid var(--line);
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.4rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.list-row:hover {
+  background: var(--bg-side);
+}
+
+.list-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.list-fields {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.3rem 0.7rem;
+  flex: 0 1 auto;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.list-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list-field-name::after {
+  content: " ☑";
+}
+
+/* Écran étroit : les valeurs passent sous le titre. */
+@media (max-width: 760px) {
+  .list-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
+  }
+
+  .list-fields {
+    justify-content: flex-start;
+  }
 }
 
 /* --- Vue Kanban ---------------------------------------------------------- */

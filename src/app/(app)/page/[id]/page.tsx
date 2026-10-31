@@ -5,7 +5,7 @@ import { canAccess } from "@/lib/access";
 import { getCurrentUser } from "@/lib/auth";
 import { configOf } from "@/lib/databases";
 import { getPage, listDatabases, listTreeRows } from "@/lib/pages";
-import { normalizeValues } from "@/lib/properties";
+import { normalizeValues, withTimes } from "@/lib/properties";
 
 // Page normale ou entrée de base ; une entrée affiche en plus ses propriétés.
 export default function PageRoute({ params }: PageProps<"/page/[id]">) {
@@ -32,7 +32,10 @@ async function PageLoader({ params }: Pick<PageProps<"/page/[id]">, "params">) {
     entry = {
       database: { id: base.id, title: base.title, icon: base.icon },
       properties,
-      values: normalizeValues(properties, page.propertyValues),
+      values: withTimes(properties, normalizeValues(properties, page.propertyValues), {
+        createdAt: page.createdAt.toISOString(),
+        updatedAt: page.updatedAt.toISOString(),
+      }),
       databases: others.filter((database) => canAccess(user, database, "read")),
     };
   }

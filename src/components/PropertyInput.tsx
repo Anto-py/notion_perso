@@ -1,10 +1,11 @@
 "use client";
 // Éditeur d'une valeur de propriété, selon son type. Partagé par le panneau
 // d'une entrée et par les cellules du tableau : une seule façon de saisir.
-import type { Property, Value } from "@/lib/properties";
+import { useState } from "react";
+import { formatNumber, parseNumber, type Property, type Value } from "@/lib/properties";
 import { CommitInput } from "./CommitInput";
 import { OptionPicker } from "./OptionPicker";
-import { isWebUrl } from "./propertyUi";
+import { isWebUrl, ValueView } from "./propertyUi";
 
 export type PropertyInputProps = {
   prop: Property;
@@ -30,6 +31,12 @@ export function PropertyInput({ prop, value, onSave, onCreate }: PropertyInputPr
           )}
         </span>
       );
+    case "number":
+      return <NumberInput prop={prop} value={typeof value === "number" ? value : undefined} onSave={onSave} />;
+    case "created_time":
+    case "updated_time":
+      // Lecture seule : tirée de la vie de l'entrée, jamais saisie.
+      return <ValueView prop={prop} value={value} />;
     case "date":
       return <input type="date" aria-label={prop.name} value={text} onChange={(event) => onSave(event.target.value || null)} />;
     case "checkbox":
@@ -55,4 +62,29 @@ export function PropertyInput({ prop, value, onSave, onCreate }: PropertyInputPr
         />
       );
   }
+}
+
+// Nombre saisi avec virgule ou point, affiché à la française dans son format.
+// Une saisie illisible est refusée sur place : le champ, recréé, reprend la
+// valeur enregistrée.
+function NumberInput({ prop, value, onSave }: { prop: Property; value: number | undefined; onSave: (value: Value | null) => void }) {
+  const [refusals, setRefusals] = useState(0);
+  const shown = value === undefined ? "" : formatNumber(value, prop.format);
+  return (
+    <CommitInput
+      key={`${shown}|${refusals}`}
+      className="number-input"
+      aria-label={prop.name}
+      placeholder="Vide"
+      inputMode="decimal"
+      value={shown}
+      maxLength={40}
+      onCommit={(typed) => {
+        if (typed === "") return onSave(null);
+        const parsed = parseNumber(typed);
+        if (parsed === null) setRefusals((n) => n + 1);
+        else if (parsed !== value) onSave(parsed);
+      }}
+    />
+  );
 }

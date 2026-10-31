@@ -6,17 +6,18 @@ import { getCurrentUser } from "@/lib/auth";
 import { configOf, listEntries } from "@/lib/databases";
 import { getPage } from "@/lib/pages";
 
-// Base : en-tête, propriétés, vue Tableau ou Kanban.
-export default function DatabaseRoute({ params }: PageProps<"/db/[id]">) {
+// Base : en-tête, propriétés, onglets des vues (Tableau, Kanban, Liste).
+export default function DatabaseRoute({ params, searchParams }: PageProps<"/db/[id]">) {
   return (
     <Suspense fallback={<p className="page-loading">Chargement…</p>}>
-      <DatabaseLoader params={params} />
+      <DatabaseLoader params={params} searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function DatabaseLoader({ params }: Pick<PageProps<"/db/[id]">, "params">) {
+async function DatabaseLoader({ params, searchParams }: Pick<PageProps<"/db/[id]">, "params" | "searchParams">) {
   const { id } = await params;
+  const { vue } = await searchParams;
   const user = await getCurrentUser();
   const page = await getPage(id);
   if (!page || page.trashedAt || page.type !== "database" || !canAccess(user, page, "read")) notFound();
@@ -34,6 +35,7 @@ async function DatabaseLoader({ params }: Pick<PageProps<"/db/[id]">, "params">)
       }}
       config={configOf(page)}
       entries={entries}
+      initialViewId={typeof vue === "string" ? vue : null}
     />
   );
 }

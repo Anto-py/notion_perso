@@ -113,6 +113,24 @@ describe("buildCsvDatabase", () => {
     expect(notes.some((note) => note.reason.includes("plage de dates"))).toBe(true);
   });
 
+  it("type une colonne numérique, son format et ses valeurs", () => {
+    const { config, entries } = buildCsvDatabase(
+      parseCsv('Nom,Durée,Prix,Taux,Tél,Séances\nA,12,"3,50 €",50%,0470 12 34 56,"1, 2"\nB,"1 234,5",10 €,5%,0470 98 76 54,"2, 3"\n'),
+      context(),
+    );
+    expect(config.properties.map((prop) => [prop.name, prop.type, prop.format])).toEqual([
+      ["Durée", "number", "number"],
+      ["Prix", "number", "euro"],
+      ["Taux", "number", "percent"],
+      ["Tél", "select", undefined],
+      ["Séances", "multiselect", undefined],
+    ]);
+    const [duree, prix] = config.properties;
+    expect(entries.map((entry) => entry.values[duree.id])).toEqual([12, 1234.5]);
+    expect(entries.map((entry) => entry.values[prix.id])).toEqual([3.5, 10]);
+    expect(config.views).toHaveLength(1);
+  });
+
   it("ne prend pas une phrase à virgule pour une sélection multiple", () => {
     const { config } = buildCsvDatabase(parseCsv('Nom,Prix\nA,Gratuit\nB,"Gratuit, open source"\nC,Freemium\n'), context());
     expect(config.properties[0].type).toBe("text");

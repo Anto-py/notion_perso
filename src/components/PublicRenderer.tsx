@@ -7,7 +7,7 @@ import { cache } from "react";
 import { renderHtml, safeHref, subpageRefs } from "@/lib/blocks";
 import { configOf, listEntries } from "@/lib/databases";
 import { getPage, type Page } from "@/lib/pages";
-import { matchesFilters, normalizeValues, sortEntries } from "@/lib/properties";
+import { matchesFilters, normalizeValues, sortEntries, withTimes } from "@/lib/properties";
 import { publicHref, type PublicNode } from "@/lib/publication";
 import { listChildren, resolvePublication, type Publication } from "@/lib/publication_query";
 import { faviconHref } from "@/lib/icons";
@@ -121,7 +121,10 @@ async function EntryProperties({ entry }: { entry: Page }) {
   const base = entry.dbId ? await getPage(entry.dbId) : null;
   if (!base || base.trashedAt) return null;
   const { properties } = configOf(base);
-  const values = normalizeValues(properties, entry.propertyValues);
+  const values = withTimes(properties, normalizeValues(properties, entry.propertyValues), {
+    createdAt: entry.createdAt.toISOString(),
+    updatedAt: entry.updatedAt.toISOString(),
+  });
   const shown = properties.filter((prop) => prop.type === "checkbox" || values[prop.id] !== undefined);
   if (!shown.length) return null;
   return (
@@ -143,12 +146,15 @@ async function EntryProperties({ entry }: { entry: Page }) {
   );
 }
 
-// Une base se lit en tableau selon sa vue enregistrée, Kanban compris :
+// Une base se lit en tableau selon sa première vue, Kanban et Liste compris :
 // filtres, tris et propriétés masquées respectés.
 async function PublicTable({ database, href }: { database: Page; href: Href }) {
-  const { properties, view } = configOf(database);
+  const { properties, views } = configOf(database);
+  const view = views[0];
   const entries = sortEntries(
-    (await listEntries(database.id)).filter((entry) => matchesFilters(entry, view.filters, properties)),
+    (await listEntries(database.id))
+      .filter((entry) => matchesFilters(entry, view.filters, properties))
+      .map((entry) => ({ ...entry, values: withTimes(properties, entry.values, entry) })),
     view.sorts,
     properties,
   );

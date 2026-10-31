@@ -6,7 +6,7 @@ import { db } from "@/db";
 import { media, pages } from "@/db/schema";
 import { flattenToText } from "./blocks";
 import { newId } from "./ids";
-import { emptyConfig } from "./properties";
+import { emptyConfig } from "./views";
 import { wouldCreateCycle, type TreeRow } from "./tree";
 
 export const TRASH_RETENTION_DAYS = 30;

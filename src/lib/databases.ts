@@ -17,15 +17,13 @@ import {
   migrateValues,
   normalizeValues,
   orphanValues,
-  parseConfig,
-  sanitizeView,
   transferValues,
   valuesToText,
-  type DbConfig,
   type EntryRow,
   type Property,
   type Values,
 } from "./properties";
+import { parseConfig, sanitizeViews, type DbConfig } from "./views";
 
 const NOT_FOUND: Outcome = { ok: false, status: 404, error: "Base introuvable" };
 const STALE: Outcome = { ok: false, status: 409, error: "La base a changé : rechargez la page." };
@@ -91,9 +89,11 @@ export async function listEntries(dbId: string): Promise<EntryRow[]> {
   }));
 }
 
-export type DatabasePatch = { properties?: Property[]; view?: unknown };
+export type DatabasePatch = { properties?: Property[]; views?: unknown };
 
-// Nouvelles propriétés (liste complète, déjà validée) et/ou nouvelle vue. Un
+// Nouvelles propriétés (liste complète, déjà validée) et/ou nouvelles vues
+// (liste complète, relue contre les propriétés du moment : un filtre ou un
+// calcul qui visait une propriété supprimée disparaît de toutes les vues). Un
 // changement de propriétés migre les valeurs de toutes les entrées, corbeille
 // comprise : une entrée restaurée doit suivre le schéma du moment.
 export async function updateDatabase(id: string, patch: DatabasePatch): Promise<Outcome & { config?: DbConfig }> {
@@ -101,7 +101,7 @@ export async function updateDatabase(id: string, patch: DatabasePatch): Promise<
     const before = await lockDatabase(tx, id);
     if (!before) return NOT_FOUND;
     const properties = patch.properties ?? before.properties;
-    const config: DbConfig = { properties, view: sanitizeView(patch.view ?? before.view, properties) };
+    const config: DbConfig = { properties, views: sanitizeViews(patch.views ?? before.views, properties) };
 
     if (patch.properties) {
       const entries = await tx

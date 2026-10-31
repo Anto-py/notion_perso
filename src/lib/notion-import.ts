@@ -14,7 +14,8 @@ import {
 } from "./notion-archive";
 import { buildCsvDatabase, parseCsv } from "./notion-csv";
 import { markdownToBlocks, type Block } from "./notion-markdown";
-import { fold, valuesToText, type DbConfig, type Values } from "./properties";
+import { fold, valuesToText, type Values } from "./properties";
+import type { DbConfig } from "./views";
 import { ALLOWED_TYPES } from "./upload_rules";
 
 export { NotionImportError } from "./notion-archive";

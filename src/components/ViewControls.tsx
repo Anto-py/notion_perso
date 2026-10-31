@@ -6,6 +6,7 @@ import { useState } from "react";
 import {
   isGroupableType,
   isOptionType,
+  isTimeType,
   NO_COLUMN,
   OP_LABELS,
   OPS_BY_TYPE,
@@ -17,8 +18,8 @@ import {
   type FilterOp,
   type Property,
   type Sort,
-  type View,
 } from "@/lib/properties";
+import type { View } from "@/lib/views";
 
 type Props = { properties: Property[]; view: View; columns: Column[]; onChange: (view: View, delay?: number) => void };
 
@@ -32,6 +33,8 @@ export function ViewControls({ properties, view, columns, onChange }: Props) {
   const groupProp = groupables.find((prop) => prop.id === view.group_by) ?? groupables[0];
   const hiddenColumnKeys = new Set(groupProp ? (view.hidden_columns[groupProp.id] ?? []) : []);
   const hiddenColumnCount = columns.filter((column) => hiddenColumnKeys.has(column.key ?? NO_COLUMN)).length;
+  const sorted = view.kind !== "board";
+  const fieldsLabel = view.kind === "table" ? "Colonnes" : view.kind === "board" ? "Champs des cartes" : "Propriétés affichées";
   const sortable = [
     ...Object.entries(SORT_BUILTINS).map(([id, name]) => ({ id, name })),
     ...properties.map(({ id, name }) => ({ id, name })),
@@ -110,7 +113,7 @@ export function ViewControls({ properties, view, columns, onChange }: Props) {
         );
       })}
 
-      {view.kind === "table" &&
+      {sorted &&
         view.sorts.map((sort, index) => (
           <div className="control-row" key={sort.prop}>
             <span className="control-label">{index === 0 ? "Tri" : "puis"}</span>
@@ -134,7 +137,7 @@ export function ViewControls({ properties, view, columns, onChange }: Props) {
         ))}
 
       {columnsOpen && properties.length > 0 && (
-        <div className="control-row" role="group" aria-label={view.kind === "table" ? "Colonnes affichées" : "Champs affichés sur les cartes"}>
+        <div className="control-row" role="group" aria-label={fieldsLabel}>
           <span className="control-label">{view.kind === "table" ? "Colonnes" : "Champs"}</span>
           {properties.map((prop) => (
             <label key={prop.id} className="column-toggle">
@@ -171,7 +174,7 @@ export function ViewControls({ properties, view, columns, onChange }: Props) {
         <button type="button" className="ghost" onClick={() => onChange({ ...view, filters: [...view.filters, { prop: TITLE_PROP.id, op: "contains", value: "" }] })}>
           + Filtre
         </button>
-        {view.kind === "table" && unusedSort && (
+        {sorted && unusedSort && (
           <button type="button" className="ghost" onClick={() => onChange({ ...view, sorts: [...view.sorts, { prop: unusedSort.id, dir: "asc" }] })}>
             + Tri
           </button>
@@ -184,10 +187,10 @@ export function ViewControls({ properties, view, columns, onChange }: Props) {
         )}
         {properties.length > 0 && (
           <button type="button" className="ghost" aria-expanded={columnsOpen} onClick={() => setColumnsOpen(!columnsOpen)}>
-            {view.kind === "table" ? "Colonnes" : "Champs des cartes"}
+            {fieldsLabel}
             {view.hidden.length > 0 &&
               ` (${view.hidden.length} ${
-                view.kind === "table" ? (view.hidden.length > 1 ? "masquées" : "masquée") : view.hidden.length > 1 ? "masqués" : "masqué"
+                view.kind === "board" ? (view.hidden.length > 1 ? "masqués" : "masqué") : view.hidden.length > 1 ? "masquées" : "masquée"
               })`}
           </button>
         )}
@@ -212,8 +215,20 @@ function FilterValue({ prop, filter, onChange }: { prop: Property; filter: Filte
       </select>
     );
   }
-  if (prop.type === "date") {
+  if (prop.type === "date" || isTimeType(prop.type)) {
     return <input type="date" aria-label="Date du filtre" value={value} onChange={(event) => onChange(event.target.value)} />;
+  }
+  if (prop.type === "number") {
+    return (
+      <input
+        aria-label="Nombre du filtre"
+        placeholder="nombre…"
+        inputMode="decimal"
+        value={value}
+        maxLength={40}
+        onChange={(event) => onChange(event.target.value, TYPING_DELAY)}
+      />
+    );
   }
   return (
     <input

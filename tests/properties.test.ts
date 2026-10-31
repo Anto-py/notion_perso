@@ -12,10 +12,8 @@ import {
   nextColor,
   normalizeValue,
   orphanValues,
-  parseConfig,
   withNewOption,
   checkValue,
-  sanitizeView,
   sortEntries,
   transferValues,
   uniqueName,
@@ -25,6 +23,7 @@ import {
   type Property,
   type Values,
 } from "@/lib/properties";
+import { parseConfig, sanitizeView } from "@/lib/views";
 
 const tags: Property = {
   id: "prop_tags",
@@ -359,7 +358,8 @@ describe("configurations héritées et sélections", () => {
         ],
       },
     ]);
-    expect(config.view.group_by).toBe("prop_etat");
+    expect(config.views).toHaveLength(1);
+    expect(config.views[0].group_by).toBe("prop_etat");
     expect(groupEntries([entry("x", { prop_etat: "c" })], config.properties[0]).map((column) => column.name)).toEqual([
       "Sans état",
       "À faire",

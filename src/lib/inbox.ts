@@ -8,7 +8,8 @@ import { CAPTURE_TITLE_MAX, noteFromText } from "./capture";
 import { updateDatabase } from "./databases";
 import { newId } from "./ids";
 import type { Page } from "./pages";
-import { parseConfig, valuesToText, type DbConfig, type Property, type Values } from "./properties";
+import { valuesToText, type Property, type Values } from "./properties";
+import { parseConfig, sanitizeView, type DbConfig } from "./views";
 import { domainOf } from "./unfurl";
 
 export const INBOX_TITLE = "Vide-cerveau";
@@ -25,14 +26,7 @@ export function inboxConfig(): DbConfig {
       { id: INBOX_PREVIEW_PROP, name: "Aperçu", type: "text" },
       { id: INBOX_SOURCE_PROP, name: "Source", type: "text" },
     ],
-    view: {
-      kind: "table",
-      group_by: null,
-      filters: [],
-      sorts: [{ prop: "created_at", dir: "desc" }],
-      hidden: [],
-      hidden_columns: {},
-    },
+    views: [sanitizeView({ sorts: [{ prop: "created_at", dir: "desc" }] }, [])],
   };
 }
 
