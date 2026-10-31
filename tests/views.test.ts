@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { keyFromIndex } from "@/lib/order_key";
 import {
   brusselsParts,
   changeType,
@@ -57,7 +58,7 @@ const entry = (title: string, values: Values, createdAt = "2026-10-01T10:00:00.0
   title,
   icon: null,
   values,
-  manualOrder: order++,
+  manualOrder: keyFromIndex(order++),
   createdAt,
   updatedAt,
 });

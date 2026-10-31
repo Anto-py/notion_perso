@@ -5,7 +5,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { pages } from "@/db/schema";
 import { CAPTURE_TITLE_MAX, noteFromText } from "./capture";
-import { updateDatabase } from "./databases";
+import { keyAfterLast, updateDatabase } from "./databases";
 import { newId } from "./ids";
 import type { Page } from "./pages";
 import { valuesToText, type Property, type Values } from "./properties";
@@ -77,10 +77,7 @@ async function insertCapture(
   values: Values,
   row: { title: string; body?: unknown[]; bodyText?: string; kind: "note" | "link" },
 ): Promise<string> {
-  const [{ next }] = await db
-    .select({ next: sql<number>`coalesce(max(${pages.manualOrder}), -1) + 1` })
-    .from(pages)
-    .where(eq(pages.dbId, inboxId));
+  const manualOrder = await keyAfterLast(db, inboxId);
   const id = newId("pg");
   await db.insert(pages).values({
     id,
@@ -92,7 +89,7 @@ async function insertCapture(
     propertyValues: values,
     valuesText: valuesToText(properties, values),
     inboxKind: row.kind,
-    manualOrder: Number(next),
+    manualOrder,
   });
   return id;
 }

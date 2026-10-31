@@ -11,6 +11,7 @@ import { db } from "@/db";
 import { pages } from "@/db/schema";
 import { appendOrphans, flattenToText } from "./blocks";
 import { newId } from "./ids";
+import { isOrderKey, keyBetween, rekey } from "./order_key";
 import type { Outcome, Page } from "./pages";
 import {
   checkValue,
@@ -41,6 +42,15 @@ function asValues(raw: unknown): Values {
 function sameValues(a: Values, b: Values): boolean {
   const keys = Object.keys(a);
   return keys.length === Object.keys(b).length && keys.every((key) => JSON.stringify(a[key]) === JSON.stringify(b[key]));
+}
+
+// Clé qui place une entrée après toutes celles de la base, corbeille comprise.
+export async function keyAfterLast(tx: Pick<Tx, "select">, dbId: string): Promise<string> {
+  const [{ last }] = await tx
+    .select({ last: sql<string | null>`max(${pages.manualOrder})` })
+    .from(pages)
+    .where(eq(pages.dbId, dbId));
+  return keyBetween(isOrderKey(last) ? last : null, null);
 }
 
 async function lockDatabase(tx: Tx, id: string): Promise<DbConfig | null> {
@@ -135,10 +145,7 @@ export async function createEntry(dbId: string, raw: Record<string, unknown>): P
     const error = checkValues(config.properties, raw);
     if (error) return { ok: false, status: 400, error } as const;
     const values = normalizeValues(config.properties, raw);
-    const [{ next }] = await tx
-      .select({ next: sql<number>`coalesce(max(${pages.manualOrder}), -1) + 1` })
-      .from(pages)
-      .where(eq(pages.dbId, dbId));
+    const manualOrder = await keyAfterLast(tx, dbId);
     const id = newId("pg");
     await tx.insert(pages).values({
       id,
@@ -146,7 +153,7 @@ export async function createEntry(dbId: string, raw: Record<string, unknown>): P
       dbId,
       propertyValues: values,
       valuesText: valuesToText(config.properties, values),
-      manualOrder: Number(next),
+      manualOrder,
     });
     return { ok: true, id } as const;
   });
@@ -179,17 +186,14 @@ export async function moveEntry(id: string, targetDbId: string): Promise<Outcome
       .where(eq(pages.id, id));
     const previous = asValues(row?.propertyValues);
     const values = transferValues(source.properties, target.properties, previous);
-    const [{ next }] = await tx
-      .select({ next: sql<number>`coalesce(max(${pages.manualOrder}), -1) + 1` })
-      .from(pages)
-      .where(eq(pages.dbId, targetDbId));
+    const manualOrder = await keyAfterLast(tx, targetDbId);
     const [targetMeta] = await tx.select({ isInbox: pages.isInbox }).from(pages).where(eq(pages.id, targetDbId));
 
     const patch: Partial<typeof pages.$inferInsert> = {
       dbId: targetDbId,
       propertyValues: values,
       valuesText: valuesToText(target.properties, values),
-      manualOrder: Number(next),
+      manualOrder,
     };
     // Une valeur sans propriété d'accueil n'est pas jetée : elle rejoint le
     // corps de la page, préfixée de son nom, l'URL restant cliquable.
@@ -224,10 +228,10 @@ export async function updateEntry(id: string, patch: EntryPatch): Promise<Outcom
     const config = await lockDatabase(tx, found.dbId);
     if (!config) return NOT_FOUND;
 
-    let order: string[] | null = null;
+    let order: Map<string, string> | null = null;
     if (patch.order) {
       const rows = await tx
-        .select({ id: pages.id })
+        .select({ id: pages.id, manualOrder: pages.manualOrder })
         .from(pages)
         .where(and(eq(pages.dbId, found.dbId), isNull(pages.trashedAt)))
         .orderBy(asc(pages.manualOrder), asc(pages.createdAt));
@@ -235,7 +239,8 @@ export async function updateEntry(id: string, patch: EntryPatch): Promise<Outcom
       const wanted = [...new Set(patch.order)];
       if (wanted.some((entryId) => !known.has(entryId))) return STALE;
       const listed = new Set(wanted);
-      order = [...wanted, ...rows.map((row) => row.id).filter((entryId) => !listed.has(entryId))];
+      const ids = [...wanted, ...rows.map((row) => row.id).filter((entryId) => !listed.has(entryId))];
+      order = rekey(ids, new Map(rows.map((row) => [row.id, row.manualOrder])));
     }
 
     if (patch.values) {
@@ -254,17 +259,16 @@ export async function updateEntry(id: string, patch: EntryPatch): Promise<Outcom
         .where(eq(pages.id, id));
     }
 
-    // Renumérote toute la base (0, 1, 2…) ; seules les lignes dont le rang
-    // change sont écrites. updated_at inchangé : déplacer n'est pas modifier.
-    if (order) {
-      const ids = sql.join(
-        order.map((entryId) => sql`${entryId}`),
-        sql`, `,
-      );
+    // Seules les entrées sorties de la plus longue suite déjà ordonnée
+    // reçoivent une clé neuve, une seule pour un glisser (lib/order_key.ts).
+    // updated_at inchangé : déplacer n'est pas modifier.
+    if (order && order.size > 0) {
+      const ids = [...order.keys()];
       await tx.execute(sql`
-        UPDATE pages SET manual_order = v.ord - 1
-        FROM unnest(ARRAY[${ids}]::text[]) WITH ORDINALITY AS v(id, ord)
-        WHERE pages.id = v.id AND pages.manual_order IS DISTINCT FROM v.ord - 1`);
+        UPDATE pages SET manual_order = v.key
+        FROM unnest(ARRAY[${sql.join(ids.map((entryId) => sql`${entryId}`), sql`, `)}]::text[],
+                    ARRAY[${sql.join(ids.map((entryId) => sql`${order.get(entryId)!}`), sql`, `)}]::text[]) AS v(id, key)
+        WHERE pages.id = v.id`);
     }
     return { ok: true } as const;
   });

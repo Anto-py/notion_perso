@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { keyFromIndex } from "@/lib/order_key";
 import {
   boardOrder,
   changeType,
@@ -57,7 +58,7 @@ const entry = (title: string, values: Values, extra: Partial<EntryRow> = {}): En
   title,
   icon: null,
   values,
-  manualOrder: order++,
+  manualOrder: keyFromIndex(order++),
   createdAt: "2026-10-01T10:00:00.000Z",
   updatedAt: "2026-10-01T10:00:00.000Z",
   ...extra,
@@ -249,9 +250,9 @@ describe("filtres", () => {
 });
 
 describe("sortEntries", () => {
-  const a = entry("a", { prop_date: "2026-07-01", prop_statut: "s3" }, { manualOrder: 2 });
-  const b = entry("b", { prop_date: "2026-09-01", prop_statut: "s1" }, { manualOrder: 1 });
-  const c = entry("c", {}, { manualOrder: 0 });
+  const a = entry("a", { prop_date: "2026-07-01", prop_statut: "s3" }, { manualOrder: keyFromIndex(2) });
+  const b = entry("b", { prop_date: "2026-09-01", prop_statut: "s1" }, { manualOrder: keyFromIndex(1) });
+  const c = entry("c", {}, { manualOrder: keyFromIndex(0) });
 
   it("trie par date décroissante, valeurs vides en dernier", () => {
     expect(sortEntries([a, b, c], [{ prop: "prop_date", dir: "desc" }], veille).map((e) => e.id)).toEqual(["b", "a", "c"]);

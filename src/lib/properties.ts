@@ -3,6 +3,7 @@
 // comme par le navigateur (affichage, filtre, tri, confirmation avant une
 // perte de valeurs). Les vues et la configuration sont dans views.ts.
 // Formats jsonb : BRAINSTORMING §3-4.
+import { compareKeys } from "./order_key";
 
 export const PROPERTY_TYPES = [
   "text",
@@ -144,7 +145,7 @@ export type EntryRow = {
   title: string;
   icon: string | null;
   values: Values;
-  manualOrder: number;
+  manualOrder: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -810,7 +811,7 @@ export function sortEntries(entries: readonly EntryRow[], sorts: readonly Sort[]
       const order = typeof ka === "number" && typeof kb === "number" ? ka - kb : collator.compare(String(ka), String(kb));
       if (order !== 0) return order * dir;
     }
-    return a.manualOrder - b.manualOrder || Date.parse(a.createdAt) - Date.parse(b.createdAt);
+    return compareKeys(a.manualOrder, b.manualOrder) || Date.parse(a.createdAt) - Date.parse(b.createdAt);
   });
 }
 

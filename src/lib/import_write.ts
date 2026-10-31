@@ -5,6 +5,7 @@ import { Readable } from "node:stream";
 import { db } from "@/db";
 import { media, pages } from "@/db/schema";
 import type { ImportPlan } from "./notion-import";
+import { keyFromIndex } from "./order_key";
 import { removeFile, saveFile } from "./storage";
 
 // PostgreSQL limite le nombre de paramètres d'une instruction ; cent lignes
@@ -32,7 +33,7 @@ export async function applyImportPlan(plan: ImportPlan): Promise<void> {
       dbConfig: page.dbConfig,
       propertyValues: page.propertyValues,
       valuesText: page.valuesText,
-      manualOrder: page.manualOrder,
+      manualOrder: keyFromIndex(page.manualOrder),
     }));
 
     await db.transaction(async (tx) => {

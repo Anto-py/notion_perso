@@ -50,6 +50,20 @@
       "when": 1793443163139,
       "tag": "0006_medias_inutilises",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793456780436,
+      "tag": "0007_sync_revisions",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793457222214,
+      "tag": "0008_ordre_fractionnaire",
+      "breakpoints": true
     }
   ]
 }

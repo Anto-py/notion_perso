@@ -68,6 +68,7 @@ export type PlanPage = {
   dbConfig: DbConfig | null;
   propertyValues: Values | null;
   valuesText: string;
+  // Rang parmi les frères, converti en clé d'ordre à l'écriture (import_write).
   manualOrder: number;
 };
 
