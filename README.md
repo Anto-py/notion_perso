@@ -58,6 +58,29 @@ L'import Notion garde en mémoire le zip, l'archive décompressée et les média
 Sur un VPS à 4 Go, un export complet peut manquer de mémoire : préférer
 plusieurs exports par branches, ou relever temporairement `NODE_OPTIONS`.
 
+## Sauvegardes
+
+Deux étages, l'un sur le VPS, l'autre hors de chez l'hébergeur.
+
+1. **Coolify**, sur le VPS : dump de la base chaque nuit (`0 2 * * *` UTC,
+   14 gardés) et archive du stockage `/data/uploads` chaque dimanche
+   (2 gardées). Revenir à un jour donné sans restaurer toute la machine.
+2. **Miroir sur un Mac** : `scripts/miroir.sh` copie par SSH le dernier dump
+   et les médias (`rsync`, sans `--delete`), vérifie le dump puis le restaure
+   dans une base locale `notion_perso_miroir`, substituée à l'ancienne
+   seulement si la restauration réussit. Notification macOS en cas d'échec ou
+   après trois jours sans copie réussie.
+
+```bash
+bash scripts/miroir.sh            # copie si la dernière a plus de 20 h
+bash scripts/miroir.sh --force    # copie maintenant
+```
+
+Les réglages (hôte, clé SSH, chemins du dump et du volume) vivent dans
+`~/notion_perso_miroir/miroir.conf`, hors dépôt ; l'en-tête du script en donne
+la liste. Un LaunchAgent le lance à l'ouverture de session puis toutes les
+6 h (`RunAtLoad`, `StartInterval` à 21600).
+
 ## Licence
 
 MIT, voir [LICENSE](LICENSE). BlockNote, l'éditeur, est sous MPL-2.0.
