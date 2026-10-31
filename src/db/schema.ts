@@ -199,3 +199,32 @@ export const syncClients = pgTable("sync_clients", {
   cursor: xid8("cursor").notNull().default(sql`'0'::xid8`),
   createdAt: createdAt(),
 });
+
+// Côté Mac seulement (vides sur le VPS) : la dernière version reçue du
+// serveur pour chaque ligne synchronisée. rev : sa révision sur le serveur.
+// local_rev : la révision locale vue au dernier passage, pré-filtre qui évite
+// de recalculer l'empreinte des lignes que rien n'a touchées. Une ligne dont
+// l'empreinte diffère de hash attend d'être envoyée (lib/sync_client.ts).
+export const syncBase = pgTable(
+  "sync_base",
+  {
+    kind: text("kind", { enum: ["page", "media", "icon_image"] }).notNull(),
+    id: text("id").notNull(),
+    rev: bigint("rev", { mode: "number" }).notNull(),
+    localRev: bigint("local_rev", { mode: "number" }).notNull(),
+    hash: text("hash").notNull(),
+    snapshot: jsonb("snapshot").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.kind, t.id] })],
+);
+
+// Côté Mac seulement : une ligne unique (id 1). cursor : curseur du flux des
+// changements, à renvoyer au cycle suivant ; synced_at : fin du dernier cycle
+// réussi ; error : raison du dernier échec, effacée au succès suivant.
+export const syncState = pgTable("sync_state", {
+  id: integer("id").primaryKey().default(1),
+  cursor: text("cursor").notNull().default("0"),
+  syncedAt: timestamp("synced_at", { withTimezone: true }),
+  error: text("error"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
