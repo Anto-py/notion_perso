@@ -44,4 +44,8 @@ COPY --from=builder /app/src/db/migrations ./src/db/migrations
 RUN mkdir -p /data/uploads && chown -R nextjs:nodejs /data
 USER nextjs
 EXPOSE 3000
+# node:22-slim n'a ni curl ni wget : la sonde passe par le fetch de Node.
+# Coolify lit ce HEALTHCHECK quand le sien est désactivé ; 60 s, règle du VPS.
+HEALTHCHECK --interval=60s --timeout=5s --start-period=30s --start-interval=5s --retries=3 \
+  CMD ["node", "-e", "fetch('http://localhost:3000/login').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
 CMD ["node", "server.js"]
