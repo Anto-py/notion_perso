@@ -57,3 +57,7 @@ docker build -t notion_perso:essai .
 L'import Notion garde en mémoire le zip, l'archive décompressée et les médias.
 Sur un VPS à 4 Go, un export complet peut manquer de mémoire : préférer
 plusieurs exports par branches, ou relever temporairement `NODE_OPTIONS`.
+
+## Licence
+
+MIT, voir [LICENSE](LICENSE). BlockNote, l'éditeur, est sous MPL-2.0.
