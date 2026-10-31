@@ -7,7 +7,7 @@ import { inArray, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { media } from "@/db/schema";
 import { planCleanup, STORED_NAME_IN_TEXT } from "./media_cleanup";
-import { listTrash, purgePage, trashedBatch, type Outcome } from "./pages";
+import { listTrash, purgeExpired, purgePage, trashedBatch, type Outcome } from "./pages";
 import { removeFile } from "./storage";
 
 const NAME_PATTERN = `(${STORED_NAME_IN_TEXT})`;
@@ -69,6 +69,19 @@ export async function tryCleanMedia(): Promise<void> {
   } catch (error) {
     console.error("Nettoyage des médias impossible :", error);
   }
+}
+
+// Purge des éléments de plus de 30 jours puis balayage des médias, au
+// démarrage et à l'ouverture de la corbeille. Un échec ne bloque ni l'un ni
+// l'autre : la corbeille reste lisible, le miroir en lecture seule compris.
+export async function tryPurgeExpired(): Promise<void> {
+  try {
+    const count = await purgeExpired();
+    if (count) console.log(`Corbeille : ${count} élément(s) de plus de 30 jours purgé(s)`);
+  } catch (error) {
+    console.error("Purge de la corbeille impossible :", error);
+  }
+  await tryCleanMedia();
 }
 
 // Noms cités par le lot purgé avec rootId, entrées de ses bases comprises :

@@ -1,7 +1,7 @@
 import { canAccess } from "@/lib/access";
 import { fail, readJson, reply, requireUser } from "@/lib/api";
-import { emptyTrash, purgeWithMedia, tryCleanMedia } from "@/lib/media_cleanup_query";
-import { getPage, listTrash, purgeExpired, restorePage } from "@/lib/pages";
+import { emptyTrash, purgeWithMedia, tryPurgeExpired } from "@/lib/media_cleanup_query";
+import { getPage, listTrash, restorePage } from "@/lib/pages";
 
 // GET : contenu de la corbeille. Ouvrir la corbeille purge d'abord ce qui y
 // dort depuis plus de 30 jours (la purge « à la demande » du plan), puis
@@ -9,8 +9,7 @@ import { getPage, listTrash, purgeExpired, restorePage } from "@/lib/pages";
 export async function GET() {
   const user = await requireUser();
   if (user instanceof Response) return user;
-  await purgeExpired();
-  await tryCleanMedia();
+  await tryPurgeExpired();
   const items = await listTrash();
   return Response.json({ items: items.filter((item) => canAccess(user, item, "read")) });
 }

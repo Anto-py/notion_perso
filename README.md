@@ -89,6 +89,24 @@ Les réglages (hôte, clé SSH, chemins du dump et du volume) vivent dans
 la liste. Un LaunchAgent le lance à l'ouverture de session puis toutes les
 6 h (`RunAtLoad`, `StartInterval` à 21600).
 
+Pour consulter le miroir, le compte de production servant à la connexion :
+
+```bash
+bash scripts/miroir_consulter.sh   # http://127.0.0.1:3100, Ctrl + C pour arrêter
+```
+
+Le script construit l'application dans un second clone
+(`~/notion_perso_miroir/app`), calé sur le plus récent déploiement Coolify
+dont la dernière migration est celle du miroir, puis la lance avec un rôle
+Postgres qui lit tout et n'écrit que ses sessions (`scripts/miroir_droits.sql`).
+Purge de la corbeille et nettoyage des médias y échouent sans rien effacer.
+
+Sans terminal : `bash scripts/miroir_app.sh /Applications` fabrique
+« Miroir notion.app », à poser dans le Dock ou sur le bureau. L'ouvrir lance
+le miroir et son onglet, cliquer à nouveau sur l'icône rouvre l'onglet,
+la quitter (Cmd + Q) arrête le serveur. Échecs et construction s'annoncent
+par notification, le détail va dans `~/notion_perso_miroir/journal/consulter.log`.
+
 ## Licence
 
 MIT, voir [LICENSE](LICENSE). BlockNote, l'éditeur, est sous MPL-2.0.

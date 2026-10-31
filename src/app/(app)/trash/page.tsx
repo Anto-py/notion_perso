@@ -2,8 +2,8 @@ import { Suspense } from "react";
 import { TrashList } from "@/components/TrashList";
 import { canAccess } from "@/lib/access";
 import { getCurrentUser } from "@/lib/auth";
-import { tryCleanMedia } from "@/lib/media_cleanup_query";
-import { countTrash, listTrash, purgeExpired, TRASH_RETENTION_DAYS } from "@/lib/pages";
+import { tryPurgeExpired } from "@/lib/media_cleanup_query";
+import { countTrash, listTrash, TRASH_RETENTION_DAYS } from "@/lib/pages";
 
 export default function TrashPage() {
   return (
@@ -21,8 +21,7 @@ export default function TrashPage() {
 // les médias inutilisés.
 async function TrashData() {
   const user = await getCurrentUser();
-  await purgeExpired();
-  await tryCleanMedia();
+  await tryPurgeExpired();
   const items = (await listTrash()).filter((item) => canAccess(user, item, "read"));
   const total = await countTrash();
   return (

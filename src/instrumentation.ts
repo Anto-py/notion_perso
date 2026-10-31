@@ -11,13 +11,6 @@ export async function register() {
     const { bootstrap } = await import("./db/bootstrap");
     await bootstrap();
   }
-  try {
-    const { purgeExpired } = await import("./lib/pages");
-    const count = await purgeExpired();
-    if (count) console.log(`Corbeille : ${count} élément(s) de plus de 30 jours purgé(s)`);
-  } catch (error) {
-    console.error("Purge de la corbeille au démarrage impossible :", error);
-  }
-  const { tryCleanMedia } = await import("./lib/media_cleanup_query");
-  await tryCleanMedia();
+  const { tryPurgeExpired } = await import("./lib/media_cleanup_query");
+  await tryPurgeExpired();
 }
