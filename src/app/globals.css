@@ -575,10 +575,15 @@ a {
   flex: 1;
 }
 
-.trash-actions {
+.trash-actions,
+.trash-empty {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
+}
+
+.trash-empty {
+  justify-content: flex-end;
 }
 
 /* --- Bases --------------------------------------------------------------- */

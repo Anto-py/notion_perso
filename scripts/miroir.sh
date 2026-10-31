@@ -19,7 +19,8 @@
 #   MIROIR_DUMPS=/data/coolify/backups/databases/<équipe>/<base>
 #   MIROIR_UPLOADS=/var/lib/docker/volumes/<volume>/_data
 # Facultatifs : MIROIR_BASE (notion_perso_miroir), MIROIR_GARDER (5 dumps),
-# MIROIR_INTERVALLE_H (20), MIROIR_ALERTE_J (3 jours sans copie réussie).
+# MIROIR_INTERVALLE_H (20), MIROIR_ALERTE_J (3 jours sans copie réussie),
+# MIROIR_DELAI_J (14 jours avant d'effacer du Mac un média supprimé).
 #
 set -euo pipefail
 
@@ -54,6 +55,7 @@ base="${MIROIR_BASE:-notion_perso_miroir}"
 garder="${MIROIR_GARDER:-5}"
 intervalle_h="${MIROIR_INTERVALLE_H:-20}"
 alerte_j="${MIROIR_ALERTE_J:-3}"
+delai_j="${MIROIR_DELAI_J:-14}"
 
 # Le miroir est effacé à chaque copie : jamais sur une base qui porte du travail.
 case "$base" in
@@ -66,7 +68,8 @@ if [ -d "$verrou" ] && [ -n "$(find "$verrou" -maxdepth 0 -mmin +120)" ]; then
   rmdir "$verrou"
 fi
 mkdir "$verrou" 2>/dev/null || exit 0
-trap 'rmdir "$verrou"' EXIT
+travail="$(mktemp -d)"
+trap 'rmdir "$verrou"; rm -rf "$travail"' EXIT
 
 age_s=-1
 [ -f "$marque" ] && age_s=$(( $(date +%s) - $(stat -f %m "$marque") ))
@@ -97,7 +100,8 @@ copier "$MIROIR_HOTE:$dump_distant" "$dossier/dumps/" || echec "copie du dump"
 dump="$dossier/dumps/$(basename "$dump_distant")"
 pg_restore -l "$dump" >/dev/null 2>&1 || echec "dump illisible : $(basename "$dump")"
 
-# Sans --delete : un média purgé sur le VPS reste sur le Mac.
+# Sans --delete : un média effacé du VPS ne quitte le Mac qu'après le délai
+# (voir plus bas, une fois la base restaurée).
 copier "$MIROIR_HOTE:$MIROIR_UPLOADS/" "$dossier/uploads/" || echec "copie des médias"
 
 # Postgres.app peut démarrer après l'ouverture de session.
@@ -122,10 +126,47 @@ medias="$(psql -d "$neuf" -At -c 'select count(*) from media')"
 dropdb --if-exists --force "$base"
 psql -d postgres -q -c "alter database \"$neuf\" rename to \"$base\""
 
+# Un média du Mac absent du VPS n'est supprimé que si la base restaurée ne le
+# connaît plus non plus : l'application efface ligne et fichier ensemble.
+# Absent du VPS mais encore en base, c'est une perte, jamais effacée ici.
+export LC_ALL=C
+psql -d "$base" -At -c 'select filename from media' | sort > "$travail/en_base"
+distant "ls -1 '$MIROIR_UPLOADS'" | sort > "$travail/sur_vps" || echec "liste des médias du VPS"
+ls -1 "$dossier/uploads" | sort > "$travail/sur_mac"
+comm -23 "$travail/sur_mac" "$travail/sur_vps" > "$travail/hors_vps"
+comm -12 "$travail/hors_vps" "$travail/en_base" > "$travail/perdus"
+comm -23 "$travail/hors_vps" "$travail/en_base" > "$travail/supprimes"
+perdus="$(wc -l < "$travail/perdus" | tr -d ' ')"
+if [ "$perdus" -gt 0 ]; then
+  log "ALERTE : $perdus média(s) en base mais absents du VPS, gardés sur le Mac : $(head -3 "$travail/perdus" | tr '\n' ' ')"
+  notifier "$perdus média(s) manquent sur le VPS, copie du Mac gardée"
+fi
+
+# absents.tsv : nom, date de la première copie qui l'a trouvé supprimé. Un nom
+# qui réapparaît sort de la liste.
+absents="$dossier/journal/absents.tsv"
+touch "$absents"
+maintenant="$(date +%s)"
+effaces=0
+: > "$travail/absents"
+while IFS= read -r nom; do
+  case "$nom" in up_*) ;; *) continue ;; esac
+  depuis="$(awk -F'\t' -v n="$nom" '$1 == n { print $2 }' "$absents")"
+  [ -n "$depuis" ] || depuis="$maintenant"
+  if [ $(( maintenant - depuis )) -ge $(( delai_j * 86400 )) ]; then
+    rm -f -- "$dossier/uploads/$nom"
+    effaces=$(( effaces + 1 ))
+  else
+    printf '%s\t%s\n' "$nom" "$depuis" >> "$travail/absents"
+  fi
+done < "$travail/supprimes"
+mv "$travail/absents" "$absents"
+attente="$(wc -l < "$absents" | tr -d ' ')"
+
 ls -1t "$dossier/dumps"/*.dmp | tail -n +$(( garder + 1 )) | while read -r ancien; do
   rm -f -- "$ancien"
 done
 
 fichiers="$(find "$dossier/uploads" -type f | wc -l | tr -d ' ')"
 touch "$marque"
-log "copie réussie : $(basename "$dump"), $pages pages, $medias médias en base, $fichiers fichiers sur le Mac"
+log "copie réussie : $(basename "$dump"), $pages pages, $medias médias en base, $fichiers fichiers sur le Mac, $effaces effacé(s), $attente en attente de $delai_j jours"

@@ -34,8 +34,9 @@ export async function saveFile(source: ReadableStream<Uint8Array>, filename: str
   }
 }
 
-// Seul effacement de fichier déposé : une image d'icône que plus aucune page
-// n'utilise, à la demande d'Antonin (lib/icon_library.ts).
+// Effacement d'un fichier déposé : une image d'icône supprimée de la
+// bibliothèque (lib/icon_library.ts), un média inutilisé depuis 30 jours
+// (lib/media_cleanup_query.ts), un import qui échoue (lib/import_write.ts).
 export async function removeFile(filename: string): Promise<void> {
   await rm(storedPath(filename), { force: true });
 }

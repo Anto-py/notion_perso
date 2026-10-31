@@ -68,8 +68,16 @@ Deux étages, l'un sur le VPS, l'autre hors de chez l'hébergeur.
 2. **Miroir sur un Mac** : `scripts/miroir.sh` copie par SSH le dernier dump
    et les médias (`rsync`, sans `--delete`), vérifie le dump puis le restaure
    dans une base locale `notion_perso_miroir`, substituée à l'ancienne
-   seulement si la restauration réussit. Notification macOS en cas d'échec ou
-   après trois jours sans copie réussie.
+   seulement si la restauration réussit. Un média absent du VPS **et** de la
+   base restaurée est effacé du Mac 14 jours plus tard ; absent du VPS mais
+   encore en base, il est gardé et signalé. Notification macOS en cas
+   d'échec, de média manquant ou après trois jours sans copie réussie.
+
+L'application elle-même efface un média 30 jours après qu'il a cessé de
+servir (aucune page, corbeille comprise, ne le cite, et il n'est pas une
+image visible de la bibliothèque d'icônes). Une purge manuelle de la
+corbeille (un élément, ou « Vider la corbeille ») efface aussitôt les médias
+des pages purgées qui ne servent plus ailleurs.
 
 ```bash
 bash scripts/miroir.sh            # copie si la dernière a plus de 20 h

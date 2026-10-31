@@ -1,7 +1,7 @@
 // Accès aux pages : arbre, création, modification, déplacement, corbeille.
 // Ce module ne décide d'aucun droit : chaque appelant passe d'abord par
 // canAccess (lib/access.ts), point unique des décisions d'accès.
-import { and, asc, desc, eq, isNull, lt, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { media, pages } from "@/db/schema";
 import { flattenToText } from "./blocks";
@@ -124,8 +124,9 @@ export async function movePage(id: string, newParentId: string | null): Promise<
 // en corbeille une sous-page supprimée plus tôt, à part.
 
 // Ids du lot parti avec rootId (rootId compris). UNION, et non UNION ALL :
-// arrête la récursion même si la base contenait une boucle.
-function trashedBatch(rootId: string) {
+// arrête la récursion même si la base contenait une boucle. Lue aussi par
+// media_cleanup_query.ts pour les médias d'une purge manuelle.
+export function trashedBatch(rootId: string) {
   return sql`
     WITH RECURSIVE root AS (
       SELECT id, trashed_at FROM pages WHERE id = ${rootId} AND trashed_at IS NOT NULL
@@ -173,6 +174,13 @@ export async function listTrash(): Promise<TrashItem[]> {
   }));
 }
 
+// Pages en corbeille, sous-pages et entrées comprises : le compte annoncé
+// avant de vider la corbeille.
+export async function countTrash(): Promise<number> {
+  const [row] = await db.select({ n: sql<number>`count(*)::int` }).from(pages).where(isNotNull(pages.trashedAt));
+  return row?.n ?? 0;
+}
+
 // Restaure le lot. Si le parent est resté en corbeille, la page remonte à la
 // racine plutôt que de rester invisible (parent purgé : déjà null, par la FK).
 // Une entrée ne vit que dans sa base : tant que la base est en corbeille,
@@ -197,8 +205,9 @@ export async function restorePage(id: string): Promise<Outcome> {
   });
 }
 
-// Suppression définitive du lot. Les fichiers liés restent sur le disque,
-// repérables par media.page_id devenu null (nettoyage disque hors v1).
+// Suppression définitive du lot, sans ses fichiers : purgeWithMedia
+// (media_cleanup_query.ts) les efface aussitôt pour une purge manuelle, le
+// balayage 30 jours après pour la purge automatique.
 export async function purgePage(id: string): Promise<Outcome> {
   const result = await db.execute(sql`DELETE FROM pages WHERE id IN (${trashedBatch(id)})`);
   return result.rowCount ? { ok: true } : NOT_FOUND;

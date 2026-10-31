@@ -105,8 +105,12 @@ export const media = pgTable("media", {
   originalName: text("original_name").notNull(),
   mime: text("mime").notNull(),
   size: integer("size").notNull(),
-  // set null : le fichier orphelin reste repérable pour le nettoyage disque.
+  // set null : indicatif, le nettoyage (lib/media_cleanup_query.ts) lit les
+  // citations, pas ce rattachement.
   pageId: text("page_id").references(() => pages.id, { onDelete: "set null" }),
+  // Nul tant que le fichier sert ; date du premier balayage qui l'a trouvé
+  // inutilisé. Effacé MEDIA_RETENTION_DAYS plus tard s'il l'est resté.
+  unusedSince: timestamp("unused_since", { withTimezone: true }),
   createdAt: createdAt(),
 });
 

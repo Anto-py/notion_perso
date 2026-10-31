@@ -1,0 +1,1 @@
+ALTER TABLE "media" ADD COLUMN "unused_since" timestamp with time zone;
