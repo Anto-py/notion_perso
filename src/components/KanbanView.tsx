@@ -6,7 +6,7 @@
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   closestCenter,
   pointerWithin,
@@ -60,10 +60,13 @@ export function KanbanView({ groupProp, properties, hiddenKeys, entries, allIds,
   const [dragging, setDragging] = useState<EntryRow | null>(null);
   const [hint, setHint] = useState<Hint | null>(null);
 
-  // Comme la sidebar : un léger déplacement avant de saisir, un appui maintenu
-  // au doigt pour laisser défiler la page.
+  // Un léger déplacement avant de saisir à la souris, un appui maintenu au
+  // doigt pour laisser défiler la page. MouseSensor et non PointerSensor : un
+  // toucher émet aussi un pointerdown, qui précède le touchstart ; le
+  // PointerSensor captait donc le doigt avant le TouchSensor, et le défilement
+  // du tableau annulait la saisie (pointercancel) avant les 6 px.
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
   );
 

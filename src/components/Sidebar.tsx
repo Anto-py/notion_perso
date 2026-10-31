@@ -5,7 +5,7 @@
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   useDroppable,
   useSensor,
@@ -81,8 +81,10 @@ export function Sidebar({ rows, username, inboxCount }: Props) {
 
   // Un léger déplacement avant de saisir : un simple clic reste un clic. Au
   // doigt, un appui maintenu, pour que le défilement de l'arbre reste possible.
+  // MouseSensor et non PointerSensor, qui captait aussi le doigt (voir
+  // KanbanView.tsx).
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
   );
 

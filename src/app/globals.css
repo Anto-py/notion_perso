@@ -275,6 +275,10 @@ a {
   border-radius: 6px;
   min-height: 1.9rem;
   touch-action: pan-y;
+  /* Voir .board-card : l'appui maintenu saisit la ligne. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .tree-row:hover {
@@ -889,6 +893,11 @@ a {
   border-radius: var(--r-inner);
   cursor: grab;
   touch-action: manipulation;
+  /* L'appui maintenu qui saisit la carte ne doit ni sélectionner son texte
+     ni ouvrir l'aperçu du lien (iOS). */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* Le lien remplit le haut de la carte : cliquer sur le titre ouvre l'entrée. */
