@@ -13,6 +13,7 @@ import { appendOrphans, flattenToText } from "./blocks";
 import { newId } from "./ids";
 import { isOrderKey, keyBetween, rekey } from "./order_key";
 import type { Outcome, Page } from "./pages";
+import { mergeDbConfig, sameJson } from "./sync_merge";
 import {
   checkValue,
   migrateValues,
@@ -99,19 +100,32 @@ export async function listEntries(dbId: string): Promise<EntryRow[]> {
   }));
 }
 
-export type DatabasePatch = { properties?: Property[]; views?: unknown };
+// base : les listes que le navigateur avait avant sa modification (lib/web_save.ts).
+// Si celles du serveur ont bougé depuis, les deux versions se fusionnent,
+// propriété par id et vue par id, la modification qui arrive l'emportant.
+export type DatabasePatch = { properties?: Property[]; views?: unknown; base?: { properties?: unknown; views?: unknown } };
 
 // Nouvelles propriétés (liste complète, déjà validée) et/ou nouvelles vues
 // (liste complète, relue contre les propriétés du moment : un filtre ou un
 // calcul qui visait une propriété supprimée disparaît de toutes les vues). Un
 // changement de propriétés migre les valeurs de toutes les entrées, corbeille
 // comprise : une entrée restaurée doit suivre le schéma du moment.
-export async function updateDatabase(id: string, patch: DatabasePatch): Promise<Outcome & { config?: DbConfig }> {
+export async function updateDatabase(id: string, patch: DatabasePatch): Promise<Outcome & { config?: DbConfig; merged?: boolean }> {
   return db.transaction(async (tx) => {
     const before = await lockDatabase(tx, id);
     if (!before) return NOT_FOUND;
-    const properties = patch.properties ?? before.properties;
-    const config: DbConfig = { properties, views: sanitizeViews(patch.views ?? before.views, properties) };
+    let properties = patch.properties ?? before.properties;
+    let views = patch.views ?? before.views;
+    const base = patch.base;
+    const moved = (key: "properties" | "views") => base !== undefined && key in base && patch[key] !== undefined && !sameJson(base[key], before[key]);
+    const merged = moved("properties") || moved("views");
+    if (merged) {
+      const common = { properties: base?.properties ?? before.properties, views: base?.views ?? before.views };
+      const config = parseConfig(mergeDbConfig(common, { properties, views }, before, true));
+      properties = config.properties;
+      views = config.views;
+    }
+    const config: DbConfig = { properties, views: sanitizeViews(views, properties) };
 
     if (patch.properties) {
       const entries = await tx
@@ -132,7 +146,7 @@ export async function updateDatabase(id: string, patch: DatabasePatch): Promise<
     }
 
     await tx.update(pages).set({ dbConfig: config }).where(eq(pages.id, id));
-    return { ok: true, config };
+    return { ok: true, config, merged };
   });
 }
 

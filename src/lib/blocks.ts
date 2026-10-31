@@ -363,6 +363,10 @@ function blockHtml(block: Json, options: RenderOptions): string {
         ' referrerpolicy="strict-origin-when-cross-origin"></iframe></div>'
       );
     }
+    case "conflict":
+      // Encadré de fusion (lib/sync_merge.ts) : un brouillon à trier dans
+      // l'éditeur, jamais montré au lecteur de la vue publique.
+      return "";
     case "columnList":
       return `<div class="body-columns">${blocksHtml(children, options)}</div>`;
     case "column":

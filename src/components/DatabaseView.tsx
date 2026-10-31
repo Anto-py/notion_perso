@@ -45,6 +45,7 @@ type Props = {
     cover: string | null;
     coverPosition: number | null;
     publicId: string | null;
+    rev: number;
   };
   config: DbConfig;
   entries: EntryRow[];
@@ -69,9 +70,21 @@ function readStoredView(dbId: string): string | null {
 
 export function DatabaseView({ database, config, entries, initialViewId }: Props) {
   const router = useRouter();
-  const { status, queue, cancel } = useAutosave(database.id, (patch) => {
-    if (patch.title !== undefined) router.refresh();
+  // Titre relu au retour sur l'onglet, s'il a changé ailleurs (key).
+  const [shownTitle, setShownTitle] = useState({ generation: 0, title: database.title });
+  const { status, queue, cancel } = useAutosave(database.id, {
+    initial: { rev: database.rev, title: database.title, body: [] },
+    onSaved: (patch) => {
+      if (patch.title !== undefined) router.refresh();
+    },
+    onRemote: (remote) => {
+      setShownTitle((current) => ({ generation: current.generation + 1, title: remote.title }));
+      router.refresh();
+    },
   });
+  // Dernières vues confirmées par le serveur : la base de chaque envoi, pour
+  // qu'un réglage fait ailleurs entre-temps soit fusionné, pas écrasé.
+  const confirmedViews = useRef(config.views);
 
   // Une configuration relue du serveur fait foi pour les vues aussi (filtres
   // retirés avec une propriété supprimée, par exemple).
@@ -158,8 +171,13 @@ export function DatabaseView({ database, config, entries, initialViewId }: Props
     setViews(next);
     clearTimeout(viewTimer.current);
     viewTimer.current = setTimeout(async () => {
-      const result = await send(`/api/databases/${database.id}`, "PATCH", { views: next });
-      if (!result.ok) setMessage(result.error);
+      const result = await send(`/api/databases/${database.id}`, "PATCH", { views: next, base: { views: confirmedViews.current } });
+      if (!result.ok) {
+        setMessage(result.error);
+        return;
+      }
+      confirmedViews.current = (result.data.config as DbConfig).views;
+      if (result.data.merged) router.refresh();
     }, delay);
   }
 
@@ -187,11 +205,12 @@ export function DatabaseView({ database, config, entries, initialViewId }: Props
       return;
     }
     setPending(null);
-    const result = await send(`/api/databases/${database.id}`, "PATCH", { properties: next });
+    const result = await send(`/api/databases/${database.id}`, "PATCH", { properties: next, base: { properties } });
     if (!result.ok) {
       setMessage(result.error);
       return;
     }
+    confirmedViews.current = (result.data.config as DbConfig).views;
     router.refresh();
   }
 
@@ -261,12 +280,13 @@ export function DatabaseView({ database, config, entries, initialViewId }: Props
   async function createOption(prop: Property, name: string): Promise<string | null> {
     const added = withNewOption(properties, prop.id, name);
     if (!added) return null;
-    const result = await send(`/api/databases/${database.id}`, "PATCH", { properties: added.properties });
+    const result = await send(`/api/databases/${database.id}`, "PATCH", { properties: added.properties, base: { properties } });
     if (!result.ok) {
       setMessage(result.error);
       return null;
     }
-    setLocalProperties(added.properties);
+    setLocalProperties((result.data.config as DbConfig).properties);
+    if (result.data.merged) router.refresh();
     return added.option.id;
   }
 
@@ -292,7 +312,12 @@ export function DatabaseView({ database, config, entries, initialViewId }: Props
       </div>
       <CoverPicker pageId={database.id} initial={database.cover} initialPosition={database.coverPosition} />
       <IconPicker pageId={database.id} type="database" initial={database.icon} />
-      <TitleField initial={database.title} ariaLabel="Titre de la base" onChange={(title) => queue({ title })} />
+      <TitleField
+        key={`title-${shownTitle.generation}`}
+        initial={shownTitle.title}
+        ariaLabel="Titre de la base"
+        onChange={(title) => queue({ title })}
+      />
 
       <ViewTabs
         views={views}

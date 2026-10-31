@@ -44,7 +44,8 @@ export function PropertyPanel({ dbId, entryId, properties: initialProperties, va
   async function createOption(prop: Property, name: string): Promise<string | null> {
     const added = withNewOption(properties, prop.id, name);
     if (!added) return null;
-    const result = await send(`/api/databases/${dbId}`, "PATCH", { properties: added.properties });
+    // base : le schéma d'où part l'ajout, pour fusionner si la base a bougé.
+    const result = await send(`/api/databases/${dbId}`, "PATCH", { properties: added.properties, base: { properties } });
     if (!result.ok) {
       setError(result.error);
       return null;

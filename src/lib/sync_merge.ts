@@ -42,9 +42,14 @@ export type MergeResult = { page: SyncPage; conflicts: number };
 
 // Encadré qui garde la version perdante d'un bloc. replaces : id du bloc
 // rival ; « Garder celle-ci » le remplace, ou prend la place de l'encadré si
-// ce bloc a été supprimé entre-temps.
+// ce bloc a été supprimé entre-temps. origin « other » : la version du serveur
+// face à un enregistrement web, qui peut venir du Mac comme d'un autre onglet.
 export const CONFLICT_BLOCK = "conflict";
-export type ConflictProps = { origin: Side; date: string; replaces: string };
+export type Origin = Side | "other";
+export type ConflictProps = { origin: Origin; date: string; replaces: string };
+// Étiquette de chaque côté dans les encadrés, par défaut le côté lui-même.
+export type Origins = Record<Side, Origin>;
+const SAME_ORIGINS: Origins = { mac: "mac", web: "web" };
 
 // Champs fusionnés ensemble : un bandeau ne mêle pas l'image d'un côté et le
 // cadrage de l'autre, ni un partage l'état de l'un et le lien de l'autre.
@@ -68,7 +73,7 @@ const COLUMN_LIST = "columnList";
 type Json = unknown;
 type Obj = Record<string, Json>;
 type Keyed = Obj & { id: string };
-type Ctx = { newer: Side; dates: Record<Side, string>; makeId: () => string; conflicts: number };
+type Ctx = { newer: Side; dates: Record<Side, string>; origins: Origins; makeId: () => string; conflicts: number };
 
 function isObj(value: Json): value is Obj {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -76,7 +81,7 @@ function isObj(value: Json): value is Obj {
 
 // Égalité de JSON, indifférente à l'ordre des clés (jsonb les réordonne) ; une
 // clé à undefined vaut une clé absente.
-function sameJson(a: Json, b: Json): boolean {
+export function sameJson(a: Json, b: Json): boolean {
   if (a === b) return true;
   if (Array.isArray(a) || Array.isArray(b)) {
     return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((item, i) => sameJson(item, b[i]));
@@ -197,7 +202,7 @@ function withNewIds(block: Json, makeId: () => string): Json {
 
 function conflictBox(block: Obj, side: Side, ctx: Ctx): Obj {
   ctx.conflicts++;
-  const props: ConflictProps = { origin: side, date: ctx.dates[side], replaces: String(block.id) };
+  const props: ConflictProps = { origin: ctx.origins[side], date: ctx.dates[side], replaces: String(block.id) };
   return { id: ctx.makeId(), type: CONFLICT_BLOCK, props, children: [withNewIds(block, ctx.makeId)] };
 }
 
@@ -327,9 +332,15 @@ function mergeValues(
 
 // base nulle : pas de version commune, par exemple une ligne renvoyée par le
 // Mac après une coupure survenue avant l'accusé de réception.
-export function mergePage(base: SyncPage | null, mac: SyncPage, web: SyncPage, makeId: () => string = () => crypto.randomUUID()): MergeResult {
+export function mergePage(
+  base: SyncPage | null,
+  mac: SyncPage,
+  web: SyncPage,
+  makeId: () => string = () => crypto.randomUUID(),
+  origins: Origins = SAME_ORIGINS,
+): MergeResult {
   const newer: Side = Date.parse(mac.updatedAt) > Date.parse(web.updatedAt) ? "mac" : "web";
-  const ctx: Ctx = { newer, dates: { mac: mac.updatedAt, web: web.updatedAt }, makeId, conflicts: 0 };
+  const ctx: Ctx = { newer, dates: { mac: mac.updatedAt, web: web.updatedAt }, origins, makeId, conflicts: 0 };
   const page = { ...web } as Record<keyof SyncPage, Json>;
 
   for (const keys of FIELD_GROUPS) {
@@ -352,4 +363,35 @@ export function mergePage(base: SyncPage | null, mac: SyncPage, web: SyncPage, m
   page.body = distinctIds(body, new Set(), makeId);
   page.updatedAt = newer === "mac" ? mac.updatedAt : web.updatedAt;
   return { page: page as SyncPage, conflicts: ctx.conflicts };
+}
+
+// --- Fusions partielles ------------------------------------------------------
+//
+// Pour l'éditeur web (lib/web_save.ts) : un seul corps ou une seule
+// configuration, sans ligne entière autour. « mine » est la version qui arrive,
+// « theirs » celle qu'elle rencontre ; mineNewer dit laquelle gagne sur un même
+// élément.
+
+export type BodyMerge = { body: unknown[]; conflicts: number };
+
+export function mergeBody(
+  base: unknown,
+  mine: unknown,
+  theirs: unknown,
+  opts: { mineNewer: boolean; dates: { mine: string; theirs: string }; origins: { mine: Origin; theirs: Origin }; makeId?: () => string },
+): BodyMerge {
+  const makeId = opts.makeId ?? (() => crypto.randomUUID());
+  const ctx: Ctx = {
+    newer: opts.mineNewer ? "web" : "mac",
+    dates: { web: opts.dates.mine, mac: opts.dates.theirs },
+    origins: { web: opts.origins.mine, mac: opts.origins.theirs },
+    makeId,
+    conflicts: 0,
+  };
+  const body = mergeBlocks(base, theirs, mine, ctx);
+  return { body: distinctIds(body, new Set(), makeId) as unknown[], conflicts: ctx.conflicts };
+}
+
+export function mergeDbConfig(base: unknown, mine: unknown, theirs: unknown, mineNewer: boolean): unknown {
+  return mergeConfig(base, theirs, mine, mineNewer ? "web" : "mac");
 }

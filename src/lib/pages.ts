@@ -8,6 +8,7 @@ import { flattenToText } from "./blocks";
 import { newId } from "./ids";
 import { emptyConfig } from "./views";
 import { wouldCreateCycle, type TreeRow } from "./tree";
+import { mergeWebSave, type WebFields } from "./web_save";
 
 export const TRASH_RETENTION_DAYS = 30;
 
@@ -80,23 +81,54 @@ export type PagePatch = {
   body?: unknown[];
 };
 
-// body_text suit toujours body : c'est lui que lit la recherche.
-export async function updatePage(id: string, patch: PagePatch): Promise<Outcome & { updatedAt?: Date }> {
-  const values: Partial<typeof pages.$inferInsert> = {};
-  if (patch.title !== undefined) values.title = patch.title;
-  if (patch.icon !== undefined) values.icon = patch.icon;
-  if (patch.cover !== undefined) values.cover = patch.cover;
-  if (patch.coverPosition !== undefined) values.coverPosition = patch.coverPosition;
-  if (patch.body !== undefined) {
-    values.body = patch.body;
-    values.bodyText = flattenToText(patch.body);
-  }
-  const [row] = await db
-    .update(pages)
-    .set(values)
-    .where(and(eq(pages.id, id), isNull(pages.trashedAt)))
-    .returning({ updatedAt: pages.updatedAt });
-  return row ? { ok: true, updatedAt: row.updatedAt } : NOT_FOUND;
+// Contrôle de version d'un enregistrement de l'éditeur (lib/web_save.ts) :
+// la révision lue par le navigateur, et sa base pour fusionner si la ligne a
+// bougé depuis.
+export type SaveCheck = { baseRev: number; base?: WebFields };
+
+export type SaveResult =
+  | { ok: true; updatedAt: Date; rev: number; merged?: WebFields; conflicts: number }
+  | { ok: false; status: 404; error: string }
+  | { ok: false; status: 409; error: string; rev: number };
+
+// body_text suit toujours body : c'est lui que lit la recherche. Sans check
+// (icône, bandeau, onglet ouvert avant ce contrôle), le champ envoyé s'écrit
+// tel quel. Avec check, ligne verrouillée : révision inchangée, écriture
+// directe ; changée sans base, 409 pour que le navigateur renvoie sa base ;
+// changée avec base, fusion à trois versions de titre et corps.
+export async function updatePage(id: string, patch: PagePatch, check?: SaveCheck): Promise<SaveResult> {
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({ rev: pages.rev, title: pages.title, body: pages.body, updatedAt: pages.updatedAt })
+      .from(pages)
+      .where(and(eq(pages.id, id), isNull(pages.trashedAt)))
+      .for("update");
+    if (!row) return { ok: false, status: 404, error: "Page introuvable" } as const;
+
+    let fields: PagePatch = patch;
+    let merged: WebFields | undefined;
+    let conflicts = 0;
+    if (check && row.rev !== check.baseRev && (patch.title !== undefined || patch.body !== undefined)) {
+      if (!check.base) return { ok: false, status: 409, error: "Page modifiée ailleurs", rev: row.rev } as const;
+      const now = new Date().toISOString();
+      const result = mergeWebSave(check.base, patch, { title: row.title, body: row.body, updatedAt: row.updatedAt.toISOString() }, now);
+      fields = { ...patch, ...result.fields };
+      merged = result.fields;
+      conflicts = result.conflicts;
+    }
+
+    const values: Partial<typeof pages.$inferInsert> = {};
+    if (fields.title !== undefined) values.title = fields.title;
+    if (fields.icon !== undefined) values.icon = fields.icon;
+    if (fields.cover !== undefined) values.cover = fields.cover;
+    if (fields.coverPosition !== undefined) values.coverPosition = fields.coverPosition;
+    if (fields.body !== undefined) {
+      values.body = fields.body;
+      values.bodyText = flattenToText(fields.body);
+    }
+    const [saved] = await tx.update(pages).set(values).where(eq(pages.id, id)).returning({ updatedAt: pages.updatedAt, rev: pages.rev });
+    return { ok: true, updatedAt: saved.updatedAt, rev: saved.rev, merged, conflicts } as const;
+  });
 }
 
 // Reparentage. newParentId null : la page remonte à la racine.

@@ -10,8 +10,10 @@ import { getDefaultReactSlashMenuItems, SuggestionMenuController, useCreateBlock
 import { useEffect, useRef } from "react";
 import { columnStructure } from "@/lib/blocks";
 import { checkUpload } from "@/lib/upload_rules";
+import { planBlockRuns } from "@/lib/web_save";
 import { youtubeId } from "@/lib/youtube";
 import { columnBlock, columnListBlock } from "./columnsBlock";
+import { conflictBlock } from "./conflictBlock";
 import { youtubeBlock } from "./mediaBlocks";
 import { subpageBlock } from "./subpageBlock";
 
@@ -48,6 +50,8 @@ const schema = BlockNoteSchema.create({
     subpage: subpageBlock(),
     columnList: columnListBlock(),
     column: columnBlock(),
+    // Jamais proposé au menu « / » : seule une fusion le pose.
+    conflict: conflictBlock(),
   },
 });
 
@@ -65,9 +69,35 @@ type Props = {
   onCreateChild?: (kind: ChildKind) => Promise<string | null>;
   onChange: (body: EditorBlocks) => void;
   onUploadState: (state: UploadState) => void;
+  // Poignée tendue à PageView, qui n'importe rien de ce module chargé
+  // seulement dans le navigateur ; null quand l'éditeur disparaît.
+  onReady?: (handle: EditorHandle | null) => void;
 };
 
+export type EditorHandle = { getDocument: () => unknown[]; replace: (target: unknown[]) => void };
+
 export type EditorInstance = typeof schema.BlockNoteEditor;
+type PartialBlock = typeof schema.PartialBlock;
+
+// Pose une version venue du serveur sans faire sauter le curseur : seuls les
+// passages qui diffèrent sont remplacés (planBlockRuns), en une transaction
+// gardée hors de l'historique, pour qu'un Cmd + Z ne défasse pas la fusion.
+function replaceDocument(editor: EditorInstance, target: unknown[]): void {
+  if (!target.length) return;
+  const runs = planBlockRuns(editor.document, target);
+  if (!runs.length) return;
+  editor.transact((tr) => {
+    tr.setMeta("addToHistory", false);
+    for (const run of runs) {
+      const insert = run.insert as PartialBlock[];
+      if (run.remove.length && insert.length) editor.replaceBlocks(run.remove, insert);
+      else if (run.remove.length) editor.removeBlocks(run.remove);
+      else if (run.after) editor.insertBlocks(insert, run.after, "after");
+      else if (run.before) editor.insertBlocks(insert, run.before, "before");
+      else editor.replaceBlocks(editor.document, insert);
+    }
+  });
+}
 
 // Le menu « / » pose le nombre de colonnes ; les commandes du bloc permettent
 // ensuite d'en ajouter une (jusqu'à quatre) ou d'en retirer une.
@@ -133,7 +163,7 @@ function slashItems(editor: EditorInstance, onCreateChild?: (kind: ChildKind) =>
   return items;
 }
 
-export default function Editor({ pageId, initialBody, onCreateChild, onChange, onUploadState }: Props) {
+export default function Editor({ pageId, initialBody, onCreateChild, onChange, onUploadState, onReady }: Props) {
   // uploadFile n'est appelé qu'après la création de l'éditeur : la ref est
   // alors remplie (effet ci-dessous).
   const editorRef = useRef<EditorInstance | null>(null);
@@ -169,7 +199,9 @@ export default function Editor({ pageId, initialBody, onCreateChild, onChange, o
 
   useEffect(() => {
     editorRef.current = editor;
-  }, [editor]);
+    onReady?.({ getDocument: () => editor.document, replace: (target) => replaceDocument(editor, target) });
+    return () => onReady?.(null);
+  }, [editor, onReady]);
 
   return (
     <BlockNoteView editor={editor} theme="light" slashMenu={false} onChange={() => onChange(editor.document)}>

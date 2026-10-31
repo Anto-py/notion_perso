@@ -54,6 +54,7 @@ async function PageLoader({ params }: Pick<PageProps<"/page/[id]">, "params">) {
         coverPosition: page.coverPosition,
         body: page.body as unknown[],
         publicId,
+        rev: page.rev,
       }}
       entry={entry}
       directory={directory}

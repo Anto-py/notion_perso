@@ -114,6 +114,11 @@ describe("renderHtml", () => {
     expect(renderHtml(body)).toBe("<p><strong>gras</strong><em><s> et<br>barré</s></em></p>");
   });
 
+  it("tait l'encadré de conflit et la version qu'il garde", () => {
+    const box = { id: "x", type: "conflict", props: { origin: "mac", date: "", replaces: "a" }, children: [block("paragraph", [text("perdue")])] };
+    expect(renderHtml([block("paragraph", [text("gardée")]), box])).toBe("<p>gardée</p>");
+  });
+
   it("n'accepte qu'une couleur de la palette, en classe", () => {
     const body = [block("paragraph", [text("a", { textColor: "red" }), text("b", { backgroundColor: "red;x:1" })])];
     expect(renderHtml(body)).toBe('<p><span class="tc-red">a</span>b</p>');

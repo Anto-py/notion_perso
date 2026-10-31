@@ -32,6 +32,7 @@ async function DatabaseLoader({ params, searchParams }: Pick<PageProps<"/db/[id]
         cover: page.cover,
         coverPosition: page.coverPosition,
         publicId: page.shareEnabled ? page.publicId : null,
+        rev: page.rev,
       }}
       config={configOf(page)}
       entries={entries}

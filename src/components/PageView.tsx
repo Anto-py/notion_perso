@@ -4,17 +4,18 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
-import type { UploadState } from "./Editor";
+import { useCallback, useRef, useState } from "react";
+import type { EditorHandle, UploadState } from "./Editor";
 import type { Property, Values } from "@/lib/properties";
 import type { SaveStatus } from "@/lib/saver";
 import type { TreeRow } from "@/lib/tree";
+import { rebaseTyping } from "@/lib/web_save";
 import { IconPicker } from "./IconPicker";
 import { CoverPicker } from "./CoverPicker";
 import { PageLabel } from "./PageIcon";
 import { PropertyPanel } from "./PropertyPanel";
 import { SharePanel } from "./SharePanel";
-import { useAutosave } from "./useAutosave";
+import { useAutosave, type RemotePage } from "./useAutosave";
 import { useSearchHighlight } from "./useSearchHighlight";
 import { useSubpages } from "./useSubpages";
 
@@ -41,6 +42,8 @@ type Props = {
     coverPosition: number | null;
     body: unknown[];
     publicId: string | null;
+    // Révision lue, pour le contrôle de version de l'enregistrement.
+    rev: number;
   };
   entry?: EntryContext;
   // Pages et bases de l'arbre : titres des blocs-liens de sous-page.
@@ -53,9 +56,37 @@ export function PageView({ page, entry, directory }: Props) {
   const [trashError, setTrashError] = useState<string | null>(null);
   const mainRef = useRef<HTMLElement>(null);
   useSearchHighlight(mainRef);
-  // Un titre enregistré change la sidebar, rendue par le serveur.
-  const { status, queue, cancel } = useAutosave(page.id, (patch) => {
-    if (patch.title !== undefined) router.refresh();
+  const editor = useRef<EditorHandle | null>(null);
+  const onEditorReady = useCallback((handle: EditorHandle | null) => {
+    editor.current = handle;
+  }, []);
+  // Page relue au retour sur l'onglet : titre, icône et bandeau repartent de
+  // cette version (key), le corps se pose sans recréer l'éditeur.
+  const [shown, setShown] = useState({ generation: 0, title: page.title, icon: page.icon, cover: page.cover, coverPosition: page.coverPosition });
+  const { status, queue, cancel } = useAutosave(page.id, {
+    initial: { rev: page.rev, title: page.title, body: page.body },
+    // Un titre enregistré change la sidebar, rendue par le serveur.
+    onSaved: (patch) => {
+      if (patch.title !== undefined) router.refresh();
+    },
+    // Le serveur a fusionné ce qui était parti avec une version venue
+    // d'ailleurs ; les frappes tapées pendant l'aller-retour s'y reposent.
+    onMerged: (sent, merged) => {
+      const handle = editor.current;
+      if (!handle || !sent.body || !merged.body) return;
+      handle.replace(rebaseTyping(sent.body, handle.getDocument(), merged.body, new Date().toISOString()));
+    },
+    onRemote: (remote: RemotePage) => {
+      editor.current?.replace(remote.body);
+      setShown((current) => ({
+        generation: current.generation + 1,
+        title: remote.title,
+        icon: remote.icon,
+        cover: remote.cover,
+        coverPosition: remote.coverPosition,
+      }));
+      router.refresh();
+    },
   });
   const subpages = useSubpages(page.id, page.body, directory, setTrashError);
 
@@ -86,9 +117,14 @@ export function PageView({ page, entry, directory }: Props) {
           Supprimer
         </button>
       </div>
-      <CoverPicker pageId={page.id} initial={page.cover} initialPosition={page.coverPosition} />
-      <IconPicker pageId={page.id} type={page.type} initial={page.icon} />
-      <TitleField initial={page.title} ariaLabel={entry ? "Titre de l'entrée" : "Titre de la page"} onChange={(title) => queue({ title })} />
+      <CoverPicker key={`cover-${shown.generation}`} pageId={page.id} initial={shown.cover} initialPosition={shown.coverPosition} />
+      <IconPicker key={`icon-${shown.generation}`} pageId={page.id} type={page.type} initial={shown.icon} />
+      <TitleField
+        key={`title-${shown.generation}`}
+        initial={shown.title}
+        ariaLabel={entry ? "Titre de l'entrée" : "Titre de la page"}
+        onChange={(title) => queue({ title })}
+      />
       {entry && (
         <PropertyPanel
           key={entry.database.id}
@@ -109,6 +145,7 @@ export function PageView({ page, entry, directory }: Props) {
           if (!entry) subpages.bodyChanged(body);
         }}
         onUploadState={setUpload}
+        onReady={onEditorReady}
       />
     </main>
   );
