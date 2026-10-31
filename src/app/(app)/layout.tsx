@@ -1,18 +1,24 @@
 import { Suspense } from "react";
 import { Sidebar } from "@/components/Sidebar";
+import { SyncStatusProvider } from "@/components/SyncStatus";
 import { canAccess } from "@/lib/access";
 import { getCurrentUser } from "@/lib/auth";
 import { countInbox } from "@/lib/inbox";
 import { listTreeRows } from "@/lib/pages";
+import { lastClientSeen } from "@/lib/sync_clients";
 
-// Zone protégée : sidebar à gauche, page ouverte au centre.
+// Zone protégée : sidebar à gauche, page ouverte au centre. Le fournisseur
+// d'état de synchronisation enveloppe les deux : ligne de la barre latérale
+// et indicateur de page lisent la même source.
 export default function AppLayout({ children }: LayoutProps<"/">) {
   return (
     <div className="app-shell">
-      <Suspense fallback={<SidebarSkeleton />}>
-        <SidebarData />
-      </Suspense>
-      <div className="app-main">{children}</div>
+      <SyncStatusProvider>
+        <Suspense fallback={<SidebarSkeleton />}>
+          <SidebarData />
+        </Suspense>
+        <div className="app-main">{children}</div>
+      </SyncStatusProvider>
     </div>
   );
 }
@@ -22,8 +28,15 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
 // redirige vers /login depuis ce composant.
 async function SidebarData() {
   const user = await getCurrentUser();
-  const [rows, inboxCount] = await Promise.all([listTreeRows(), countInbox()]);
-  return <Sidebar rows={rows.filter((row) => canAccess(user, row, "read"))} username={user.username} inboxCount={inboxCount} />;
+  const [rows, inboxCount, macSyncedAt] = await Promise.all([listTreeRows(), countInbox(), lastClientSeen()]);
+  return (
+    <Sidebar
+      rows={rows.filter((row) => canAccess(user, row, "read"))}
+      username={user.username}
+      inboxCount={inboxCount}
+      macSyncedAt={macSyncedAt?.toISOString() ?? null}
+    />
+  );
 }
 
 function SidebarSkeleton() {

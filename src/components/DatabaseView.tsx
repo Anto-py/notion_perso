@@ -33,6 +33,7 @@ import { PropertySchemaEditor } from "./PropertySchemaEditor";
 import { send } from "./request";
 import { SharePanel } from "./SharePanel";
 import { TableView } from "./TableView";
+import { usePagePending } from "./SyncStatus";
 import { useAutosave } from "./useAutosave";
 import { ViewControls } from "./ViewControls";
 import { ViewTabs } from "./ViewTabs";
@@ -72,7 +73,7 @@ export function DatabaseView({ database, config, entries, initialViewId }: Props
   const router = useRouter();
   // Titre relu au retour sur l'onglet, s'il a changé ailleurs (key).
   const [shownTitle, setShownTitle] = useState({ generation: 0, title: database.title });
-  const { status, queue, cancel } = useAutosave(database.id, {
+  const { status, queue, cancel, savedCount } = useAutosave(database.id, {
     initial: { rev: database.rev, title: database.title, body: [] },
     onSaved: (patch) => {
       if (patch.title !== undefined) router.refresh();
@@ -82,6 +83,7 @@ export function DatabaseView({ database, config, entries, initialViewId }: Props
       router.refresh();
     },
   });
+  const pagePending = usePagePending(database.id, savedCount);
   // Dernières vues confirmées par le serveur : la base de chaque envoi, pour
   // qu'un réglage fait ailleurs entre-temps soit fusionné, pas écrasé.
   const confirmedViews = useRef(config.views);
@@ -304,7 +306,7 @@ export function DatabaseView({ database, config, entries, initialViewId }: Props
   return (
     <main className="page page-wide">
       <div className="page-bar">
-        <SaveIndicator status={status} />
+        <SaveIndicator status={status} pending={pagePending} />
         <SharePanel pageId={database.id} initialPublicId={database.publicId} />
         <button type="button" className="ghost" onClick={moveToTrash}>
           Supprimer la base

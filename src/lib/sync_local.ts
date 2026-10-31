@@ -88,6 +88,15 @@ export async function scanLocal(): Promise<Scan> {
   return scan;
 }
 
+// Une page précise attend-elle d'être envoyée ? Même décision que le scan
+// complet (isPending), mais sans balayer la base : l'indicateur de page
+// l'interroge au montage et après chaque enregistrement.
+export async function pagePending(id: string): Promise<boolean> {
+  const [row] = await db.select().from(pages).where(eq(pages.id, id));
+  const base = (await readBases(db, "page", [id])).get(id) ?? null;
+  return isPending({ kind: "page", id, row: row ? pageToSync(row) : null, base });
+}
+
 // --- Application de ce qui est reçu ------------------------------------------------
 
 export type ApplyInput = {

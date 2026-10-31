@@ -9,6 +9,7 @@ import { fileSize, openFile, removeFile, saveFile } from "./storage";
 import { CONFIRMED_DELETION, latestChanges, planPush, rowKey } from "./sync_client_plan";
 import { applyIncoming, listMediaFiles, readState, recordError, scanLocal } from "./sync_local";
 import type { Change, PushItem, SyncMedia } from "./sync_protocol";
+import type { CycleProgress } from "./sync_status";
 import type { PushOutcome } from "./sync_push";
 import { serverVersion, type ChangesBatch } from "./sync_server";
 
@@ -35,6 +36,7 @@ export type CycleReport = {
   filesDown: number;
   filesRemoved: number;
   filesMissing: number;
+  bytesDown: number;
   errors: string[];
 };
 
@@ -86,7 +88,7 @@ async function upload(config: SyncConfig, row: SyncMedia): Promise<void> {
   } as RequestInit & { duplex: "half"; timeoutMs: number });
 }
 
-async function download(config: SyncConfig, file: { filename: string; size: number }): Promise<void> {
+async function download(config: SyncConfig, file: { filename: string; size: number }): Promise<number> {
   const response = await call(config, `/api/sync/media/${file.filename}`, { timeoutMs: 10 * 60_000 });
   if (!response.body) throw new Error("réponse vide");
   await saveFile(response.body, file.filename);
@@ -95,6 +97,7 @@ async function download(config: SyncConfig, file: { filename: string; size: numb
     await removeFile(file.filename);
     throw new Error(`fichier incomplet (${size} octets sur ${file.size})`);
   }
+  return size;
 }
 
 async function eachLimited<T>(items: readonly T[], limit: number, task: (item: T) => Promise<void>): Promise<void> {
@@ -112,8 +115,10 @@ async function fetchMissing(config: SyncConfig, report: CycleReport): Promise<vo
   for (const file of await listMediaFiles()) if ((await fileSize(file.filename)) === null) missing.push(file);
   await eachLimited(missing, FILE_CONCURRENCY, async (file) => {
     try {
-      await download(config, file);
+      const size = await download(config, file);
       report.filesDown++;
+      report.bytesDown += size;
+      if (progress) progress.bytes += size;
     } catch (error) {
       if (error instanceof SyncError && error.reason !== "server") throw error;
       report.filesMissing++;
@@ -123,6 +128,14 @@ async function fetchMissing(config: SyncConfig, report: CycleReport): Promise<vo
 }
 
 // --- Cycle ------------------------------------------------------------------------
+
+// Avancement du cycle en cours, lu par GET /api/synchro (ligne d'état). En
+// mémoire, propre au processus : un état éphémère, jamais une donnée du vault.
+let progress: CycleProgress | null = null;
+
+export function readProgress(): CycleProgress | null {
+  return progress;
+}
 
 async function cycle(config: SyncConfig): Promise<CycleReport> {
   const report: CycleReport = {
@@ -135,75 +148,88 @@ async function cycle(config: SyncConfig): Promise<CycleReport> {
     filesDown: 0,
     filesRemoved: 0,
     filesMissing: 0,
+    bytesDown: 0,
     errors: [],
   };
   const cursor = (await readState())?.cursor ?? "0";
-
-  // 1. Envoi. Un média dont le fichier n'a pas pu partir reste en attente.
-  const scan = await scanLocal();
-  const failedUploads = new Set<string>();
-  for (const candidate of scan.pending) {
-    if (candidate.kind !== "media" || !candidate.row || candidate.base) continue;
-    try {
-      await upload(config, candidate.row as SyncMedia);
-      report.filesUp++;
-    } catch (error) {
-      if (error instanceof SyncError && error.reason !== "server") throw error;
-      failedUploads.add(candidate.id);
-      report.errors.push(`média ${candidate.id} : ${error instanceof Error ? error.message : error}`);
-    }
-  }
-  const plan = planPush(scan.pending.filter((c) => !(c.kind === "media" && failedUploads.has(c.id))));
-  const received: Change[] = [];
-  for (const batch of plan.batches) {
-    const response = await call(config, "/api/sync/push", {
-      method: "POST",
-      body: JSON.stringify({ items: batch satisfies PushItem[] }),
-      headers: { "Content-Type": "application/json" },
-    });
-    const { results } = (await response.json()) as { results: PushOutcome[] };
-    for (const outcome of results) {
-      const key = rowKey(outcome.kind, outcome.id);
-      if ("error" in outcome) {
-        plan.sent.delete(key);
-        report.errors.push(`${outcome.kind} ${outcome.id} : ${outcome.error}`);
-      } else if ("deleted" in outcome) {
-        received.push({ kind: outcome.kind, id: outcome.id, rev: CONFIRMED_DELETION, deleted: true });
-      } else {
-        received.push(outcome as Change);
-        if (outcome.kind === "page") report.conflicts += outcome.conflicts;
+  // L'objet publié ne change pas pendant le cycle : la route lit toujours
+  // une référence stable, dont les nombres avancent.
+  const tracked: CycleProgress = { first: cursor === "0", pages: 0, pagesTotal: null, bytes: 0, bytesTotal: null };
+  progress = tracked;
+  try {
+    // 1. Envoi. Un média dont le fichier n'a pas pu partir reste en attente.
+    const scan = await scanLocal();
+    const failedUploads = new Set<string>();
+    for (const candidate of scan.pending) {
+      if (candidate.kind !== "media" || !candidate.row || candidate.base) continue;
+      try {
+        await upload(config, candidate.row as SyncMedia);
+        report.filesUp++;
+      } catch (error) {
+        if (error instanceof SyncError && error.reason !== "server") throw error;
+        failedUploads.add(candidate.id);
+        report.errors.push(`média ${candidate.id} : ${error instanceof Error ? error.message : error}`);
       }
     }
-    report.pushed += batch.length;
-  }
+    const plan = planPush(scan.pending.filter((c) => !(c.kind === "media" && failedUploads.has(c.id))));
+    const received: Change[] = [];
+    for (const batch of plan.batches) {
+      const response = await call(config, "/api/sync/push", {
+        method: "POST",
+        body: JSON.stringify({ items: batch satisfies PushItem[] }),
+        headers: { "Content-Type": "application/json" },
+      });
+      const { results } = (await response.json()) as { results: PushOutcome[] };
+      for (const outcome of results) {
+        const key = rowKey(outcome.kind, outcome.id);
+        if ("error" in outcome) {
+          plan.sent.delete(key);
+          report.errors.push(`${outcome.kind} ${outcome.id} : ${outcome.error}`);
+        } else if ("deleted" in outcome) {
+          received.push({ kind: outcome.kind, id: outcome.id, rev: CONFIRMED_DELETION, deleted: true });
+        } else {
+          received.push(outcome as Change);
+          if (outcome.kind === "page") report.conflicts += outcome.conflicts;
+        }
+      }
+      report.pushed += batch.length;
+    }
 
-  // 2. Lecture du flux, tous les lots, depuis le curseur du cycle précédent.
-  // Le xmin du premier lot devient le curseur du suivant (sync_server.ts).
-  let nextCursor: string | null = null;
-  let after = 0;
-  for (;;) {
-    const response = await call(config, `/api/sync/changes?cursor=${cursor}&after=${after}`);
-    const batch = (await response.json()) as ChangesBatch;
-    nextCursor ??= batch.xmin;
-    received.push(...batch.changes);
-    report.received += batch.changes.length;
-    if (!batch.more || !batch.changes.length) break;
-    after = batch.changes.at(-1)!.rev;
-  }
+    // 2. Lecture du flux, tous les lots, depuis le curseur du cycle précédent.
+    // Le xmin du premier lot devient le curseur du suivant (sync_server.ts).
+    let nextCursor: string | null = null;
+    let after = 0;
+    for (;;) {
+      const response = await call(config, `/api/sync/changes?cursor=${cursor}&after=${after}`);
+      const batch = (await response.json()) as ChangesBatch;
+      nextCursor ??= batch.xmin;
+      if (batch.totals) {
+        tracked.pagesTotal = batch.totals.pages;
+        tracked.bytesTotal = batch.totals.mediaBytes;
+      }
+      tracked.pages += batch.changes.filter((change) => change.kind === "page" && !("deleted" in change && change.deleted)).length;
+      received.push(...batch.changes);
+      report.received += batch.changes.length;
+      if (!batch.more || !batch.changes.length) break;
+      after = batch.changes.at(-1)!.rev;
+    }
 
-  // 3. Écriture, en une transaction, curseur compris.
-  const outcome = await applyIncoming({ changes: [...latestChanges(received).values()], sent: plan.sent, clean: scan.clean, cursor: nextCursor });
-  report.applied = outcome.applied;
-  report.kept = outcome.kept;
-  report.errors.push(...outcome.skipped);
+    // 3. Écriture, en une transaction, curseur compris.
+    const outcome = await applyIncoming({ changes: [...latestChanges(received).values()], sent: plan.sent, clean: scan.clean, cursor: nextCursor });
+    report.applied = outcome.applied;
+    report.kept = outcome.kept;
+    report.errors.push(...outcome.skipped);
 
-  // 4. Fichiers : ceux des médias effacés, puis ceux qui manquent.
-  for (const filename of outcome.removedFiles) {
-    await removeFile(filename);
-    report.filesRemoved++;
+    // 4. Fichiers : ceux des médias effacés, puis ceux qui manquent.
+    for (const filename of outcome.removedFiles) {
+      await removeFile(filename);
+      report.filesRemoved++;
+    }
+    await fetchMissing(config, report);
+    return report;
+  } finally {
+    progress = null;
   }
-  await fetchMissing(config, report);
-  return report;
 }
 
 // Un cycle à la fois : un second appel pendant qu'un cycle tourne reçoit le

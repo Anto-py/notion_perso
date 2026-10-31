@@ -92,6 +92,10 @@ async function sendPatch(
 // sur des refs et sur le routeur, stables.
 export function useAutosave(pageId: string, { initial, onSaved, onMerged, onRemote }: Options) {
   const [status, setStatus] = useState<SaveStatus>({ state: "saved" });
+  // Compteur des lots enregistrés : l'indicateur de synchronisation s'en sert
+  // pour redemander si la page attend encore (deux « saved » de suite ne
+  // changeraient pas status.state, donc pas de dépendance possible dessus).
+  const [savedCount, setSavedCount] = useState(0);
   // Supports mutables plutôt que des refs : la mécanique d'envoi, créée une
   // fois, les lit hors du rendu.
   const [lastStatus] = useState(() => ({ current: status }));
@@ -103,6 +107,7 @@ export function useAutosave(pageId: string, { initial, onSaved, onMerged, onRemo
       onStatus: (next) => {
         lastStatus.current = next;
         setStatus(next);
+        if (next.state === "saved") setSavedCount((n) => n + 1);
       },
       onSaved,
     }),
@@ -139,5 +144,5 @@ export function useAutosave(pageId: string, { initial, onSaved, onMerged, onRemo
     return () => window.removeEventListener("beforeunload", warn);
   }, [status.state]);
 
-  return { status, queue: saver.queue, cancel: saver.cancel };
+  return { status, queue: saver.queue, cancel: saver.cancel, savedCount };
 }

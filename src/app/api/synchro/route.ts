@@ -1,18 +1,29 @@
 // Synchronisation de l'instance du Mac, vue de son interface (session, et non
 // jeton comme api/sync/*, qui sert le serveur). GET : l'état (dernier cycle
-// réussi, dernière erreur, lignes en attente). POST : lance un cycle
-// (« Synchroniser maintenant ») et rend son bilan. 404 sur une instance qui ne
-// se synchronise pas (VPS, développement).
+// réussi, dernière erreur, lignes en attente, conflits) ; avec ?page=, seule
+// cette page attend-elle. POST : lance un cycle (« Synchroniser maintenant »)
+// et rend son bilan. 404 sur une instance qui ne se synchronise pas (VPS,
+// développement).
 import { fail, requireUser } from "@/lib/api";
-import { runCycle, SyncError, syncConfig } from "@/lib/sync_client";
-import { readState, scanLocal } from "@/lib/sync_local";
+import { countConflicts } from "@/lib/conflicts";
+import { readProgress, runCycle, SyncError, syncConfig } from "@/lib/sync_client";
+import { pagePending, readState, scanLocal } from "@/lib/sync_local";
 
-export async function GET() {
+export async function GET(request: Request) {
   const user = await requireUser();
   if (user instanceof Response) return user;
   if (!syncConfig()) return fail(404, "Cette instance ne se synchronise pas");
-  const [state, scan] = await Promise.all([readState(), scanLocal()]);
-  return Response.json({ syncedAt: state?.syncedAt ?? null, error: state?.error ?? null, pending: scan.pending.length });
+  const page = new URL(request.url).searchParams.get("page");
+  if (page) return Response.json({ pagePending: await pagePending(page) });
+  const [state, scan, conflicts] = await Promise.all([readState(), scanLocal(), countConflicts()]);
+  return Response.json({
+    syncedAt: state?.syncedAt ?? null,
+    error: state?.error ?? null,
+    pending: scan.pending.length,
+    conflicts,
+    // Avancement du cycle en cours, null au repos.
+    progress: readProgress(),
+  });
 }
 
 export async function POST() {

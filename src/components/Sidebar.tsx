@@ -17,15 +17,23 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { ancestorsOf, buildTree, wouldCreateCycle, type TreeRow } from "@/lib/tree";
+import { formatClock } from "@/lib/sync_status";
 import { PageLabel } from "./PageIcon";
 import { SearchBar } from "./SearchBar";
+import { SyncStatus } from "./SyncStatus";
 import { TreeItem } from "./TreeItem";
 
 export const ROOT_DROP_ID = "__racine__";
 
-type Props = { rows: TreeRow[]; username: string; inboxCount: number };
+type Props = {
+  rows: TreeRow[];
+  username: string;
+  inboxCount: number;
+  // Dernier passage connu d'un Mac, lu sur l'app web ; null sur le Mac.
+  macSyncedAt: string | null;
+};
 
-export function Sidebar({ rows, username, inboxCount }: Props) {
+export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const activeId = /^\/(page|db)\//.test(pathname) ? decodeURIComponent(pathname.split("/")[2]) : null;
@@ -185,6 +193,8 @@ export function Sidebar({ rows, username, inboxCount }: Props) {
               Se déconnecter
             </button>
           </form>
+          {macSyncedAt && <p className="sync-mac">Mac synchronisé à {formatClock(new Date(macSyncedAt))}</p>}
+          <SyncStatus />
         </div>
       </aside>
     </>

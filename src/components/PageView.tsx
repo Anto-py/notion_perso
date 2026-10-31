@@ -15,6 +15,7 @@ import { CoverPicker } from "./CoverPicker";
 import { PageLabel } from "./PageIcon";
 import { PropertyPanel } from "./PropertyPanel";
 import { SharePanel } from "./SharePanel";
+import { usePagePending } from "./SyncStatus";
 import { useAutosave, type RemotePage } from "./useAutosave";
 import { useSearchHighlight } from "./useSearchHighlight";
 import { useSubpages } from "./useSubpages";
@@ -63,7 +64,7 @@ export function PageView({ page, entry, directory }: Props) {
   // Page relue au retour sur l'onglet : titre, icône et bandeau repartent de
   // cette version (key), le corps se pose sans recréer l'éditeur.
   const [shown, setShown] = useState({ generation: 0, title: page.title, icon: page.icon, cover: page.cover, coverPosition: page.coverPosition });
-  const { status, queue, cancel } = useAutosave(page.id, {
+  const { status, queue, cancel, savedCount } = useAutosave(page.id, {
     initial: { rev: page.rev, title: page.title, body: page.body },
     // Un titre enregistré change la sidebar, rendue par le serveur.
     onSaved: (patch) => {
@@ -88,6 +89,9 @@ export function PageView({ page, entry, directory }: Props) {
       router.refresh();
     },
   });
+  // Sur le Mac : « Enregistré sur le Mac » tant que la page attend son envoi,
+  // « Synchronisé » une fois arrivée sur le VPS (BRAINSTORMING §11).
+  const pagePending = usePagePending(page.id, savedCount);
   const subpages = useSubpages(page.id, page.body, directory, setTrashError);
 
   async function moveToTrash() {
@@ -109,7 +113,7 @@ export function PageView({ page, entry, directory }: Props) {
             ← <PageLabel row={{ ...entry.database, type: "database" }} />
           </Link>
         )}
-        <SaveIndicator status={status} />
+        <SaveIndicator status={status} pending={pagePending} />
         <UploadIndicator state={upload} onDismiss={() => setUpload(null)} />
         {trashError && <span className="status status-error">{trashError}</span>}
         <SharePanel pageId={page.id} initialPublicId={page.publicId} />
@@ -174,9 +178,18 @@ export function TitleField({ initial, ariaLabel, onChange }: { initial: string; 
   );
 }
 
-export function SaveIndicator({ status }: { status: SaveStatus }) {
+export function SaveIndicator({ status, pending }: { status: SaveStatus; pending?: boolean | null }) {
   if (status.state === "error") return <span className="status status-error" role="alert">{status.message}</span>;
-  const text = status.state === "saved" ? "Enregistré" : "Enregistrement…";
+  // pending : null sur l'app web (pas de synchronisation), true/false sur le
+  // Mac une fois l'état relu. Le mot « Enregistré » seul ne dit pas en ligne.
+  const text =
+    status.state === "saved"
+      ? pending === true
+        ? "Enregistré sur le Mac"
+        : pending === false
+          ? "Synchronisé"
+          : "Enregistré"
+      : "Enregistrement…";
   return <span className="status" aria-live="polite">{text}</span>;
 }
 

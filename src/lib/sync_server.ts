@@ -58,7 +58,10 @@ export async function requireSyncClient(request: Request, checkVersion = true): 
 
 // --- Lecture des changements -------------------------------------------------
 
-export type ChangesBatch = { changes: Change[]; xmin: string; more: boolean };
+// Totaux d'une synchronisation depuis zéro, pour la progression du premier
+// lancement (« 640 pages sur 1668, médias 80 Mo sur 257 »).
+export type SyncTotals = { pages: number; mediaBytes: number };
+export type ChangesBatch = { changes: Change[]; xmin: string; more: boolean; totals: SyncTotals | null };
 
 // Lignes et suppressions de sync_xid >= cursor et rev > after, dans l'ordre
 // des révisions. Une transaction en lecture répétable : la liste, les lignes
@@ -96,7 +99,19 @@ export async function readChanges(cursor: string, after: number): Promise<Change
       const changes = rows.map(
         (row): Change => found.get(`${row.kind}:${row.id}`) ?? { kind: row.kind, id: row.id, rev: Number(row.rev), deleted: true },
       );
-      return { changes, xmin: snap.rows[0].xmin, more: listed.rows.length > SYNC_BATCH };
+      // Premier lot d'une synchronisation depuis zéro : le client ne peut pas
+      // connaître le total, seul le serveur le sait.
+      let totals: SyncTotals | null = null;
+      if (cursor === "0" && after === 0) {
+        const counted = await tx.execute<{ pages: string; media_bytes: string }>(sql`
+          SELECT (SELECT count(*) FROM pages)::text AS pages,
+                 (SELECT coalesce(sum(size), 0) FROM media)::text AS media_bytes`);
+        totals = {
+          pages: Number(counted.rows[0]?.pages ?? 0),
+          mediaBytes: Number(counted.rows[0]?.media_bytes ?? 0),
+        };
+      }
+      return { changes, xmin: snap.rows[0].xmin, more: listed.rows.length > SYNC_BATCH, totals };
     },
     { isolationLevel: "repeatable read", accessMode: "read only" },
   );

@@ -234,6 +234,71 @@ a {
   font-weight: 600;
 }
 
+/* État de la synchronisation, en bas de la barre latérale. */
+.sync-mac {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.sync-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.sync-status a {
+  color: inherit;
+}
+
+.sync-conflict,
+.sync-error {
+  color: var(--danger);
+}
+
+.sync-progress {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+
+.sync-now {
+  align-self: flex-start;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.sync-now:disabled {
+  opacity: 0.5;
+  text-decoration: none;
+  cursor: default;
+}
+
+.conflict-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+}
+
+.conflict-list li {
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.conflict-list a {
+  color: var(--ink);
+}
+
 .skeleton {
   height: 1.2rem;
   margin: 0.3rem 0.5rem;
