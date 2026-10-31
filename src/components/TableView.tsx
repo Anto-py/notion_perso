@@ -1,12 +1,13 @@
 "use client";
 // Vue Tableau : une ligne par entrée, une colonne par propriété affichée (la
 // vue peut en masquer), le titre en tête. Chaque cellule porte l'éditeur de son type : la valeur se règle là,
-// sans ouvrir l'entrée. Cliquer ailleurs sur la ligne ouvre l'entrée. En pied
+// sans ouvrir l'entrée ; un texte ou un lien s'ouvre dans un encadré qui le montre en entier. Cliquer ailleurs sur la ligne ouvre l'entrée. En pied
 // de colonne, un calcul propre à la vue, sur les entrées qu'elle montre.
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TITLE_PROP, type EntryRow, type Property, type Value } from "@/lib/properties";
 import { CALC_LABELS, calcOpsFor, calcText, computeCalc, type CalcOp } from "@/lib/views";
+import { ExpandableCell } from "./ExpandableCell";
 import { PageLabel } from "./PageIcon";
 import { PropertyInput } from "./PropertyInput";
 import { TYPE_ICONS } from "./propertyUi";
@@ -62,12 +63,16 @@ export function TableView({ properties, entries, filtered, onCreate, onSave, onC
               </td>
               {properties.map((prop) => (
                 <td key={prop.id} className="cell-edit">
-                  <PropertyInput
-                    prop={prop}
-                    value={entry.values[prop.id]}
-                    onSave={(value) => onSave(entry.id, prop.id, value)}
-                    onCreate={(name) => onCreateOption(prop, name)}
-                  />
+                  {prop.type === "text" || prop.type === "url" ? (
+                    <ExpandableCell prop={prop} value={entry.values[prop.id]} onSave={(value) => onSave(entry.id, prop.id, value)} />
+                  ) : (
+                    <PropertyInput
+                      prop={prop}
+                      value={entry.values[prop.id]}
+                      onSave={(value) => onSave(entry.id, prop.id, value)}
+                      onCreate={(name) => onCreateOption(prop, name)}
+                    />
+                  )}
                 </td>
               ))}
             </tr>

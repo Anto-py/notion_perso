@@ -2,6 +2,8 @@
 // Choix d'options d'une sélection (simple ou multiple), avec
 // création à la volée : taper un nom absent propose « Créer … ». Entrée
 // choisit l'option exacte, sinon la première trouvée, sinon crée.
+// En sélection multiple, le menu montre d'abord toutes les options choisies,
+// à la ligne, chacune retirable : le bouton, lui, peut les couper.
 // Le menu est monté dans <body> et positionné en fixe : dans une cellule de
 // tableau, il ne doit être rogné ni par la cellule ni par le conteneur qui
 // fait défiler horizontalement.
@@ -121,6 +123,9 @@ export function OptionPicker({ prop, selected, multiple, onChange, onCreate }: P
           <div
             ref={menu}
             className="picker-menu picker-menu-fixed"
+            // Un événement d'un portail remonte l'arbre React : dans un tableau,
+            // un clic sur une étiquette ouvrirait l'entrée de la ligne.
+            onClick={(event) => event.stopPropagation()}
             style={{
               left: position.left,
               top: position.top,
@@ -128,6 +133,18 @@ export function OptionPicker({ prop, selected, multiple, onChange, onCreate }: P
               transform: position.above ? "translateY(-100%)" : undefined,
             }}
           >
+            {multiple && chosen.length > 0 && (
+              <ul className="picker-chosen" aria-label={`${prop.name} : options choisies`}>
+                {chosen.map((option) => (
+                  <li key={option.id}>
+                    <OptionChip option={option} />
+                    <button type="button" className="chip-remove" aria-label={`Retirer ${option.name}`} onClick={() => pick(option.id)}>
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
             <input
               // Le menu s'ouvre pour taper : le curseur y va directement.
               autoFocus

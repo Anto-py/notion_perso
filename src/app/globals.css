@@ -924,6 +924,65 @@ a {
   width: 100%;
 }
 
+/* Texte, lien et étiquettes : une ligne au repos, coupée si elle déborde ;
+   sélectionnée, la cellule montre tout (encadré, menu des options). */
+.db-table td.cell-edit .picker-value {
+  max-width: 22rem;
+  overflow: hidden;
+}
+
+.db-table td.cell-edit .picker-value .chips {
+  flex-wrap: nowrap;
+}
+
+.cell-expandable {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.cell-preview {
+  flex: 1;
+  min-width: 9rem;
+  max-width: 22rem;
+  min-height: 2rem;
+  padding: 0.3rem 0.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  border-color: transparent;
+  background: transparent;
+}
+
+.cell-preview:hover {
+  border-color: var(--line);
+  background: var(--bg);
+}
+
+.cell-overlay {
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  padding: 0.2rem;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-inner);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+}
+
+.cell-overlay > *,
+.cell-overlay .prop-input {
+  flex: 1;
+  max-width: none;
+}
+
+.cell-overlay .prop-input {
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
 .add-entry {
   margin-top: 0.25rem;
   color: var(--ink-soft);
@@ -1262,6 +1321,14 @@ a {
   border-color: transparent;
 }
 
+/* Texte et lien : la zone grandit avec son contenu (CommitTextarea). */
+textarea.prop-input {
+  display: block;
+  resize: none;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .prop-input:hover {
   background: var(--hover);
 }
@@ -1353,6 +1420,29 @@ a {
 
 .picker-hint {
   padding: 0.3rem 0.5rem;
+}
+
+.picker-menu .picker-chosen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  max-height: 8rem;
+  margin-bottom: 0.4rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.picker-chosen li {
+  display: inline-flex;
+  align-items: center;
+}
+
+.chip-remove {
+  padding: 0 0.3rem;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  line-height: 1;
 }
 
 /* --- Recherche ----------------------------------------------------------- */

@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { formatNumber, parseNumber, type Property, type Value } from "@/lib/properties";
 import { CommitInput } from "./CommitInput";
+import { CommitTextarea } from "./CommitTextarea";
 import { OptionPicker } from "./OptionPicker";
 import { isWebUrl, ValueView } from "./propertyUi";
 
@@ -13,17 +14,39 @@ export type PropertyInputProps = {
   onSave: (value: Value | null) => void;
   // Crée l'option dans la base ; renvoie son id, ou null en cas d'échec.
   onCreate: (name: string) => Promise<string | null>;
+  // Texte et lien : focus dès l'affichage (encadré d'une cellule de tableau).
+  focusAtEnd?: boolean;
 };
 
-export function PropertyInput({ prop, value, onSave, onCreate }: PropertyInputProps) {
+export function PropertyInput({ prop, value, onSave, onCreate, focusAtEnd }: PropertyInputProps) {
   const text = typeof value === "string" ? value : "";
   switch (prop.type) {
     case "text":
-      return <CommitInput aria-label={prop.name} placeholder="Vide" value={text} maxLength={5000} onCommit={(next) => onSave(next || null)} />;
+      return (
+        <CommitTextarea
+          className="prop-input"
+          aria-label={prop.name}
+          placeholder="Vide"
+          value={text}
+          maxLength={5000}
+          focusAtEnd={focusAtEnd}
+          onCommit={(next) => onSave(next || null)}
+        />
+      );
     case "url":
       return (
         <span className="prop-url">
-          <CommitInput aria-label={prop.name} placeholder="https://…" inputMode="url" value={text} maxLength={2048} onCommit={(next) => onSave(next || null)} />
+          <CommitTextarea
+            className="prop-input"
+            aria-label={prop.name}
+            placeholder="https://…"
+            inputMode="url"
+            value={text}
+            maxLength={2048}
+            multiline={false}
+            focusAtEnd={focusAtEnd}
+            onCommit={(next) => onSave(next || null)}
+          />
           {isWebUrl(text) && (
             <a href={text} target="_blank" rel="noopener noreferrer" aria-label={`Ouvrir ${prop.name}`}>
               ↗
