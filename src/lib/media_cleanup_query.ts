@@ -114,6 +114,12 @@ export async function purgeWithMedia(id: string): Promise<Outcome> {
   return outcome;
 }
 
+// Effacement demandé par l'app Mac (lib/sync_server.ts) : accordé seulement
+// si plus rien ne cite le média, avec la même garde que la purge.
+export async function deleteMediaIfUnused(id: string): Promise<boolean> {
+  return (await deleteUnused(sql`m.id = ${id}`)) > 0;
+}
+
 // Vider la corbeille : chaque lot, tête par tête. Une entrée déjà emportée
 // avec sa base répond introuvable et se saute. Renvoie le nombre de lots purgés.
 export async function emptyTrash(canPurge: (item: { id: string }) => boolean): Promise<number> {

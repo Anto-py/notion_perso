@@ -34,6 +34,7 @@ export const config = {
   // que le manifeste, que le navigateur demande sans cookie.
   // Exclut aussi api/upload et api/import : le proxy met tout corps en mémoire
   // et le tronque sans erreur au-delà de 10 Mo (proxyClientMaxBodySize). Ces
-  // routes vérifient elles-mêmes la session.
-  matcher: ["/((?!_next/static|_next/image|manifest.webmanifest|sw.js|icons/|api/upload|api/import).*)"],
+  // routes vérifient elles-mêmes la session. api/sync, enfin, ne connaît pas
+  // les cookies : l'app Mac s'y présente avec son jeton (lib/sync_server.ts).
+  matcher: ["/((?!_next/static|_next/image|manifest.webmanifest|sw.js|icons/|api/upload|api/import|api/sync/).*)"],
 };

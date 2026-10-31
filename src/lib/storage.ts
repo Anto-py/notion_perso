@@ -41,6 +41,15 @@ export async function removeFile(filename: string): Promise<void> {
   await rm(storedPath(filename), { force: true });
 }
 
+// Taille du fichier sur le disque, null s'il n'y est pas.
+export async function fileSize(filename: string): Promise<number | null> {
+  try {
+    return (await stat(storedPath(filename))).size;
+  } catch {
+    return null;
+  }
+}
+
 export async function openFile(filename: string): Promise<{ stream: ReadableStream<Uint8Array>; size: number } | null> {
   const target = storedPath(filename);
   try {

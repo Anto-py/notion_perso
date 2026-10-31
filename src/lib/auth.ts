@@ -1,6 +1,5 @@
 // Sessions et utilisateur connecté. getCurrentUser() est la seule lecture de
 // l'utilisateur dans l'application (Data Access Layer, SPECS.md).
-import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
@@ -8,17 +7,13 @@ import { cache } from "react";
 import { and, eq, gt } from "drizzle-orm";
 import { db } from "@/db";
 import { sessions, users } from "@/db/schema";
-import { newToken } from "./ids";
+import { hashToken, newToken } from "./ids";
 import { hashPassword, verifyPassword } from "./password";
 import { SESSION_COOKIE, SESSION_MAX_AGE_S } from "./session_cookie";
 
 export type User = { id: string; username: string };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-function hashToken(token: string): string {
-  return createHash("sha256").update(token).digest("base64url");
-}
 
 function expiry(): Date {
   return new Date(Date.now() + SESSION_MAX_AGE_S * 1000);
