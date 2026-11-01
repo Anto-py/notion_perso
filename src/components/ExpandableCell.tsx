@@ -78,7 +78,7 @@ export function ExpandableCell({ prop, value, onSave }: Props) {
               if (!event.relatedTarget) trigger.current?.focus();
             }}
           >
-            <PropertyInput prop={prop} value={value} onSave={onSave} onCreate={async () => null} focusAtEnd />
+            <PropertyInput prop={prop} value={value} onSave={onSave} onCreate={async () => null} onCreateEntry={async () => null} focusAtEnd />
           </div>,
           document.body,
         )}

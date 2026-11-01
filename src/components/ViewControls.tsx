@@ -2,7 +2,7 @@
 // Filtres (combinés par « et »), tris et colonnes affichées de la vue. Chaque
 // changement remonte la vue entière ; delay > 0 pour une frappe, enregistrée
 // après un temps de calme.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   isGroupableType,
   isOptionType,
@@ -258,6 +258,9 @@ export function ViewControls({ properties, view, columns, onChange }: Props) {
 
 function FilterValue({ prop, filter, onChange }: { prop: Property; filter: Filter; onChange: (value: string, delay?: number) => void }) {
   const value = filter.value ?? "";
+  // Une relation se filtre sur une entrée de sa base cible : on la choisit
+  // dans la liste des entrées, jamais en tapant un identifiant.
+  if (prop.type === "relation") return <RelationFilterValue prop={prop} value={value} onChange={onChange} />;
   // Le filtre compare des ids d'option : une sélection se choisit dans sa
   // liste, jamais en texte libre.
   if (isOptionType(prop.type)) {
@@ -295,5 +298,35 @@ function FilterValue({ prop, filter, onChange }: { prop: Property; filter: Filte
       maxLength={100}
       onChange={(event) => onChange(event.target.value, TYPING_DELAY)}
     />
+  );
+}
+
+// Entrées de la base cible, lues à l'affichage du filtre. Une base vide ou
+// injoignable laisse la liste sans choix, la valeur enregistrée restant
+// affichée telle quelle.
+function RelationFilterValue({ prop, value, onChange }: { prop: Property; value: string; onChange: (value: string) => void }) {
+  const [entries, setEntries] = useState<{ id: string; title: string }[]>([]);
+  useEffect(() => {
+    if (!prop.target) return;
+    let alive = true;
+    void fetch(`/api/databases/${prop.target}`)
+      .then(async (response) => (response.ok ? ((await response.json()) as { entries?: { id: string; title: string }[] }) : null))
+      .then((data) => {
+        if (alive && data) setEntries((data.entries ?? []).map(({ id, title }) => ({ id, title })));
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [prop.target]);
+  return (
+    <select aria-label="Entrée du filtre" value={value} onChange={(event) => onChange(event.target.value)}>
+      <option value="">choisir…</option>
+      {entries.map((entry) => (
+        <option key={entry.id} value={entry.id}>
+          {entry.title || "Sans titre"}
+        </option>
+      ))}
+    </select>
   );
 }

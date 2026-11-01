@@ -45,7 +45,7 @@ export function KanbanCard({ entry, properties, groupId, hint }: Props) {
             <div className="board-card-field" key={prop.id}>
               <dt>{prop.name}</dt>
               <dd>
-                <ValueView prop={prop} value={entry.values[prop.id]} />
+                <ValueView prop={prop} value={entry.values[prop.id]} links={entry.links?.[prop.id]} />
               </dd>
             </div>
           ))}

@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { PageView, type EntryContext } from "@/components/PageView";
 import { canAccess } from "@/lib/access";
 import { getCurrentUser } from "@/lib/auth";
-import { configOf } from "@/lib/databases";
+import { configOf, linksForValues } from "@/lib/databases";
 import { getPage, listDatabases, listTreeRows } from "@/lib/pages";
 import { normalizeValues, withTimes } from "@/lib/properties";
 
@@ -29,13 +29,15 @@ async function PageLoader({ params }: Pick<PageProps<"/page/[id]">, "params">) {
     if (!base || base.trashedAt || !canAccess(user, base, "read")) notFound();
     const { properties } = configOf(base);
     const others = (await listDatabases()).filter((database) => database.id !== base.id);
+    const values = withTimes(properties, normalizeValues(properties, page.propertyValues), {
+      createdAt: page.createdAt.toISOString(),
+      updatedAt: page.updatedAt.toISOString(),
+    });
     entry = {
       database: { id: base.id, title: base.title, icon: base.icon },
       properties,
-      values: withTimes(properties, normalizeValues(properties, page.propertyValues), {
-        createdAt: page.createdAt.toISOString(),
-        updatedAt: page.updatedAt.toISOString(),
-      }),
+      values,
+      links: await linksForValues(properties, values),
       databases: others.filter((database) => canAccess(user, database, "read")),
     };
   }

@@ -49,13 +49,32 @@ export async function searchPages(query: string, executor: Pick<typeof db, "exec
     )
     SELECT p.id, p.type, p.title, p.icon, p.is_inbox,
       ts_headline('fr_unaccent', p.body_text || E'\n' || p.values_text, query.q, ${HEADLINE_OPTIONS}) AS excerpt
-    FROM pages p, query
+    FROM pages p
+    -- CROSS JOIN explicite : une virgule lierait le LATERAL à query seul, qui
+    -- ne voit pas la page.
+    CROSS JOIN query
+    LEFT JOIN pages d ON d.id = p.db_id
+    -- Titres des entrées citées par une relation (étape 10), lus à chaque
+    -- recherche : rien n'est recopié dans values_text, donc rien n'y vieillit.
+    LEFT JOIN LATERAL (
+      SELECT string_agg(t.title, ' ') AS titles
+      FROM jsonb_array_elements(COALESCE(d.db_config -> 'properties', '[]'::jsonb)) AS prop
+      CROSS JOIN LATERAL jsonb_array_elements_text(
+        CASE
+          WHEN prop ->> 'type' = 'relation' AND jsonb_typeof(p.property_values -> (prop ->> 'id')) = 'array'
+          THEN p.property_values -> (prop ->> 'id')
+          ELSE '[]'::jsonb
+        END
+      ) AS rel(entry_id)
+      JOIN pages t ON t.id = rel.entry_id AND t.trashed_at IS NULL
+    ) linked ON true
     WHERE p.trashed_at IS NULL
       AND NOT EXISTS (
         SELECT 1 FROM terms
         WHERE NOT (
           p.search_vector @@ terms.q
           OR lower(f_unaccent(p.title || ' ' || p.body_text || ' ' || p.values_text)) ~ ('\\m' || terms.t)
+          OR lower(f_unaccent(COALESCE(linked.titles, ''))) ~ ('\\m' || terms.t)
         )
       )
     ORDER BY

@@ -52,6 +52,8 @@ type Props = {
   };
   config: DbConfig;
   entries: EntryRow[];
+  // Bases de l'arbre, cibles possibles d'une relation.
+  databases: { id: string; title: string; icon: string | null }[];
   // Vue demandée par l'adresse (?vue=), si elle existe encore.
   initialViewId: string | null;
 };
@@ -71,7 +73,7 @@ function readStoredView(dbId: string): string | null {
   }
 }
 
-export function DatabaseView({ database, config, entries, initialViewId }: Props) {
+export function DatabaseView({ database, config, entries, databases, initialViewId }: Props) {
   const router = useRouter();
   // Titre relu au retour sur l'onglet, s'il a changé ailleurs (key).
   const [shownTitle, setShownTitle] = useState({ generation: 0, title: database.title });
@@ -289,6 +291,20 @@ export function DatabaseView({ database, config, entries, initialViewId }: Props
     });
   }
 
+  // Créer une entrée depuis le sélecteur d'une relation : elle naît dans la
+  // base cible sous le titre tapé, sans quitter la page d'où l'on écrit.
+  async function createLinkedEntry(prop: Property, title: string): Promise<string | null> {
+    if (!prop.target) return null;
+    setMessage(null);
+    const result = await send("/api/entries", "POST", { dbId: prop.target, title });
+    if (!result.ok) {
+      setMessage(result.error);
+      return null;
+    }
+    router.refresh();
+    return String(result.data.id);
+  }
+
   // Créer une option depuis une cellule l'ajoute d'abord à la base (schéma
   // commun), puis la choisit pour cette entrée seulement.
   async function createOption(prop: Property, name: string): Promise<string | null> {
@@ -373,7 +389,7 @@ export function DatabaseView({ database, config, entries, initialViewId }: Props
           </button>
         </div>
       )}
-      {schemaOpen && <PropertySchemaEditor properties={properties} valuesList={valuesList} onChange={(next) => saveProperties(next)} />}
+      {schemaOpen && <PropertySchemaEditor properties={properties} valuesList={valuesList} databases={databases} onChange={(next) => saveProperties(next)} />}
 
       <ViewControls properties={properties} view={view} columns={boardColumns} onChange={changeView} />
       {view.kind === "table" && (
@@ -384,6 +400,7 @@ export function DatabaseView({ database, config, entries, initialViewId }: Props
           onCreate={() => createEntry()}
           onSave={saveValue}
           onCreateOption={createOption}
+          onCreateEntry={createLinkedEntry}
           calcs={view.calcs}
           onCalc={changeCalc}
         />

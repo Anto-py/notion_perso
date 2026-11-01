@@ -188,6 +188,19 @@ function LinkedDatabase({ databaseId, config, onPick, onConfig }: Props) {
     else reload();
   }
 
+  // Créer une entrée depuis le sélecteur d'une relation : elle naît dans la
+  // base cible, sans quitter la page hôte.
+  async function createLinkedEntry(prop: Property, title: string): Promise<string | null> {
+    if (!prop.target) return null;
+    setMessage(null);
+    const result = await send("/api/entries", "POST", { dbId: prop.target, title });
+    if (!result.ok) {
+      setMessage(result.error);
+      return null;
+    }
+    return String(result.data.id);
+  }
+
   // Une option neuve appartient au schéma de la base : elle s'y écrit, puis
   // la base est relue pour que les vues du bloc se relisent contre elle.
   async function createOption(prop: Property, name: string): Promise<string | null> {
@@ -263,6 +276,7 @@ function LinkedDatabase({ databaseId, config, onPick, onConfig }: Props) {
           onCreate={() => void createEntry()}
           onSave={saveValue}
           onCreateOption={createOption}
+          onCreateEntry={createLinkedEntry}
           calcs={view.calcs}
           onCalc={changeCalc}
         />

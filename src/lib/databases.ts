@@ -6,7 +6,8 @@
 // Verrous : toute écriture qui dépend de la configuration verrouille d'abord
 // la ligne de la base, et elle seule. Un ordre de verrouillage unique évite
 // les interblocages entre une migration du schéma et une saisie de valeur.
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import { pages } from "@/db/schema";
 import { appendOrphans, flattenToText } from "./blocks";
@@ -17,11 +18,13 @@ import { mergeDbConfig, sameJson } from "./sync_merge";
 import {
   checkValue,
   migrateValues,
+  normalizeValue,
   normalizeValues,
   orphanValues,
   transferValues,
   valuesToText,
   type EntryRow,
+  type LinkRef,
   type Property,
   type Values,
 } from "./properties";
@@ -74,9 +77,127 @@ function checkValues(properties: readonly Property[], raw: Record<string, unknow
   return null;
 }
 
+// Les ids cités par une relation doivent exister, être des entrées de la base
+// cible et n'être ni en corbeille ni purgées. checkValue, pur, ne peut pas le
+// savoir : ce contrôle lit la base dans la transaction de l'écriture.
+async function checkRelationTargets(
+  tx: Pick<Tx, "select">,
+  properties: readonly Property[],
+  raw: Record<string, unknown>,
+): Promise<string | null> {
+  for (const prop of properties) {
+    if (prop.type !== "relation") continue;
+    const ids = normalizeValue(prop, raw[prop.id]);
+    if (!Array.isArray(ids) || ids.length === 0) continue;
+    const rows = await tx
+      .select({ id: pages.id })
+      .from(pages)
+      .where(
+        and(
+          inArray(pages.id, ids),
+          eq(pages.type, "entry"),
+          eq(pages.dbId, prop.target ?? ""),
+          isNull(pages.trashedAt),
+        ),
+      );
+    const known = new Set(rows.map((row) => row.id));
+    if (ids.some((id) => !known.has(id))) return `${prop.name} : entrée liée introuvable, rechargez la page.`;
+  }
+  return null;
+}
+
+// Ids cités par les relations d'une entrée, par propriété.
+function relationIds(properties: readonly Property[], values: Values): Map<string, string[]> {
+  const found = new Map<string, string[]>();
+  for (const prop of properties) {
+    if (prop.type !== "relation") continue;
+    const ids = normalizeValue(prop, values[prop.id]);
+    if (Array.isArray(ids) && ids.length > 0) found.set(prop.id, ids);
+  }
+  return found;
+}
+
+// Titre, icône, corbeille et base publique des entrées citées, en une
+// requête. Un id purgé n'a plus de ligne et sa puce disparaît ; un id en
+// corbeille est rendu avec trashed, à l'affichage de décider.
+async function resolveRefs(ids: Iterable<string>, executor: Pick<typeof db, "select">): Promise<Map<string, LinkRef>> {
+  const wanted = [...new Set(ids)];
+  if (wanted.length === 0) return new Map();
+  const bases = alias(pages, "bases");
+  const rows = await executor
+    .select({
+      id: pages.id,
+      title: pages.title,
+      icon: pages.icon,
+      trashedAt: pages.trashedAt,
+      publicId: bases.publicId,
+      shareEnabled: bases.shareEnabled,
+    })
+    .from(pages)
+    .leftJoin(bases, eq(bases.id, pages.dbId))
+    .where(inArray(pages.id, wanted));
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      {
+        id: row.id,
+        title: row.title,
+        icon: row.icon,
+        trashed: row.trashedAt !== null,
+        publicBaseId: row.shareEnabled ? row.publicId : null,
+      } satisfies LinkRef,
+    ]),
+  );
+}
+
+// Les puces d'une entrée seule (page d'une entrée, vue publique).
+export async function linksForValues(
+  properties: readonly Property[],
+  values: Values,
+  executor: Pick<typeof db, "select"> = db,
+): Promise<Record<string, LinkRef[]>> {
+  const perProp = relationIds(properties, values);
+  if (perProp.size === 0) return {};
+  const refs = await resolveRefs([...perProp.values()].flat(), executor);
+  return linksFrom(perProp, refs);
+}
+
+function linksFrom(perProp: Map<string, string[]>, refs: Map<string, LinkRef>): Record<string, LinkRef[]> {
+  const links: Record<string, LinkRef[]> = {};
+  for (const [propId, ids] of perProp) {
+    const list = ids.flatMap((id) => {
+      const ref = refs.get(id);
+      return ref ? [ref] : [];
+    });
+    if (list.length > 0) links[propId] = list;
+  }
+  return links;
+}
+
+// Les puces de toute une liste d'entrées, en une requête (base vive, vue
+// publique, écran d'une sauvegarde).
+export async function attachLinks<T extends { values: Values }>(
+  properties: readonly Property[],
+  entries: T[],
+  executor: Pick<typeof db, "select"> = db,
+): Promise<(T & { links?: Record<string, LinkRef[]> })[]> {
+  const perEntry = entries.map((entry) => relationIds(properties, entry.values));
+  if (perEntry.every((perProp) => perProp.size === 0)) return entries;
+  const refs = await resolveRefs(perEntry.flatMap((perProp) => [...perProp.values()].flat()), executor);
+  return entries.map((entry, index) => {
+    const links = perEntry[index].size > 0 ? linksFrom(perEntry[index], refs) : undefined;
+    return links ? { ...entry, links } : entry;
+  });
+}
+
 // Entrées d'une base, hors corbeille, dans l'ordre manuel. executor : la base
 // vive par défaut, la copie d'une sauvegarde quand l'écran de sauvegarde lit.
 export async function listEntries(dbId: string, executor: Pick<typeof db, "select"> = db): Promise<EntryRow[]> {
+  const [base] = await executor
+    .select({ dbConfig: pages.dbConfig })
+    .from(pages)
+    .where(and(eq(pages.id, dbId), eq(pages.type, "database")));
+  const properties = parseConfig(base?.dbConfig).properties;
   const rows = await executor
     .select({
       id: pages.id,
@@ -94,7 +215,7 @@ export async function listEntries(dbId: string, executor: Pick<typeof db, "selec
     .from(pages)
     .where(and(eq(pages.dbId, dbId), eq(pages.type, "entry"), isNull(pages.trashedAt)))
     .orderBy(asc(pages.manualOrder), asc(pages.createdAt));
-  return rows.map((row) => ({
+  const entries = rows.map((row) => ({
     id: row.id,
     title: row.title,
     icon: row.icon,
@@ -105,6 +226,7 @@ export async function listEntries(dbId: string, executor: Pick<typeof db, "selec
     cover: row.cover,
     bodyImage: row.bodyImage,
   }));
+  return attachLinks(properties, entries, executor);
 }
 
 // base : les listes que le navigateur avait avant sa modification (lib/web_save.ts).
@@ -134,6 +256,23 @@ export async function updateDatabase(id: string, patch: DatabasePatch): Promise<
     }
     const config: DbConfig = { properties, views: sanitizeViews(views, properties) };
 
+    // Une relation nouvelle ou dont la cible change doit désigner une base qui
+    // existe et qui n'est pas en corbeille ; une cible déjà acceptée n'est pas
+    // revérifiée, pour qu'une base mise en corbeille ailleurs ne bloque pas
+    // toute retouche du schéma (BRAINSTORMING §13, l'en-tête avertit).
+    if (patch.properties) {
+      for (const prop of properties) {
+        if (prop.type !== "relation") continue;
+        const previous = before.properties.find((item) => item.id === prop.id);
+        if (previous?.type === "relation" && previous.target === prop.target) continue;
+        const [target] = await tx
+          .select({ id: pages.id })
+          .from(pages)
+          .where(and(eq(pages.id, prop.target ?? ""), eq(pages.type, "database"), isNull(pages.trashedAt)));
+        if (!target) return { ok: false, status: 400, error: `${prop.name} : la base cible est introuvable` } as const;
+      }
+    }
+
     if (patch.properties) {
       const entries = await tx
         .select({ id: pages.id, propertyValues: pages.propertyValues, valuesText: pages.valuesText })
@@ -159,11 +298,11 @@ export async function updateDatabase(id: string, patch: DatabasePatch): Promise<
 
 // Nouvelle entrée, en fin d'ordre manuel, avec d'éventuelles valeurs de départ
 // (la colonne Kanban où l'on a cliqué « + »).
-export async function createEntry(dbId: string, raw: Record<string, unknown>): Promise<Outcome & { id?: string }> {
+export async function createEntry(dbId: string, raw: Record<string, unknown>, title?: string): Promise<Outcome & { id?: string }> {
   return db.transaction(async (tx) => {
     const config = await lockDatabase(tx, dbId);
     if (!config) return NOT_FOUND;
-    const error = checkValues(config.properties, raw);
+    const error = checkValues(config.properties, raw) ?? (await checkRelationTargets(tx, config.properties, raw));
     if (error) return { ok: false, status: 400, error } as const;
     const values = normalizeValues(config.properties, raw);
     const manualOrder = await keyAfterLast(tx, dbId);
@@ -172,6 +311,8 @@ export async function createEntry(dbId: string, raw: Record<string, unknown>): P
       id,
       type: "entry",
       dbId,
+      // Le sélecteur d'une relation crée l'entrée attendue sous le titre tapé.
+      title: (title ?? "").trim().slice(0, 500),
       propertyValues: values,
       valuesText: valuesToText(config.properties, values),
       manualOrder,
@@ -265,7 +406,7 @@ export async function updateEntry(id: string, patch: EntryPatch): Promise<Outcom
     }
 
     if (patch.values) {
-      const error = checkValues(config.properties, patch.values);
+      const error = checkValues(config.properties, patch.values) ?? (await checkRelationTargets(tx, config.properties, patch.values));
       if (error) return { ok: false, status: 400, error } as const;
       const [entry] = await tx.select({ propertyValues: pages.propertyValues }).from(pages).where(eq(pages.id, id));
       const merged: Record<string, unknown> = { ...asValues(entry?.propertyValues) };

@@ -3,6 +3,7 @@
 // annoncées avant confirmation, changement de type.
 import { isIsoDate, isTimestamp, parseNumber } from "./property_format";
 import {
+  ID_PATTERN,
   LIMITS,
   fold,
   isOptionType,
@@ -45,6 +46,15 @@ export function normalizeValue(prop: Property, raw: unknown): Value | undefined 
     case "created_time":
     case "updated_time":
       return isTimestamp(raw) ? raw : undefined;
+    // Une relation est un ensemble d'ids : l'ordre d'ajout est gardé, un id
+    // répété ne compte qu'une fois, et « une seule entrée » ne garde que la
+    // première.
+    case "relation": {
+      if (!Array.isArray(raw)) return undefined;
+      const ids = [...new Set(raw.filter((id): id is string => typeof id === "string" && ID_PATTERN.test(id)))];
+      const kept = prop.single ? ids.slice(0, 1) : ids.slice(0, LIMITS.links);
+      return kept.length > 0 ? kept : undefined;
+    }
   }
 }
 
@@ -83,6 +93,15 @@ export function checkValue(prop: Property, raw: unknown): string | null {
     case "created_time":
     case "updated_time":
       return `${prop.name} : valeur en lecture seule`;
+    // L'existence des entrées citées et l'appartenance à la base cible se
+    // vérifient en base, pas ici (databases.ts, checkRelationTargets).
+    case "relation":
+      return Array.isArray(raw) &&
+        raw.length <= LIMITS.links &&
+        raw.every((id) => typeof id === "string" && ID_PATTERN.test(id)) &&
+        (!prop.single || raw.length <= 1)
+        ? null
+        : `${prop.name} : entrées liées invalides`;
   }
 }
 
@@ -104,6 +123,11 @@ export function valueText(prop: Property, value: unknown): string {
       return String(normalized).replace(".", ",");
     case "created_time":
     case "updated_time":
+      return "";
+    // Les titres liés entrent dans la recherche par une jointure à la
+    // lecture, jamais dans values_text : aucun id ne s'y écrit, donc aucun
+    // titre n'y vieillit (SPECS, « Relations et cumuls »).
+    case "relation":
       return "";
     default:
       return normalized as string;
@@ -136,6 +160,9 @@ function mapOption(from: Property, to: Property, id: string): string | undefined
 // Conversion au mieux d'une valeur quand sa propriété change (type, options).
 // undefined : la valeur ne survit pas.
 export function convertValue(from: Property, to: Property, value: unknown): Value | undefined {
+  // Changer la base cible d'une relation perd ses valeurs : un id d'entrée
+  // n'a de sens que dans sa base. La perte est annoncée avant confirmation.
+  if (from.type === "relation" && to.type === "relation" && from.target !== to.target) return undefined;
   if (from.type === to.type) return normalizeValue(to, value);
   const current = normalizeValue(from, value);
   if (current === undefined) return undefined;
@@ -171,6 +198,10 @@ export function convertValue(from: Property, to: Property, value: unknown): Valu
     case "created_time":
     case "updated_time":
       return undefined;
+    // Aucun texte ne se convertit en lien vers une entrée : la valeur est
+    // perdue, et la perte annoncée avant confirmation.
+    case "relation":
+      return undefined;
   }
 }
 
@@ -185,6 +216,9 @@ export function transferValues(from: readonly Property[], to: readonly Property[
     if (isTimeType(target.type)) continue;
     const source = from.find((prop) => fold(prop.name) === fold(target.name));
     if (!source || source.type !== target.type || values[source.id] === undefined) continue;
+    // Deux relations ne se reportent que si elles désignent la même base :
+    // un id d'entrée n'a de sens que dans sa base.
+    if (target.type === "relation" && source.target !== target.target) continue;
     const current = normalizeValue(source, values[source.id]);
     if (current === undefined) continue;
     if (isOptionType(target.type)) {
@@ -248,7 +282,11 @@ function isLost(before: Property, after: Property | undefined, value: unknown): 
   const next = convertValue(before, after, current);
   if (next === undefined) return true;
   if (before.type === after.type) {
-    return before.type === "multiselect" && (next as string[]).length < (current as string[]).length;
+    // Une relation limitée à une entrée perd les puces suivantes.
+    if (before.type === "relation" || before.type === "multiselect") {
+      return (next as string[]).length < (current as string[]).length;
+    }
+    return false;
   }
   if (after.type === "checkbox") return false;
   return fold(valueText(after, next)) !== fold(valueText(before, current));

@@ -31,7 +31,7 @@ export function ListView({ properties, entries, filtered, onCreate }: Props) {
                     {fields.map((prop) => (
                       <span className="list-field" key={prop.id} title={prop.name}>
                         {prop.type === "checkbox" && <span className="list-field-name">{prop.name}</span>}
-                        <ValueView prop={prop} value={entry.values[prop.id]} linked={false} />
+                        <ValueView prop={prop} value={entry.values[prop.id]} linked={false} links={entry.links?.[prop.id]} />
                       </span>
                     ))}
                   </span>

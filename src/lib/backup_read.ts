@@ -5,8 +5,9 @@
 import { and, asc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { media, pages } from "@/db/schema";
 import { backupDb } from "./backup_db";
-import { listEntries } from "./databases";
+import { linksForValues, listEntries } from "./databases";
 import { getPage, type Page } from "./pages";
+import type { Property, Values } from "./properties";
 import type { SearchHit } from "./search";
 import { searchPages } from "./search_query";
 import type { TreeRow } from "./tree";
@@ -67,6 +68,12 @@ export async function backupChildren(pageId: string): Promise<BackupChild[]> {
 export async function backupEntries(dbId: string) {
   const db = backupDb();
   return db ? listEntries(dbId, db) : [];
+}
+
+// Puces des relations dans la copie : mêmes titres, lus dans la sauvegarde.
+export async function backupLinks(properties: readonly Property[], values: Values) {
+  const db = backupDb();
+  return db ? linksForValues(properties, values, db) : {};
 }
 
 // Ancêtres de la page, la plus lointaine d'abord, racine comprise : une

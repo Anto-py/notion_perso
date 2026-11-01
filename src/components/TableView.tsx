@@ -19,6 +19,7 @@ type Props = {
   onCreate: () => void;
   onSave: (entryId: string, propId: string, value: Value | null) => void;
   onCreateOption: (prop: Property, name: string) => Promise<string | null>;
+  onCreateEntry: (prop: Property, title: string) => Promise<string | null>;
   calcs: Record<string, CalcOp>;
   onCalc: (propId: string, op: CalcOp | null) => void;
 };
@@ -26,7 +27,7 @@ type Props = {
 // Un clic sur un élément de saisie ne doit pas ouvrir l'entrée.
 const INTERACTIVE = "a, button, input, select, textarea, label, .picker";
 
-export function TableView({ properties, entries, filtered, onCreate, onSave, onCreateOption, calcs, onCalc }: Props) {
+export function TableView({ properties, entries, filtered, onCreate, onSave, onCreateOption, onCreateEntry, calcs, onCalc }: Props) {
   const router = useRouter();
   return (
     <div className="table-wrap">
@@ -71,6 +72,8 @@ export function TableView({ properties, entries, filtered, onCreate, onSave, onC
                       value={entry.values[prop.id]}
                       onSave={(value) => onSave(entry.id, prop.id, value)}
                       onCreate={(name) => onCreateOption(prop, name)}
+                      onCreateEntry={onCreateEntry}
+                      links={entry.links?.[prop.id]}
                     />
                   )}
                 </td>

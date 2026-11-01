@@ -6,7 +6,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { cache } from "react";
 import { safeHref } from "@/lib/blocks";
-import { listEntries } from "@/lib/databases";
+import { linksForValues, listEntries } from "@/lib/databases";
 import { faviconHref } from "@/lib/icons";
 import { getPage } from "@/lib/pages";
 import { publicHref } from "@/lib/publication";
@@ -75,7 +75,7 @@ async function PublicContent({ publicId, found }: { publicId: string; found: Pub
       crumbs={chain.slice(0, -1)}
       subpages={children}
       href={(id) => publicHref(publicId, root.id, id)}
-      source={{ getPage, listEntries }}
+      source={{ getPage, listEntries, links: linksForValues }}
     />
   );
 }

@@ -97,7 +97,7 @@ function matchesFilter(entry: EntryRow, filter: Filter, properties: readonly Pro
   }
   switch (filter.op) {
     case "contains":
-      return prop.type === "multiselect"
+      return prop.type === "multiselect" || prop.type === "relation"
         ? Array.isArray(value) && value.includes(target)
         : fold(valueText(prop, value)).includes(fold(target));
     case "not_contains":
@@ -144,6 +144,9 @@ function sortKey(propId: string, properties: readonly Property[]): SortKey | nul
         const value = normalizeValue(prop, entry.values[prop.id]);
         return typeof value === "string" ? Date.parse(value) : undefined;
       };
+    // Le titre de la première puce, lu à la lecture (entry.links).
+    case "relation":
+      return (entry) => entry.links?.[prop.id]?.[0]?.title || undefined;
     // Une sélection se trie dans l'ordre de ses options, pas par ordre
     // alphabétique : c'est aussi l'ordre des colonnes du Kanban.
     case "select":

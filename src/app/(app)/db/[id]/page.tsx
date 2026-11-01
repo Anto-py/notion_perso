@@ -4,7 +4,7 @@ import { DatabaseView } from "@/components/DatabaseView";
 import { canAccess } from "@/lib/access";
 import { getCurrentUser } from "@/lib/auth";
 import { configOf, listEntries } from "@/lib/databases";
-import { getPage } from "@/lib/pages";
+import { getPage, listDatabases } from "@/lib/pages";
 
 // Base : en-tête, propriétés, onglets des vues (Tableau, Kanban, Liste).
 export default function DatabaseRoute({ params, searchParams }: PageProps<"/db/[id]">) {
@@ -22,6 +22,9 @@ async function DatabaseLoader({ params, searchParams }: Pick<PageProps<"/db/[id]
   const page = await getPage(id);
   if (!page || page.trashedAt || page.type !== "database" || !canAccess(user, page, "read")) notFound();
   const entries = (await listEntries(page.id)).filter((entry) => canAccess(user, entry, "read"));
+  // Cibles possibles d'une relation : toutes les bases, la base courante
+  // comprise (BRAINSTORMING §13).
+  const databases = (await listDatabases()).filter((database) => canAccess(user, database, "read"));
   return (
     <DatabaseView
       key={page.id}
@@ -36,6 +39,7 @@ async function DatabaseLoader({ params, searchParams }: Pick<PageProps<"/db/[id]
       }}
       config={configOf(page)}
       entries={entries}
+      databases={databases.map(({ id: dbId, title, icon }) => ({ id: dbId, title, icon }))}
       initialViewId={typeof vue === "string" ? vue : null}
     />
   );

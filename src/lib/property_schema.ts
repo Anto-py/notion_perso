@@ -12,6 +12,7 @@ export const PROPERTY_TYPES = [
   "checkbox",
   "created_time",
   "updated_time",
+  "relation",
 ] as const;
 export type PropertyType = (typeof PROPERTY_TYPES)[number];
 
@@ -25,6 +26,7 @@ export const TYPE_LABELS: Record<PropertyType, string> = {
   checkbox: "Case à cocher",
   created_time: "Créé le",
   updated_time: "Modifié le",
+  relation: "Relation",
 };
 
 // Créé le, Modifié le : valeur tirée de created_at et updated_at de l'entrée,
@@ -71,14 +73,38 @@ export const COLOR_LABELS: Record<OptionColor, string> = {
 
 export type SelectOption = { id: string; name: string; color: OptionColor };
 // format : Nombre seulement, « number » à défaut.
-export type Property = { id: string; name: string; type: PropertyType; options?: SelectOption[]; format?: NumberFormat };
+// target, single, reciprocal : Relation seulement. target désigne la base
+// cible (elle-même comprise), single limite la valeur à une entrée,
+// reciprocal demande la jumelle dans la base cible (étape 10, palier b).
+export type Property = {
+  id: string;
+  name: string;
+  type: PropertyType;
+  options?: SelectOption[];
+  format?: NumberFormat;
+  target?: string;
+  single?: boolean;
+  reciprocal?: boolean;
+};
 
 // text, url, date (AAAA-MM-JJ), select (id d'option) : chaîne ;
-// multiselect : liste d'ids ; checkbox : true ; number : nombre fini ;
-// created_time, updated_time : horodatage ISO, ajouté à la lecture. Une
-// valeur vide est absente.
+// multiselect et relation : liste d'ids ; checkbox : true ; number : nombre
+// fini ; created_time, updated_time : horodatage ISO, ajouté à la lecture.
+// Une valeur vide est absente.
 export type Value = string | string[] | boolean | number;
 export type Values = Record<string, Value>;
+
+// Entrée citée par une relation, telle que la lisent les puces : son titre et
+// son icône sont lus à chaque affichage, jamais recopiés dans la valeur.
+// publicBaseId : identifiant public de sa base, quand elle est publiée ; c'est
+// ce qui décide d'un lien dans la vue publique.
+export type LinkRef = {
+  id: string;
+  title: string;
+  icon: string | null;
+  trashed: boolean;
+  publicBaseId: string | null;
+};
 
 export const FILTER_OPS = [
   "contains",
@@ -109,6 +135,8 @@ export const OPS_BY_TYPE: Record<PropertyType, FilterOp[]> = {
   // Comparées au jour (heure de Bruxelles) ; jamais vides.
   created_time: ["is", "before", "after"],
   updated_time: ["is", "before", "after"],
+  // « contient » porte l'id d'une entrée de la base cible.
+  relation: ["contains", "is_empty", "is_not_empty"],
 };
 
 export const OP_LABELS: Record<FilterOp, string> = {
@@ -150,6 +178,9 @@ export type EntryRow = {
   // quand le producteur n'en a pas besoin.
   cover?: string | null;
   bodyImage?: string | null;
+  // Relation (étape 10) : les entrées citées, résolues à la lecture, par id
+  // de propriété. Un id purgé n'a pas d'entrée ici.
+  links?: Record<string, LinkRef[]>;
 };
 
 // Le titre de l'entrée est le titre de sa page : une colonne fixe, filtrable
@@ -162,7 +193,18 @@ export const SORT_BUILTINS: Record<string, string> = {
   updated_at: "Dernière modification",
 };
 
-export const LIMITS = { properties: 50, options: 200, name: 100, text: 5000, url: 2048, filters: 20, sorts: 5, number: 1e15 };
+export const LIMITS = {
+  properties: 50,
+  options: 200,
+  name: 100,
+  text: 5000,
+  url: 2048,
+  filters: 20,
+  sorts: 5,
+  number: 1e15,
+  // Entrées citées par une relation.
+  links: 1000,
+};
 
 export const ID_PATTERN = /^[A-Za-z0-9_-]{1,40}$/;
 const ID_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
@@ -252,6 +294,12 @@ export function validateProperties(raw: unknown): Property[] | string {
       const options = validateOptions(item.options ?? []);
       if (typeof options === "string") return `${name} : ${options}`;
       prop.options = options;
+    }
+    if (prop.type === "relation") {
+      if (typeof item.target !== "string" || !ID_PATTERN.test(item.target)) return `${name} : base cible attendue`;
+      prop.target = item.target;
+      prop.single = item.single === true;
+      prop.reciprocal = item.reciprocal === true;
     }
     properties.push(prop);
   }

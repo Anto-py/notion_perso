@@ -2,10 +2,11 @@
 // Éditeur d'une valeur de propriété, selon son type. Partagé par le panneau
 // d'une entrée et par les cellules du tableau : une seule façon de saisir.
 import { useState } from "react";
-import { formatNumber, parseNumber, type Property, type Value } from "@/lib/properties";
+import { formatNumber, parseNumber, type LinkRef, type Property, type Value } from "@/lib/properties";
 import { CommitInput } from "./CommitInput";
 import { CommitTextarea } from "./CommitTextarea";
 import { OptionPicker } from "./OptionPicker";
+import { RelationPicker } from "./RelationPicker";
 import { isWebUrl, ValueView } from "./propertyUi";
 
 export type PropertyInputProps = {
@@ -14,11 +15,15 @@ export type PropertyInputProps = {
   onSave: (value: Value | null) => void;
   // Crée l'option dans la base ; renvoie son id, ou null en cas d'échec.
   onCreate: (name: string) => Promise<string | null>;
+  // Crée l'entrée dans la base cible d'une relation ; renvoie son id, ou null.
+  onCreateEntry: (prop: Property, title: string) => Promise<string | null>;
+  // Puces déjà résolues (relation) : titre et icône des entrées citées.
+  links?: readonly LinkRef[];
   // Texte et lien : focus dès l'affichage (encadré d'une cellule de tableau).
   focusAtEnd?: boolean;
 };
 
-export function PropertyInput({ prop, value, onSave, onCreate, focusAtEnd }: PropertyInputProps) {
+export function PropertyInput({ prop, value, onSave, onCreate, onCreateEntry, links, focusAtEnd }: PropertyInputProps) {
   const text = typeof value === "string" ? value : "";
   switch (prop.type) {
     case "text":
@@ -82,6 +87,16 @@ export function PropertyInput({ prop, value, onSave, onCreate, focusAtEnd }: Pro
           multiple
           onChange={(ids) => onSave(ids.length > 0 ? ids : null)}
           onCreate={onCreate}
+        />
+      );
+    case "relation":
+      return (
+        <RelationPicker
+          prop={prop}
+          selected={Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : []}
+          links={links}
+          onChange={(ids) => onSave(ids.length > 0 ? ids : null)}
+          onCreateEntry={(title) => onCreateEntry(prop, title)}
         />
       );
   }

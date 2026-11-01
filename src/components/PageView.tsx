@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 import type { EditorHandle, UploadState } from "./Editor";
-import type { Property, Values } from "@/lib/properties";
+import type { LinkRef, Property, Values } from "@/lib/properties";
 import type { SaveStatus } from "@/lib/saver";
 import type { TreeRow } from "@/lib/tree";
 import { rebaseTyping } from "@/lib/web_save";
@@ -29,6 +29,8 @@ export type EntryContext = {
   database: { id: string; title: string; icon: string | null };
   properties: Property[];
   values: Values;
+  // Puces des relations de l'entrée, titres et icônes résolus par le serveur.
+  links: Record<string, LinkRef[]>;
   // Bases vers lesquelles l'entrée peut être déplacée.
   databases: { id: string; title: string; icon: string | null }[];
 };
@@ -136,6 +138,7 @@ export function PageView({ page, entry, directory }: Props) {
           entryId={page.id}
           properties={entry.properties}
           values={entry.values}
+          links={entry.links}
           databases={entry.databases}
         />
       )}

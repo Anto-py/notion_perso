@@ -8,7 +8,7 @@ import { configOf } from "@/lib/databases";
 import { MEDIA_BASE } from "@/lib/icons";
 import { LINKED_PRIVATE_HTML, linkedViewHtml } from "@/lib/linked_html";
 import type { Page } from "@/lib/pages";
-import { matchesFilters, normalizeValues, sortEntries, withTimes, type EntryRow, type Property } from "@/lib/properties";
+import { matchesFilters, normalizeValues, sortEntries, withTimes, type EntryRow, type LinkRef, type Property, type Values } from "@/lib/properties";
 import { cardImage, parseLinkedConfig, pickView, type View } from "@/lib/views";
 import { PageCover } from "./PageCover";
 import { PageIcon, PageLabel } from "./PageIcon";
@@ -19,6 +19,8 @@ import { TYPE_ICONS, ValueView } from "./propertyUi";
 export type ReadOnlySource = {
   getPage: (id: string) => Promise<Page | null>;
   listEntries: (dbId: string) => Promise<EntryRow[]>;
+  // Puces des relations d'une entrée seule. Absente : pas de puce à résoudre.
+  links?: (properties: readonly Property[], values: Values) => Promise<Record<string, LinkRef[]>>;
 };
 
 export type ReadOnlyChild = { id: string; type: Page["type"]; title: string; icon: string | null };
@@ -55,6 +57,10 @@ export async function ReadOnlyPage({
   // celle-là descend de la publication.
   const byId = new Map(subpages.map((child) => [child.id, child]));
   const linked = subpageRefs(page.body);
+  // Une puce ne mène qu'à une entrée atteignable : dans la vue publique, la
+  // base de l'entrée doit être publiée ; dans une sauvegarde, tout est lisible.
+  const linkFor = (ref: LinkRef): string | null =>
+    linkedPolicy === "public" ? (ref.publicBaseId ? `/p/${ref.publicBaseId}/${ref.id}` : null) : href(ref.id);
   return (
     <article>
       <PageCover cover={page.cover} position={page.coverPosition} className="page-cover public-cover" mediaBase={mediaBase} />
@@ -62,13 +68,13 @@ export async function ReadOnlyPage({
       <h1 className="public-title">
         <PageIcon icon={page.icon} type={page.type} mediaBase={mediaBase} /> {page.title || "Sans titre"}
       </h1>
-      {page.type === "entry" && <EntryProperties entry={page} source={source} />}
+      {page.type === "entry" && <EntryProperties entry={page} source={source} link={linkFor} mediaBase={mediaBase} />}
       {page.type === "database" ? (
-        <PublicDatabase database={page} href={href} source={source} mediaBase={mediaBase} />
+        <PublicDatabase database={page} href={href} source={source} mediaBase={mediaBase} link={linkFor} />
       ) : (
         <div
           className="public-body"
-          dangerouslySetInnerHTML={{ __html: await bodyHtml(page, byId, href, mediaBase, source, linkedPolicy) }}
+          dangerouslySetInnerHTML={{ __html: await bodyHtml(page, byId, href, mediaBase, source, linkedPolicy, linkFor) }}
         />
       )}
       <Children rows={subpages.filter((child) => !linked.has(child.id))} href={href} mediaBase={mediaBase} />
@@ -85,6 +91,7 @@ async function bodyHtml(
   mediaBase: string,
   source: ReadOnlySource,
   linkedPolicy: "public" | "all",
+  linkFor: (ref: LinkRef) => string | null,
 ): Promise<string> {
   // Les vues liées demandent les entrées d'une autre base : elles sont
   // rendues à part, puis retrouvées par leur clé au fil du corps.
@@ -92,7 +99,7 @@ async function bodyHtml(
   for (const ref of linkedRefs(page.body)) {
     const key = linkedKey(ref.databaseId, ref.config);
     if (linkedHtml.has(key)) continue;
-    linkedHtml.set(key, await linkedBlockHtml(ref.databaseId, ref.config, source, href, mediaBase, linkedPolicy));
+    linkedHtml.set(key, await linkedBlockHtml(ref.databaseId, ref.config, source, href, mediaBase, linkedPolicy, linkFor));
   }
   const html = renderHtml(page.body, {
     subpage: (id) => {
@@ -120,6 +127,7 @@ async function linkedBlockHtml(
   href: (id: string) => string,
   mediaBase: string,
   linkedPolicy: "public" | "all",
+  linkFor: (ref: LinkRef) => string | null,
 ): Promise<string> {
   const base = await source.getPage(databaseId);
   if (!base || base.trashedAt || base.type !== "database") return LINKED_PRIVATE_HTML;
@@ -144,6 +152,7 @@ async function linkedBlockHtml(
       href: (entryId) => (own ? `${own}/${entryId}` : href(entryId)),
       baseHref: own ?? href(base.id),
       mediaBase,
+      entryLink: linkFor,
     },
   );
 }
@@ -166,7 +175,17 @@ function Crumbs({ crumbs, href, mediaBase }: { crumbs: ReadOnlyCrumb[]; href: (i
 // Toutes les propriétés de l'entrée, masquées dans la vue comprises : le
 // masquage ne vaut que pour le tableau (choix d'Antonin du 2026-10-30). Une
 // valeur vide n'est pas affichée, une case l'est toujours.
-async function EntryProperties({ entry, source }: { entry: Page; source: ReadOnlySource }) {
+async function EntryProperties({
+  entry,
+  source,
+  link,
+  mediaBase,
+}: {
+  entry: Page;
+  source: ReadOnlySource;
+  link: (ref: LinkRef) => string | null;
+  mediaBase: string;
+}) {
   const base = entry.dbId ? await source.getPage(entry.dbId) : null;
   if (!base || base.trashedAt) return null;
   const { properties } = configOf(base);
@@ -174,6 +193,7 @@ async function EntryProperties({ entry, source }: { entry: Page; source: ReadOnl
     createdAt: entry.createdAt.toISOString(),
     updatedAt: entry.updatedAt.toISOString(),
   });
+  const links = source.links ? await source.links(properties, values) : {};
   const shown = properties.filter((prop) => prop.type === "checkbox" || values[prop.id] !== undefined);
   if (!shown.length) return null;
   return (
@@ -187,7 +207,7 @@ async function EntryProperties({ entry, source }: { entry: Page; source: ReadOnl
             {prop.name}
           </span>
           <div className="prop-value">
-            <ValueView prop={prop} value={values[prop.id]} />
+            <ValueView prop={prop} value={values[prop.id]} links={links[prop.id]} link={link} mediaBase={mediaBase} />
           </div>
         </div>
       ))}
@@ -203,11 +223,13 @@ async function PublicDatabase({
   href,
   source,
   mediaBase,
+  link,
 }: {
   database: Page;
   href: (id: string) => string;
   source: ReadOnlySource;
   mediaBase: string;
+  link: (ref: LinkRef) => string | null;
 }) {
   const { properties, views } = configOf(database);
   const view = views[0];
@@ -241,7 +263,7 @@ async function PublicDatabase({
       })}
     </ul>
   ) : (
-    <PublicTable entries={entries} properties={properties} view={view} href={href} mediaBase={mediaBase} />
+    <PublicTable entries={entries} properties={properties} view={view} href={href} mediaBase={mediaBase} link={link} />
   );
 }
 
@@ -273,12 +295,14 @@ function PublicTable({
   view,
   href,
   mediaBase,
+  link,
 }: {
   entries: EntryRow[];
   properties: Property[];
   view: View;
   href: (id: string) => string;
   mediaBase: string;
+  link: (ref: LinkRef) => string | null;
 }) {
   const columns = properties.filter((prop) => !view.hidden.includes(prop.id));
   return (
@@ -304,7 +328,7 @@ function PublicTable({
               </td>
               {columns.map((prop) => (
                 <td key={prop.id}>
-                  <ValueView prop={prop} value={entry.values[prop.id]} />
+                  <ValueView prop={prop} value={entry.values[prop.id]} links={entry.links?.[prop.id]} link={link} mediaBase={mediaBase} />
                 </td>
               ))}
             </tr>

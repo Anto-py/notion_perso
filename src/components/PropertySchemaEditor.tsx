@@ -24,11 +24,31 @@ import {
 import { CommitInput } from "./CommitInput";
 import { OptionChip } from "./propertyUi";
 
-type Props = { properties: Property[]; valuesList: Values[]; onChange: (next: Property[]) => void };
+type Props = {
+  properties: Property[];
+  valuesList: Values[];
+  // Les bases de l'arbre, cibles possibles d'une relation (la base courante
+  // comprise) ; lues par le serveur, l'annuaire du bloc lié ne les portant pas.
+  databases: { id: string; title: string; icon: string | null }[];
+  onChange: (next: Property[]) => void;
+};
 
-export function PropertySchemaEditor({ properties, valuesList, onChange }: Props) {
+export function PropertySchemaEditor({ properties, valuesList, databases, onChange }: Props) {
+
   function update(id: string, change: (prop: Property) => Property) {
     onChange(properties.map((prop) => (prop.id === id ? change(prop) : prop)));
+  }
+
+  // Passer une propriété en relation demande sa base cible : la première de
+  // l'arbre à défaut, que l'on change juste en dessous.
+  function changeTypeTo(prop: Property, type: PropertyType): Property {
+    const next = changeType(prop, type, valuesList);
+    if (type === "relation") {
+      next.target = prop.target ?? databases[0]?.id ?? "";
+      next.single = prop.single ?? false;
+      next.reciprocal = prop.reciprocal ?? false;
+    }
+    return next;
   }
 
   return (
@@ -49,7 +69,7 @@ export function PropertySchemaEditor({ properties, valuesList, onChange }: Props
             <select
               aria-label={`Type de ${prop.name}`}
               value={prop.type}
-              onChange={(event) => update(prop.id, (p) => changeType(p, event.target.value as PropertyType, valuesList))}
+              onChange={(event) => update(prop.id, (p) => changeTypeTo(p, event.target.value as PropertyType))}
             >
               {PROPERTY_TYPES.map((type) => (
                 <option key={type} value={type}>
@@ -69,6 +89,29 @@ export function PropertySchemaEditor({ properties, valuesList, onChange }: Props
                   </option>
                 ))}
               </select>
+            )}
+            {prop.type === "relation" && (
+              <>
+                <select
+                  aria-label={`Base cible de ${prop.name}`}
+                  value={prop.target ?? ""}
+                  onChange={(event) => update(prop.id, (p) => ({ ...p, target: event.target.value }))}
+                >
+                  {databases.map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {row.title || "Sans titre"}
+                    </option>
+                  ))}
+                </select>
+                <label className="schema-check">
+                  <input
+                    type="checkbox"
+                    checked={prop.single === true}
+                    onChange={(event) => update(prop.id, (p) => ({ ...p, single: event.target.checked }))}
+                  />
+                  Une seule entrée
+                </label>
+              </>
             )}
             <button type="button" className="ghost" onClick={() => onChange(properties.filter((p) => p.id !== prop.id))}>
               Supprimer

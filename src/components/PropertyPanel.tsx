@@ -7,7 +7,7 @@
 // aussi changer de base : les propriétés de même nom et type suivent.
 import Link from "next/link";
 import { useRef, useState } from "react";
-import { withNewOption, type Property, type Value, type Values } from "@/lib/properties";
+import { withNewOption, type LinkRef, type Property, type Value, type Values } from "@/lib/properties";
 import type { DbConfig } from "@/lib/views";
 import { MoveToDatabase } from "./MoveToDatabase";
 import { PropertyInput } from "./PropertyInput";
@@ -19,10 +19,12 @@ type Props = {
   entryId: string;
   properties: Property[];
   values: Values;
+  // Puces des relations, résolues par le serveur.
+  links: Record<string, LinkRef[]>;
   databases: { id: string; title: string; icon: string | null }[];
 };
 
-export function PropertyPanel({ dbId, entryId, properties: initialProperties, values: initialValues, databases }: Props) {
+export function PropertyPanel({ dbId, entryId, properties: initialProperties, values: initialValues, links, databases }: Props) {
   const [properties, setProperties] = useState(initialProperties);
   const [values, setValues] = useState(initialValues);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +41,17 @@ export function PropertyPanel({ dbId, entryId, properties: initialProperties, va
       const result = await send(`/api/entries/${entryId}`, "PATCH", { values: { [propId]: value } });
       setError(result.ok ? null : result.error);
     });
+  }
+
+  // Créer une entrée depuis le sélecteur d'une relation, sans quitter la page.
+  async function createEntry(prop: Property, title: string): Promise<string | null> {
+    if (!prop.target) return null;
+    const result = await send("/api/entries", "POST", { dbId: prop.target, title });
+    if (!result.ok) {
+      setError(result.error);
+      return null;
+    }
+    return String(result.data.id);
   }
 
   async function createOption(prop: Property, name: string): Promise<string | null> {
@@ -75,6 +88,8 @@ export function PropertyPanel({ dbId, entryId, properties: initialProperties, va
               value={values[prop.id]}
               onSave={(value) => save(prop.id, value)}
               onCreate={(name) => createOption(prop, name)}
+              onCreateEntry={createEntry}
+              links={links[prop.id]}
             />
           </div>
         </div>

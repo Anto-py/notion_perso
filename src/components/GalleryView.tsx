@@ -52,7 +52,7 @@ export function GalleryView({ properties, entries, filtered, onCreate, cardSize,
                     {fields.map((prop) => (
                       <span className="gallery-field" key={prop.id} title={prop.name}>
                         {prop.type === "checkbox" && <span className="list-field-name">{prop.name}</span>}
-                        <ValueView prop={prop} value={entry.values[prop.id]} linked={false} />
+                        <ValueView prop={prop} value={entry.values[prop.id]} linked={false} links={entry.links?.[prop.id]} />
                       </span>
                     ))}
                   </span>
