@@ -8,6 +8,7 @@ import {
   FORMAT_LABELS,
   NUMBER_FORMATS,
   isSingleOptionType,
+  isTwin,
   localId,
   nextColor,
   OPTION_COLORS,
@@ -57,60 +58,82 @@ export function PropertySchemaEditor({ properties, valuesList, databases, onChan
       {properties.map((prop) => (
         <div className="schema-prop" key={prop.id}>
           <div className="schema-head">
-            <CommitInput
-              key={prop.name}
-              className="schema-name"
-              aria-label="Nom de la propriété"
-              value={prop.name}
-              maxLength={100}
-              allowEmpty={false}
-              onCommit={(name) => update(prop.id, (p) => ({ ...p, name }))}
-            />
-            <select
-              aria-label={`Type de ${prop.name}`}
-              value={prop.type}
-              onChange={(event) => update(prop.id, (p) => changeTypeTo(p, event.target.value as PropertyType))}
-            >
-              {PROPERTY_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {TYPE_LABELS[type]}
-                </option>
-              ))}
-            </select>
-            {prop.type === "number" && (
-              <select
-                aria-label={`Format de ${prop.name}`}
-                value={prop.format ?? "number"}
-                onChange={(event) => update(prop.id, (p) => ({ ...p, format: event.target.value as NumberFormat }))}
-              >
-                {NUMBER_FORMATS.map((format) => (
-                  <option key={format} value={format}>
-                    {FORMAT_LABELS[format]}
-                  </option>
-                ))}
-              </select>
-            )}
-            {prop.type === "relation" && (
+            {isTwin(prop) ? (
               <>
+                {/* La jumelle appartient à l'autre base : son nom, son type et
+                    sa cible suivent la relation déclarante et ne se règlent pas
+                    ici. La supprimer retire la réciprocité à la déclarante. */}
+                <span className="schema-name schema-twin" title="Jumelle d'une relation déclarée dans une autre base">
+                  ↩ {prop.name}
+                </span>
+                <span className="hint schema-hint">Suit la relation d&apos;origine</span>
+              </>
+            ) : (
+              <>
+                <CommitInput
+                  key={prop.name}
+                  className="schema-name"
+                  aria-label="Nom de la propriété"
+                  value={prop.name}
+                  maxLength={100}
+                  allowEmpty={false}
+                  onCommit={(name) => update(prop.id, (p) => ({ ...p, name }))}
+                />
                 <select
-                  aria-label={`Base cible de ${prop.name}`}
-                  value={prop.target ?? ""}
-                  onChange={(event) => update(prop.id, (p) => ({ ...p, target: event.target.value }))}
+                  aria-label={`Type de ${prop.name}`}
+                  value={prop.type}
+                  onChange={(event) => update(prop.id, (p) => changeTypeTo(p, event.target.value as PropertyType))}
                 >
-                  {databases.map((row) => (
-                    <option key={row.id} value={row.id}>
-                      {row.title || "Sans titre"}
+                  {PROPERTY_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {TYPE_LABELS[type]}
                     </option>
                   ))}
                 </select>
-                <label className="schema-check">
-                  <input
-                    type="checkbox"
-                    checked={prop.single === true}
-                    onChange={(event) => update(prop.id, (p) => ({ ...p, single: event.target.checked }))}
-                  />
-                  Une seule entrée
-                </label>
+                {prop.type === "number" && (
+                  <select
+                    aria-label={`Format de ${prop.name}`}
+                    value={prop.format ?? "number"}
+                    onChange={(event) => update(prop.id, (p) => ({ ...p, format: event.target.value as NumberFormat }))}
+                  >
+                    {NUMBER_FORMATS.map((format) => (
+                      <option key={format} value={format}>
+                        {FORMAT_LABELS[format]}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {prop.type === "relation" && (
+                  <>
+                    <select
+                      aria-label={`Base cible de ${prop.name}`}
+                      value={prop.target ?? ""}
+                      onChange={(event) => update(prop.id, (p) => ({ ...p, target: event.target.value }))}
+                    >
+                      {databases.map((row) => (
+                        <option key={row.id} value={row.id}>
+                          {row.title || "Sans titre"}
+                        </option>
+                      ))}
+                    </select>
+                    <label className="schema-check">
+                      <input
+                        type="checkbox"
+                        checked={prop.single === true}
+                        onChange={(event) => update(prop.id, (p) => ({ ...p, single: event.target.checked }))}
+                      />
+                      Une seule entrée
+                    </label>
+                    <label className="schema-check">
+                      <input
+                        type="checkbox"
+                        checked={prop.reciprocal === true}
+                        onChange={(event) => update(prop.id, (p) => ({ ...p, reciprocal: event.target.checked }))}
+                      />
+                      Réciproque
+                    </label>
+                  </>
+                )}
               </>
             )}
             <button type="button" className="ghost" onClick={() => onChange(properties.filter((p) => p.id !== prop.id))}>

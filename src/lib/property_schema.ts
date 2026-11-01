@@ -72,6 +72,10 @@ export const COLOR_LABELS: Record<OptionColor, string> = {
 };
 
 export type SelectOption = { id: string; name: string; color: OptionColor };
+// Jumelle d'une relation déclarante, posée par le serveur dans la base cible :
+// db est la base déclarante, prop sa relation. Aucune valeur n'est stockée, la
+// jumelle se lit à chaque affichage (étape 10, palier b).
+export type TwinRef = { db: string; prop: string };
 // format : Nombre seulement, « number » à défaut.
 // target, single, reciprocal : Relation seulement. target désigne la base
 // cible (elle-même comprise), single limite la valeur à une entrée,
@@ -85,6 +89,7 @@ export type Property = {
   target?: string;
   single?: boolean;
   reciprocal?: boolean;
+  twinOf?: TwinRef;
 };
 
 // text, url, date (AAAA-MM-JJ), select (id d'option) : chaîne ;
@@ -213,6 +218,16 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+export function isTwinRef(value: unknown): value is TwinRef {
+  return isRecord(value) && typeof value.db === "string" && typeof value.prop === "string";
+}
+
+// Une jumelle est une relation, mais qui ne se saisit pas : sa valeur se
+// calcule. Les branches de saisie s'appuient sur cette garde.
+export function isTwin(prop: Property): prop is Property & { twinOf: TwinRef } {
+  return prop.type === "relation" && isTwinRef(prop.twinOf);
+}
+
 // Comparaison insensible à la casse et aux accents (« Évaluation » = « evaluation »).
 export function fold(text: string): string {
   return text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
@@ -298,8 +313,17 @@ export function validateProperties(raw: unknown): Property[] | string {
     if (prop.type === "relation") {
       if (typeof item.target !== "string" || !ID_PATTERN.test(item.target)) return `${name} : base cible attendue`;
       prop.target = item.target;
-      prop.single = item.single === true;
-      prop.reciprocal = item.reciprocal === true;
+      // Une jumelle est posée par le serveur : elle n'est ni réciproque ni
+      // limitée, et son nom suit la relation déclarante. Un twinOf mal formé
+      // est ignoré, la prochaine écriture rétablissant la cohérence.
+      if (isTwinRef(item.twinOf) && ID_PATTERN.test(item.twinOf.db) && ID_PATTERN.test(item.twinOf.prop)) {
+        prop.twinOf = { db: item.twinOf.db, prop: item.twinOf.prop };
+        prop.single = false;
+        prop.reciprocal = false;
+      } else {
+        prop.single = item.single === true;
+        prop.reciprocal = item.reciprocal === true;
+      }
     }
     properties.push(prop);
   }

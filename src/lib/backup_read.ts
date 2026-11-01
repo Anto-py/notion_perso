@@ -8,6 +8,7 @@ import { backupDb } from "./backup_db";
 import { linksForValues, listEntries } from "./databases";
 import { getPage, type Page } from "./pages";
 import type { Property, Values } from "./properties";
+import { fillTwins } from "./relation_query";
 import type { SearchHit } from "./search";
 import { searchPages } from "./search_query";
 import type { TreeRow } from "./tree";
@@ -74,6 +75,12 @@ export async function backupEntries(dbId: string) {
 export async function backupLinks(properties: readonly Property[], values: Values) {
   const db = backupDb();
   return db ? linksForValues(properties, values, db) : {};
+}
+
+// Valeurs des jumelles d'une entrée de la copie, calculées sur la copie.
+export async function backupTwins(properties: readonly Property[], entry: { id: string; values: Values }) {
+  const db = backupDb();
+  return db ? (await fillTwins(properties, [entry], db))[0] : entry;
 }
 
 // Ancêtres de la page, la plus lointaine d'abord, racine comprise : une

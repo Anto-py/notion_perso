@@ -16,7 +16,9 @@ import { isOrderKey, keyBetween, rekey } from "./order_key";
 import type { Outcome, Page } from "./pages";
 import { mergeDbConfig, sameJson } from "./sync_merge";
 import {
+  asValues,
   checkValue,
+  isTwin,
   migrateValues,
   normalizeValue,
   normalizeValues,
@@ -28,6 +30,8 @@ import {
   type Property,
   type Values,
 } from "./properties";
+import { mergeTwins } from "./relation";
+import { fillTwins, writeTwin } from "./relation_query";
 import { parseConfig, sanitizeViews, type DbConfig } from "./views";
 
 const NOT_FOUND: Outcome = { ok: false, status: 404, error: "Base introuvable" };
@@ -37,10 +41,6 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export function configOf(page: Pick<Page, "dbConfig">): DbConfig {
   return parseConfig(page.dbConfig);
-}
-
-function asValues(raw: unknown): Values {
-  return typeof raw === "object" && raw !== null && !Array.isArray(raw) ? (raw as Values) : {};
 }
 
 function sameValues(a: Values, b: Values): boolean {
@@ -64,6 +64,56 @@ async function lockDatabase(tx: Tx, id: string): Promise<DbConfig | null> {
     .where(and(eq(pages.id, id), eq(pages.type, "database"), isNull(pages.trashedAt)))
     .for("update");
   return base ? parseConfig(base.dbConfig) : null;
+}
+
+// Même verrou, corbeille comprise : une jumelle se lit et se retire encore
+// quand la base qui la porte ou la déclare est en corbeille. La corbeille se
+// constate ici plutôt que par un 404.
+async function lockConfig(tx: Tx, id: string): Promise<{ config: DbConfig; trashed: boolean } | null> {
+  const [row] = await tx
+    .select({ dbConfig: pages.dbConfig, trashedAt: pages.trashedAt })
+    .from(pages)
+    .where(and(eq(pages.id, id), eq(pages.type, "database")))
+    .for("update");
+  return row ? { config: parseConfig(row.dbConfig), trashed: row.trashedAt !== null } : null;
+}
+
+// Les bases que le schéma d'une base peut toucher : les cibles de ses
+// relations et les bases de ses jumelles, puis les mêmes un saut plus loin
+// (retirer une jumelle retire la réciprocité, qui peut avoir sa propre
+// jumelle ailleurs). Lecture sans verrou, pour connaître l'ordre de
+// verrouillage avant de le prendre.
+async function linkedDatabases(tx: Pick<Tx, "select">, id: string, patch: DatabasePatch): Promise<string[]> {
+  const linked = new Set<string>([id]);
+  const seen = new Set<string>([id]);
+  // Le schéma d'avant comme celui d'après : une cible qu'on quitte doit être
+  // verrouillée, pour y retirer la jumelle qui la citait.
+  const before = await readProperties(tx, id);
+  const sources: Property[][] = patch.properties ? [before, patch.properties] : [before];
+  for (let hop = 0; hop < 2; hop++) {
+    for (const properties of sources) {
+      for (const prop of properties) {
+        if (prop.type !== "relation") continue;
+        if (prop.target) linked.add(prop.target);
+        if (prop.twinOf) linked.add(prop.twinOf.db);
+      }
+    }
+    sources.length = 0;
+    for (const dbId of linked) {
+      if (seen.has(dbId)) continue;
+      seen.add(dbId);
+      sources.push(await readProperties(tx, dbId));
+    }
+  }
+  return [...linked].sort();
+}
+
+async function readProperties(tx: Pick<Tx, "select">, id: string): Promise<Property[]> {
+  const [row] = await tx
+    .select({ dbConfig: pages.dbConfig })
+    .from(pages)
+    .where(and(eq(pages.id, id), eq(pages.type, "database")));
+  return row ? parseConfig(row.dbConfig).properties : [];
 }
 
 // Clés inconnues ou valeurs irrecevables : refus lisible, rien n'est écrit.
@@ -192,7 +242,7 @@ export async function attachLinks<T extends { values: Values }>(
 
 // Entrées d'une base, hors corbeille, dans l'ordre manuel. executor : la base
 // vive par défaut, la copie d'une sauvegarde quand l'écran de sauvegarde lit.
-export async function listEntries(dbId: string, executor: Pick<typeof db, "select"> = db): Promise<EntryRow[]> {
+export async function listEntries(dbId: string, executor: Pick<typeof db, "select" | "execute"> = db): Promise<EntryRow[]> {
   const [base] = await executor
     .select({ dbConfig: pages.dbConfig })
     .from(pages)
@@ -226,13 +276,40 @@ export async function listEntries(dbId: string, executor: Pick<typeof db, "selec
     cover: row.cover,
     bodyImage: row.bodyImage,
   }));
-  return attachLinks(properties, entries, executor);
+  // Les jumelles remplissent leurs valeurs avant la résolution des puces :
+  // elles se lisent dans l'autre base, jamais dans property_values.
+  return attachLinks(properties, await fillTwins(properties, entries, executor), executor);
 }
 
 // base : les listes que le navigateur avait avant sa modification (lib/web_save.ts).
 // Si celles du serveur ont bougé depuis, les deux versions se fusionnent,
 // propriété par id et vue par id, la modification qui arrive l'emportant.
 export type DatabasePatch = { properties?: Property[]; views?: unknown; base?: { properties?: unknown; views?: unknown } };
+
+// Écrit un schéma dans une base et migre ses valeurs : une propriété retirée
+// emporte ses valeurs, un type changé les convertit (properties.ts). Sert à
+// la base éditée comme aux bases voisines, quand retirer une jumelle retire la
+// relation qui la déclare ailleurs.
+async function writeConfig(tx: Tx, dbId: string, before: DbConfig, properties: Property[], views: unknown): Promise<DbConfig> {
+  const config: DbConfig = { properties, views: sanitizeViews(views, properties) };
+  const entries = await tx
+    .select({ id: pages.id, propertyValues: pages.propertyValues, valuesText: pages.valuesText })
+    .from(pages)
+    .where(eq(pages.dbId, dbId));
+  for (const entry of entries) {
+    const current = asValues(entry.propertyValues);
+    const values = migrateValues(before.properties, properties, current);
+    const text = valuesToText(properties, values);
+    if (text === entry.valuesText && sameValues(values, current)) continue;
+    // updated_at inchangé : c'est la base qui a changé, pas l'entrée.
+    await tx
+      .update(pages)
+      .set({ propertyValues: values, valuesText: text, updatedAt: sql`${pages.updatedAt}` })
+      .where(eq(pages.id, entry.id));
+  }
+  await tx.update(pages).set({ dbConfig: config }).where(eq(pages.id, dbId));
+  return config;
+}
 
 // Nouvelles propriétés (liste complète, déjà validée) et/ou nouvelles vues
 // (liste complète, relue contre les propriétés du moment : un filtre ou un
@@ -241,8 +318,17 @@ export type DatabasePatch = { properties?: Property[]; views?: unknown; base?: {
 // comprise : une entrée restaurée doit suivre le schéma du moment.
 export async function updateDatabase(id: string, patch: DatabasePatch): Promise<Outcome & { config?: DbConfig; merged?: boolean }> {
   return db.transaction(async (tx) => {
-    const before = await lockDatabase(tx, id);
-    if (!before) return NOT_FOUND;
+    // Toutes les bases que cette écriture peut toucher sont verrouillées
+    // d'abord, dans l'ordre de leurs ids : deux bases qui se déclarent une
+    // relation réciproque ne peuvent pas s'interbloquer.
+    const locked = new Map<string, { config: DbConfig; trashed: boolean }>();
+    for (const dbId of await linkedDatabases(tx, id, patch)) {
+      const row = await lockConfig(tx, dbId);
+      if (row) locked.set(dbId, row);
+      if (dbId === id && (!row || row.trashed)) return NOT_FOUND;
+    }
+    const before = locked.get(id)!.config;
+
     let properties = patch.properties ?? before.properties;
     let views = patch.views ?? before.views;
     const base = patch.base;
@@ -254,7 +340,6 @@ export async function updateDatabase(id: string, patch: DatabasePatch): Promise<
       properties = config.properties;
       views = config.views;
     }
-    const config: DbConfig = { properties, views: sanitizeViews(views, properties) };
 
     // Une relation nouvelle ou dont la cible change doit désigner une base qui
     // existe et qui n'est pas en corbeille ; une cible déjà acceptée n'est pas
@@ -273,25 +358,92 @@ export async function updateDatabase(id: string, patch: DatabasePatch): Promise<
       }
     }
 
+    const amended = new Map<string, Property[]>();
     if (patch.properties) {
-      const entries = await tx
-        .select({ id: pages.id, propertyValues: pages.propertyValues, valuesText: pages.valuesText })
-        .from(pages)
-        .where(eq(pages.dbId, id));
-      for (const entry of entries) {
-        const current = asValues(entry.propertyValues);
-        const values = migrateValues(before.properties, properties, current);
-        const text = valuesToText(properties, values);
-        if (text === entry.valuesText && sameValues(values, current)) continue;
-        // updated_at inchangé : c'est la base qui a changé, pas l'entrée.
-        await tx
-          .update(pages)
-          .set({ propertyValues: values, valuesText: text, updatedAt: sql`${pages.updatedAt}` })
-          .where(eq(pages.id, entry.id));
+      // Une jumelle ne survit pas à la disparition de la relation qui la
+      // déclare. Une base déclarante absente ou en corbeille ne se juge pas :
+      // ses puces restent lisibles jusqu'à sa restauration.
+      properties = properties.filter((prop) => {
+        if (!prop.twinOf) return true;
+        const declaring = prop.twinOf.db === id ? properties : locked.get(prop.twinOf.db)?.config.properties;
+        if (!declaring) return true;
+        const source = declaring.find((item) => item.id === prop.twinOf!.prop);
+        return !!source && source.type === "relation" && source.reciprocal === true && source.target === id;
+      });
+
+      // Supprimer une jumelle retire la relation qui la déclare, où qu'elle
+      // vive (BRAINSTORMING §13) ; ses valeurs partent avec elle.
+      for (const twin of before.properties) {
+        if (!twin.twinOf || properties.some((prop) => prop.id === twin.id)) continue;
+        const declDb = twin.twinOf.db;
+        const source = declDb === id ? properties : locked.get(declDb)?.config.properties;
+        if (!source) continue;
+        const next = source.filter((prop) => prop.id !== twin.twinOf!.prop);
+        if (declDb === id) properties = next;
+        else amended.set(declDb, next);
       }
+      for (const [declDb, next] of amended) properties = mergeTwins(properties, declDb, next);
     }
 
-    await tx.update(pages).set({ dbConfig: config }).where(eq(pages.id, id));
+    // Les jumelles des relations réciproques de cette base se recalculent dans
+    // chaque base cible, y compris dans la base elle-même pour une relation
+    // vers soi.
+    // Les cibles d'avant comme d'après : une relation devenue non réciproque,
+    // retirée ou repointée doit voir sa jumelle recalculée là où elle était.
+    const targets = new Set<string>();
+    if (patch.properties) {
+      for (const prop of [...properties, ...before.properties]) {
+        if (prop.type === "relation" && prop.reciprocal === true && prop.target) targets.add(prop.target);
+      }
+      if (targets.has(id)) {
+        properties = mergeTwins(properties, id, properties);
+        views = sanitizeViews(views, properties);
+      }
+    }
+    const config: DbConfig = patch.properties
+      ? await writeConfig(tx, id, before, properties, views)
+      : { properties, views: sanitizeViews(views, properties) };
+    if (!patch.properties) await tx.update(pages).set({ dbConfig: config }).where(eq(pages.id, id));
+
+    // Les autres bases : d'abord la relation retirée avec sa jumelle, puis les
+    // jumelles de cette base recalculées sur l'état amendé, pour qu'une chaîne
+    // de trois bases ne s'écrase pas elle-même. Seule une base qui perd une
+    // propriété migre ses valeurs ; une jumelle n'en porte aucune.
+    if (patch.properties) {
+      const work = new Map<string, { properties: Property[]; migrate: boolean }>();
+      const put = (dbId: string, props: Property[], migrate: boolean) => {
+        const current = work.get(dbId);
+        work.set(dbId, { properties: props, migrate: migrate || (current?.migrate ?? false) });
+      };
+      for (const [declDb, next] of amended) put(declDb, next, true);
+      const currentOf = (dbId: string) => work.get(dbId)?.properties ?? locked.get(dbId)?.config.properties;
+      // Une base amendée peut avoir ses propres cibles : sa jumelle doit y
+      // suivre la relation qu'elle vient de perdre.
+      for (const [declDb, next] of amended) {
+        for (const prop of next) {
+          if (prop.type !== "relation" || !prop.target || prop.target === id || prop.target === declDb) continue;
+          const source = currentOf(prop.target);
+          if (source) put(prop.target, mergeTwins(source, declDb, next), false);
+        }
+      }
+      for (const targetId of targets) {
+        if (targetId === id) continue;
+        const source = currentOf(targetId);
+        if (source) put(targetId, mergeTwins(source, id, properties), false);
+      }
+      for (const [dbId, entry] of work) {
+        const row = locked.get(dbId);
+        if (!row || row.trashed || sameJson(entry.properties, row.config.properties)) continue;
+        if (entry.migrate) {
+          await writeConfig(tx, dbId, row.config, entry.properties, row.config.views);
+        } else {
+          await tx
+            .update(pages)
+            .set({ dbConfig: { ...row.config, properties: entry.properties, views: sanitizeViews(row.config.views, entry.properties) } })
+            .where(eq(pages.id, dbId));
+        }
+      }
+    }
     return { ok: true, config, merged };
   });
 }
@@ -387,7 +539,21 @@ export async function updateEntry(id: string, patch: EntryPatch): Promise<Outcom
       .from(pages)
       .where(and(eq(pages.id, id), eq(pages.type, "entry"), isNull(pages.trashedAt)));
     if (!found?.dbId) return { ok: false, status: 404, error: "Entrée introuvable" } as const;
-    const config = await lockDatabase(tx, found.dbId);
+
+    // Écrire depuis une jumelle touche aussi la base qui déclare la relation :
+    // les deux sont verrouillées dans l'ordre de leurs ids.
+    const preview = await readProperties(tx, found.dbId);
+    const twins = patch.values ? preview.filter(isTwin).filter((prop) => prop.id in patch.values!) : [];
+    const linked = new Set<string>([found.dbId]);
+    for (const twin of twins) if (twin.twinOf) linked.add(twin.twinOf.db);
+    const configs = new Map<string, DbConfig | null>();
+    for (const dbId of [...linked].sort()) configs.set(dbId, await lockDatabase(tx, dbId));
+    for (const twin of twins) {
+      if (!configs.get(twin.target ?? "")) {
+        return { ok: false, status: 409, error: `${twin.name} : la base d'origine est en corbeille.` } as const;
+      }
+    }
+    const config = configs.get(found.dbId);
     if (!config) return NOT_FOUND;
 
     let order: Map<string, string> | null = null;
@@ -406,11 +572,19 @@ export async function updateEntry(id: string, patch: EntryPatch): Promise<Outcom
     }
 
     if (patch.values) {
-      const error = checkValues(config.properties, patch.values) ?? (await checkRelationTargets(tx, config.properties, patch.values));
+      // Les jumelles ne s'écrivent pas comme des valeurs : leur delta part vers
+      // les entrées qui déclarent la relation (plus bas).
+      const plain: Record<string, unknown> = { ...patch.values };
+      for (const twin of twins) delete plain[twin.id];
+      const error = checkValues(config.properties, plain) ?? (await checkRelationTargets(tx, config.properties, plain));
       if (error) return { ok: false, status: 400, error } as const;
+      for (const twin of twins) {
+        const targetError = await checkRelationTargets(tx, [twin], { [twin.id]: patch.values![twin.id] });
+        if (targetError) return { ok: false, status: 400, error: targetError } as const;
+      }
       const [entry] = await tx.select({ propertyValues: pages.propertyValues }).from(pages).where(eq(pages.id, id));
       const merged: Record<string, unknown> = { ...asValues(entry?.propertyValues) };
-      for (const [key, value] of Object.entries(patch.values)) {
+      for (const [key, value] of Object.entries(plain)) {
         if (value === null) delete merged[key];
         else merged[key] = value;
       }
@@ -419,6 +593,10 @@ export async function updateEntry(id: string, patch: EntryPatch): Promise<Outcom
         .update(pages)
         .set({ propertyValues: values, valuesText: valuesToText(config.properties, values) })
         .where(eq(pages.id, id));
+      for (const twin of twins) {
+        const wanted = normalizeValue(twin, patch.values![twin.id]);
+        await writeTwin(tx, twin, id, Array.isArray(wanted) ? wanted : []);
+      }
     }
 
     // Seules les entrées sorties de la plus longue suite déjà ordonnée

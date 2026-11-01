@@ -27,6 +27,12 @@ export const TYPE_ICONS: Record<PropertyType, string> = {
   relation: "⇄",
 };
 
+// L'icône d'une propriété dans l'entrée. Une jumelle porte la flèche de retour :
+// elle lit la relation déclarée dans l'autre base, elle ne la possède pas.
+export function propIcon(prop: Property): string {
+  return prop.twinOf ? "↩" : TYPE_ICONS[prop.type];
+}
+
 // Où mène une puce : l'app, la vue publique (seulement si la base de l'entrée
 // est publiée), l'écran d'une sauvegarde. null : pas de lien.
 export type LinkBuilder = (ref: LinkRef) => string | null;

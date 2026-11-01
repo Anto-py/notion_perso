@@ -8,6 +8,7 @@ import { cache } from "react";
 import { safeHref } from "@/lib/blocks";
 import { linksForValues, listEntries } from "@/lib/databases";
 import { faviconHref } from "@/lib/icons";
+import { fillTwins } from "@/lib/relation_query";
 import { getPage } from "@/lib/pages";
 import { publicHref } from "@/lib/publication";
 import { listChildren, resolvePublication, type Publication } from "@/lib/publication_query";
@@ -75,7 +76,12 @@ async function PublicContent({ publicId, found }: { publicId: string; found: Pub
       crumbs={chain.slice(0, -1)}
       subpages={children}
       href={(id) => publicHref(publicId, root.id, id)}
-      source={{ getPage, listEntries, links: linksForValues }}
+      source={{
+        getPage,
+        listEntries,
+        links: linksForValues,
+        twinValues: async (properties, entry) => (await fillTwins(properties, [entry]))[0],
+      }}
     />
   );
 }

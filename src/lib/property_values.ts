@@ -58,9 +58,14 @@ export function normalizeValue(prop: Property, raw: unknown): Value | undefined 
   }
 }
 
+// Les valeurs stockées d'une entrée, telles quelles.
+export function asValues(raw: unknown): Values {
+  return isRecord(raw) ? (raw as Values) : {};
+}
+
 // Les valeurs d'une entrée, réduites aux propriétés de la base.
 export function normalizeValues(properties: readonly Property[], raw: unknown): Values {
-  const source = isRecord(raw) ? raw : {};
+  const source = asValues(raw);
   const values: Values = {};
   for (const prop of properties) {
     const value = normalizeValue(prop, source[prop.id]);
@@ -95,7 +100,10 @@ export function checkValue(prop: Property, raw: unknown): string | null {
       return `${prop.name} : valeur en lecture seule`;
     // L'existence des entrées citées et l'appartenance à la base cible se
     // vérifient en base, pas ici (databases.ts, checkRelationTargets).
+    // Une jumelle ne stocke rien : sa valeur se calcule, une saisie ordinaire
+    // est refusée (l'écriture depuis la jumelle passe par updateEntry).
     case "relation":
+      if (prop.twinOf) return `${prop.name} : propriété calculée, non modifiable ici`;
       return Array.isArray(raw) &&
         raw.length <= LIMITS.links &&
         raw.every((id) => typeof id === "string" && ID_PATTERN.test(id)) &&
@@ -212,8 +220,9 @@ export function convertValue(from: Property, to: Property, value: unknown): Valu
 export function transferValues(from: readonly Property[], to: readonly Property[], values: Values): Values {
   const transferred: Values = {};
   for (const target of to) {
-    // Créé le, Modifié le : rien de stocké, rien à reporter.
-    if (isTimeType(target.type)) continue;
+    // Créé le, Modifié le : rien de stocké, rien à reporter. Une jumelle se
+    // recalcule dans sa base, elle ne suit pas une entrée qui la quitte.
+    if (isTimeType(target.type) || target.twinOf) continue;
     const source = from.find((prop) => fold(prop.name) === fold(target.name));
     if (!source || source.type !== target.type || values[source.id] === undefined) continue;
     // Deux relations ne se reportent que si elles désignent la même base :
@@ -264,6 +273,9 @@ export function orphanValues(
 export function migrateValues(before: readonly Property[], after: readonly Property[], values: Values): Values {
   const migrated: Values = {};
   for (const prop of after) {
+    // Une jumelle n'a pas de valeur à migrer ; une valeur fantôme héritée
+    // d'une ancienne version ne doit pas revenir.
+    if (prop.twinOf) continue;
     const previous = before.find((p) => p.id === prop.id);
     if (!previous || values[prop.id] === undefined) continue;
     const value = convertValue(previous, prop, values[prop.id]);
@@ -276,6 +288,8 @@ export function migrateValues(before: readonly Property[], after: readonly Prope
 // réécrite autrement par la conversion. Renommer une option n'est pas une
 // perte : l'id reste.
 function isLost(before: Property, after: Property | undefined, value: unknown): boolean {
+  // Une jumelle ne stocke rien : la retirer ne perd aucune saisie.
+  if (before.twinOf) return false;
   const current = normalizeValue(before, value);
   if (current === undefined) return false;
   if (!after) return true;

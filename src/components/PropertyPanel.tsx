@@ -11,7 +11,7 @@ import { withNewOption, type LinkRef, type Property, type Value, type Values } f
 import type { DbConfig } from "@/lib/views";
 import { MoveToDatabase } from "./MoveToDatabase";
 import { PropertyInput } from "./PropertyInput";
-import { TYPE_ICONS } from "./propertyUi";
+import { propIcon } from "./propertyUi";
 import { send } from "./request";
 
 type Props = {
@@ -78,7 +78,7 @@ export function PropertyPanel({ dbId, entryId, properties: initialProperties, va
         <div className="prop-row" key={prop.id}>
           <span className="prop-name">
             <span className="prop-icon" aria-hidden="true">
-              {TYPE_ICONS[prop.type]}
+              {propIcon(prop)}
             </span>
             {prop.name}
           </span>

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ReadOnlyPage } from "@/components/ReadOnlyPage";
 import { RecoverButton } from "@/components/backup/RecoverButton";
-import { backupChildren, backupCrumbs, backupEntries, backupLinks, backupPage, backupSubtree } from "@/lib/backup_read";
+import { backupChildren, backupCrumbs, backupEntries, backupLinks, backupPage, backupSubtree, backupTwins } from "@/lib/backup_read";
 
 // Une page de la sauvegarde ouverte, rendue par le même composant que la vue
 // publique (palier d de l'étape 12). Les pages en corbeille du dump ne
@@ -39,7 +39,7 @@ async function BackupPageData({ params }: { params: PageProps<"/sauvegarde/[id]"
         crumbs={crumbs}
         subpages={children}
         href={(pageId) => `/sauvegarde/${pageId}`}
-        source={{ getPage: backupPage, listEntries: backupEntries, links: backupLinks }}
+        source={{ getPage: backupPage, listEntries: backupEntries, links: backupLinks, twinValues: backupTwins }}
         mediaBase="/api/sauvegarde/media/"
         linkedPolicy="all"
       />

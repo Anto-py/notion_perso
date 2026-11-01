@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { configOf, linksForValues } from "@/lib/databases";
 import { getPage, listDatabases, listTreeRows } from "@/lib/pages";
 import { normalizeValues, withTimes } from "@/lib/properties";
+import { fillTwins } from "@/lib/relation_query";
 
 // Page normale ou entrée de base ; une entrée affiche en plus ses propriétés.
 export default function PageRoute({ params }: PageProps<"/page/[id]">) {
@@ -29,10 +30,13 @@ async function PageLoader({ params }: Pick<PageProps<"/page/[id]">, "params">) {
     if (!base || base.trashedAt || !canAccess(user, base, "read")) notFound();
     const { properties } = configOf(base);
     const others = (await listDatabases()).filter((database) => database.id !== base.id);
-    const values = withTimes(properties, normalizeValues(properties, page.propertyValues), {
+    const timed = withTimes(properties, normalizeValues(properties, page.propertyValues), {
       createdAt: page.createdAt.toISOString(),
       updatedAt: page.updatedAt.toISOString(),
     });
+    // Les jumelles se lisent dans l'autre base, avant la résolution des puces.
+    const [filled] = await fillTwins(properties, [{ id: page.id, values: timed }]);
+    const values = filled.values;
     entry = {
       database: { id: base.id, title: base.title, icon: base.icon },
       properties,

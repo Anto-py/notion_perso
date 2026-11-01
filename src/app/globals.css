@@ -1021,6 +1021,12 @@ a {
   font-weight: 600;
 }
 
+/* Jumelle d'une relation déclarée ailleurs : lisible, mais pas réglable ici. */
+.schema .schema-twin {
+  color: var(--ink-soft);
+  cursor: default;
+}
+
 .schema-options {
   list-style: none;
   margin: 0.5rem 0 0 1.5rem;

@@ -12,7 +12,7 @@ import { matchesFilters, normalizeValues, sortEntries, withTimes, type EntryRow,
 import { cardImage, parseLinkedConfig, pickView, type View } from "@/lib/views";
 import { PageCover } from "./PageCover";
 import { PageIcon, PageLabel } from "./PageIcon";
-import { TYPE_ICONS, ValueView } from "./propertyUi";
+import { propIcon, ValueView } from "./propertyUi";
 
 // Ce que le rendu demande à sa base : la base vive, ou la copie d'une
 // sauvegarde (lib/backup_read.ts).
@@ -21,6 +21,9 @@ export type ReadOnlySource = {
   listEntries: (dbId: string) => Promise<EntryRow[]>;
   // Puces des relations d'une entrée seule. Absente : pas de puce à résoudre.
   links?: (properties: readonly Property[], values: Values) => Promise<Record<string, LinkRef[]>>;
+  // Valeurs des jumelles d'une entrée seule. Les listes d'entrées les portent
+  // déjà (listEntries les remplit) ; la page d'une entrée les demande ici.
+  twinValues?: (properties: readonly Property[], entry: { id: string; values: Values }) => Promise<{ id: string; values: Values }>;
 };
 
 export type ReadOnlyChild = { id: string; type: Page["type"]; title: string; icon: string | null };
@@ -189,10 +192,11 @@ async function EntryProperties({
   const base = entry.dbId ? await source.getPage(entry.dbId) : null;
   if (!base || base.trashedAt) return null;
   const { properties } = configOf(base);
-  const values = withTimes(properties, normalizeValues(properties, entry.propertyValues), {
+  const timed = withTimes(properties, normalizeValues(properties, entry.propertyValues), {
     createdAt: entry.createdAt.toISOString(),
     updatedAt: entry.updatedAt.toISOString(),
   });
+  const values = source.twinValues ? (await source.twinValues(properties, { id: entry.id, values: timed })).values : timed;
   const links = source.links ? await source.links(properties, values) : {};
   const shown = properties.filter((prop) => prop.type === "checkbox" || values[prop.id] !== undefined);
   if (!shown.length) return null;
@@ -202,7 +206,7 @@ async function EntryProperties({
         <div className="prop-row" key={prop.id}>
           <span className="prop-name">
             <span className="prop-icon" aria-hidden="true">
-              {TYPE_ICONS[prop.type]}
+              {propIcon(prop)}
             </span>
             {prop.name}
           </span>

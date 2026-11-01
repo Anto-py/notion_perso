@@ -10,7 +10,7 @@ import { CALC_LABELS, calcOpsFor, calcText, computeCalc, type CalcOp } from "@/l
 import { ExpandableCell } from "./ExpandableCell";
 import { PageLabel } from "./PageIcon";
 import { PropertyInput } from "./PropertyInput";
-import { TYPE_ICONS } from "./propertyUi";
+import { propIcon } from "./propertyUi";
 
 type Props = {
   properties: Property[];
@@ -43,7 +43,7 @@ export function TableView({ properties, entries, filtered, onCreate, onSave, onC
             {properties.map((prop) => (
               <th scope="col" key={prop.id}>
                 <span className="prop-icon" aria-hidden="true">
-                  {TYPE_ICONS[prop.type]}
+                  {propIcon(prop)}
                 </span>
                 {prop.name}
               </th>

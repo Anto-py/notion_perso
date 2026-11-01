@@ -3,6 +3,7 @@ import { keyFromIndex } from "@/lib/order_key";
 import {
   checkValue,
   countLosses,
+  isTwin,
   matchesFilters,
   normalizeValue,
   sortEntries,
@@ -14,6 +15,7 @@ import {
   type Property,
   type Values,
 } from "@/lib/properties";
+import { mergeTwins, relationDelta, twinProperty, withLink } from "@/lib/relation";
 
 // Relations entre bases (étape 10, palier a) : ce qui se décide sans base,
 // c'est-à-dire la forme de la valeur, sa conversion et sa lecture dans une vue.
@@ -108,6 +110,91 @@ describe("vues, relation", () => {
     const c = entry("C", {});
     const sorted = sortEntries([b, c, a], [{ prop: "prop_ressources", dir: "asc" }], [ressources]);
     expect(sorted.map((item) => item.id)).toEqual(["A", "B", "C"]);
+  });
+});
+
+describe("jumelle d'une relation réciproque", () => {
+  const declaring: Property = { ...ressources, reciprocal: true };
+  const other: Property = { id: "prop_titre", name: "Titre court", type: "text" };
+
+  it("naît dans la base cible avec la cible de la déclarante et un nom suivi", () => {
+    const twin = mergeTwins([other], "db_sequences", [declaring]).at(-1)!;
+    expect(twin).toEqual({
+      id: expect.stringMatching(/^prop_/),
+      name: "Ressources",
+      type: "relation",
+      target: "db_sequences",
+      single: false,
+      twinOf: { db: "db_sequences", prop: "prop_ressources" },
+    });
+    expect(isTwin(twin)).toBe(true);
+  });
+
+  it("garde son id et sa place quand la déclarante est renommée", () => {
+    const first = mergeTwins([other], "db_sequences", [declaring]).at(-1)!;
+    const second = mergeTwins([other, first], "db_sequences", [{ ...declaring, name: "Sources" }]).at(-1)!;
+    expect(second.id).toBe(first.id);
+    expect(second.name).toBe("Sources");
+  });
+
+  it("prend un nom suffixé quand la base cible porte déjà ce nom", () => {
+    const taken: Property = { id: "prop_r", name: "Ressources", type: "text" };
+    const twin = mergeTwins([taken], "db_sequences", [declaring]).at(-1)!;
+    expect(twin.name).toBe("Ressources 2");
+  });
+
+  it("disparaît quand la relation perd sa réciprocité ou sa cible", () => {
+    const twin = mergeTwins([other], "db_sequences", [declaring]).at(-1)!;
+    expect(mergeTwins([other, twin], "db_sequences", [{ ...declaring, reciprocal: false }])).toEqual([other]);
+    expect(mergeTwins([other, twin], "db_sequences", [])).toEqual([other]);
+  });
+
+  it("laisse intactes les jumelles d'une autre base déclarante", () => {
+    const mine = mergeTwins([other], "db_sequences", [declaring]).at(-1)!;
+    const foreign: Property = { ...twinProperty({ ...declaring, id: "prop_x" }, "db_autre", []), id: "prop_foreign" };
+    const merged = mergeTwins([other, mine, foreign], "db_sequences", [{ ...declaring, reciprocal: false }]);
+    expect(merged.map((prop) => prop.id)).toEqual([other.id, foreign.id]);
+  });
+
+  it("suit la relation vers soi-même sans se perdre", () => {
+    const self: Property = { ...declaring, target: "db_sequences" };
+    const twin = mergeTwins([other], "db_sequences", [self]).at(-1)!;
+    const merged = mergeTwins([other, twin], "db_sequences", [self]);
+    expect(merged.filter((prop) => prop.twinOf)).toEqual([twin]);
+  });
+
+  it("validateProperties accepte un twinOf bien formé et ignore un twinOf abîmé", () => {
+    const twin = { id: "prop_j", name: "Jumelle", type: "relation", target: "db_sequences", twinOf: { db: "db_sequences", prop: "prop_ressources" } };
+    expect(validateProperties([twin])).toEqual([{ ...twin, single: false, reciprocal: false }]);
+    expect(validateProperties([{ ...twin, twinOf: { db: "pas un id", prop: "prop_ressources" } }])).toEqual([
+      { id: "prop_j", name: "Jumelle", type: "relation", target: "db_sequences", single: false, reciprocal: false },
+    ]);
+  });
+
+  it("refuse d'écrire la valeur d'une jumelle", () => {
+    const [twin] = mergeTwins([], "db_sequences", [declaring]);
+    expect(checkValue(twin, ["pg_a"])).toMatch(/calculée/);
+  });
+
+  it("ne perd rien quand on supprime une jumelle et ne la reporte pas", () => {
+    const [twin] = mergeTwins([], "db_sequences", [declaring]);
+    expect(countLosses([twin], [], [{ [twin.id]: ["pg_a"] }])).toBe(0);
+    const values: Values = { prop_ressources: ["pg_a"] };
+    expect(transferValues([twin], [{ ...twin, id: "prop_r2" }], values)).toEqual({});
+  });
+});
+
+describe("relationDelta et withLink", () => {
+  it("sépare ce qui s'ajoute de ce qui se retire", () => {
+    expect(relationDelta(["a", "b"], ["b", "c"])).toEqual({ add: ["c"], remove: ["a"] });
+    expect(relationDelta([], ["c"])).toEqual({ add: ["c"], remove: [] });
+  });
+
+  it("ajoute en fin et remplace la valeur d'une relation à une seule entrée", () => {
+    expect(withLink(ressources, ["a"], "b", true)).toEqual(["a", "b"]);
+    expect(withLink(ressources, ["a"], "a", true)).toEqual(["a"]);
+    expect(withLink(ressources, ["a", "b"], "a", false)).toEqual(["b"]);
+    expect(withLink(tutrice, ["a"], "b", true)).toEqual(["b"]);
   });
 });
 
