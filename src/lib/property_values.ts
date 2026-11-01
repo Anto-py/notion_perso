@@ -14,6 +14,7 @@ import {
   nextColor,
   optionById,
   optionByName,
+  rollupResultType,
   type Property,
   type PropertyType,
   type SelectOption,
@@ -54,6 +55,13 @@ export function normalizeValue(prop: Property, raw: unknown): Value | undefined 
       const ids = [...new Set(raw.filter((id): id is string => typeof id === "string" && ID_PATTERN.test(id)))];
       const kept = prop.single ? ids.slice(0, 1) : ids.slice(0, LIMITS.links);
       return kept.length > 0 ? kept : undefined;
+    }
+    // Un cumul ne stocke aucune valeur : cette branche relit celle que
+    // fillRollups calcule à la lecture, pour l'affichage, le tri et le pied
+    // de tableau. L'écriture reste refusée par checkValue.
+    case "rollup": {
+      if (rollupResultType(prop.calc) === "date") return typeof raw === "string" && isIsoDate(raw) ? raw : undefined;
+      return typeof raw === "number" && Number.isFinite(raw) && Math.abs(raw) < LIMITS.number ? raw : undefined;
     }
   }
 }
@@ -110,6 +118,9 @@ export function checkValue(prop: Property, raw: unknown): string | null {
         (!prop.single || raw.length <= 1)
         ? null
         : `${prop.name} : entrées liées invalides`;
+    // Calculé à la lecture, jamais saisi.
+    case "rollup":
+      return `${prop.name} : propriété calculée, en lecture seule`;
   }
 }
 
@@ -136,6 +147,9 @@ export function valueText(prop: Property, value: unknown): string {
     // lecture, jamais dans values_text : aucun id ne s'y écrit, donc aucun
     // titre n'y vieillit (SPECS, « Relations et cumuls »).
     case "relation":
+    // Un cumul ne s'écrit pas dans values_text : son résultat est calculé, il
+    // n'a rien à faire dans la recherche plein-texte.
+    case "rollup":
       return "";
     default:
       return normalized as string;
@@ -171,6 +185,9 @@ export function convertValue(from: Property, to: Property, value: unknown): Valu
   // Changer la base cible d'une relation perd ses valeurs : un id d'entrée
   // n'a de sens que dans sa base. La perte est annoncée avant confirmation.
   if (from.type === "relation" && to.type === "relation" && from.target !== to.target) return undefined;
+  // Une valeur calculée ne se convertit ni ne se saisit : entrer ou sortir
+  // d'un cumul abandonne la valeur.
+  if (from.type === "rollup" || to.type === "rollup") return undefined;
   if (from.type === to.type) return normalizeValue(to, value);
   const current = normalizeValue(from, value);
   if (current === undefined) return undefined;
@@ -221,8 +238,9 @@ export function transferValues(from: readonly Property[], to: readonly Property[
   const transferred: Values = {};
   for (const target of to) {
     // Créé le, Modifié le : rien de stocké, rien à reporter. Une jumelle se
-    // recalcule dans sa base, elle ne suit pas une entrée qui la quitte.
-    if (isTimeType(target.type) || target.twinOf) continue;
+    // recalcule dans sa base, elle ne suit pas une entrée qui la quitte. Un
+    // cumul n'a pas de valeur à reporter non plus.
+    if (isTimeType(target.type) || target.twinOf || target.type === "rollup") continue;
     const source = from.find((prop) => fold(prop.name) === fold(target.name));
     if (!source || source.type !== target.type || values[source.id] === undefined) continue;
     // Deux relations ne se reportent que si elles désignent la même base :
@@ -274,8 +292,8 @@ export function migrateValues(before: readonly Property[], after: readonly Prope
   const migrated: Values = {};
   for (const prop of after) {
     // Une jumelle n'a pas de valeur à migrer ; une valeur fantôme héritée
-    // d'une ancienne version ne doit pas revenir.
-    if (prop.twinOf) continue;
+    // d'une ancienne version ne doit pas revenir. Un cumul non plus.
+    if (prop.twinOf || prop.type === "rollup") continue;
     const previous = before.find((p) => p.id === prop.id);
     if (!previous || values[prop.id] === undefined) continue;
     const value = convertValue(previous, prop, values[prop.id]);
@@ -288,8 +306,9 @@ export function migrateValues(before: readonly Property[], after: readonly Prope
 // réécrite autrement par la conversion. Renommer une option n'est pas une
 // perte : l'id reste.
 function isLost(before: Property, after: Property | undefined, value: unknown): boolean {
-  // Une jumelle ne stocke rien : la retirer ne perd aucune saisie.
-  if (before.twinOf) return false;
+  // Une jumelle et un cumul ne stockent rien : les retirer ne perd aucune
+  // saisie.
+  if (before.twinOf || before.type === "rollup") return false;
   const current = normalizeValue(before, value);
   if (current === undefined) return false;
   if (!after) return true;
@@ -324,7 +343,7 @@ export function changeType(
   makeId: (prefix: string) => string = localId,
 ): Property {
   const next: Property = { id: prop.id, name: prop.name, type };
-  if (type === "number") next.format = prop.format ?? "number";
+  if (type === "number" || type === "rollup") next.format = prop.format ?? "number";
   if (!isOptionType(type)) return next;
   // D'une propriété à options vers une autre, la liste est gardée telle
   // quelle ; depuis un texte, les valeurs saisies font les options.

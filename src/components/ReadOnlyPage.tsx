@@ -21,9 +21,10 @@ export type ReadOnlySource = {
   listEntries: (dbId: string) => Promise<EntryRow[]>;
   // Puces des relations d'une entrée seule. Absente : pas de puce à résoudre.
   links?: (properties: readonly Property[], values: Values) => Promise<Record<string, LinkRef[]>>;
-  // Valeurs des jumelles d'une entrée seule. Les listes d'entrées les portent
-  // déjà (listEntries les remplit) ; la page d'une entrée les demande ici.
-  twinValues?: (properties: readonly Property[], entry: { id: string; values: Values }) => Promise<{ id: string; values: Values }>;
+  // Valeurs calculées (jumelles et cumuls) d'une entrée seule. Les listes
+  // d'entrées les portent déjà (listEntries les remplit) ; la page d'une
+  // entrée les demande ici.
+  computedValues?: (properties: readonly Property[], entry: { id: string; values: Values }) => Promise<{ id: string; values: Values }>;
 };
 
 export type ReadOnlyChild = { id: string; type: Page["type"]; title: string; icon: string | null };
@@ -196,7 +197,7 @@ async function EntryProperties({
     createdAt: entry.createdAt.toISOString(),
     updatedAt: entry.updatedAt.toISOString(),
   });
-  const values = source.twinValues ? (await source.twinValues(properties, { id: entry.id, values: timed })).values : timed;
+  const values = source.computedValues ? (await source.computedValues(properties, { id: entry.id, values: timed })).values : timed;
   const links = source.links ? await source.links(properties, values) : {};
   const shown = properties.filter((prop) => prop.type === "checkbox" || values[prop.id] !== undefined);
   if (!shown.length) return null;

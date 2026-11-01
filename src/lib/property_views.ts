@@ -4,14 +4,17 @@ import { compareKeys } from "./order_key";
 import { brusselsParts, isIsoDate, parseNumber } from "./property_format";
 import {
   LIMITS,
-  OPS_BY_TYPE,
   TITLE_PROP,
+  filterOpsFor,
   fold,
+  isDateProp,
+  isNumberProp,
   isOptionType,
   isRecord,
   isTimeType,
   opNeedsValue,
   optionById,
+  rollupResultType,
   type EntryRow,
   type Filter,
   type FilterOp,
@@ -27,7 +30,7 @@ import { normalizeValue, valueText } from "./property_values";
 export function sanitizeFilter(raw: unknown, properties: readonly Property[]): Filter | null {
   if (!isRecord(raw) || typeof raw.prop !== "string" || typeof raw.op !== "string") return null;
   const prop = raw.prop === TITLE_PROP.id ? TITLE_PROP : properties.find((p) => p.id === raw.prop);
-  if (!prop || !OPS_BY_TYPE[prop.type].includes(raw.op as FilterOp)) return null;
+  if (!prop || !filterOpsFor(prop).includes(raw.op as FilterOp)) return null;
   const op = raw.op as FilterOp;
   if (!opNeedsValue(op)) return { prop: prop.id, op };
   const value = typeof raw.value === "string" ? raw.value.slice(0, LIMITS.name) : "";
@@ -36,9 +39,9 @@ export function sanitizeFilter(raw: unknown, properties: readonly Property[]): F
   if (value === "") return { prop: prop.id, op, value };
   if (isOptionType(prop.type)) {
     if (!optionById(prop, value)) return null;
-  } else if ((prop.type === "date" || isTimeType(prop.type)) && !isIsoDate(value)) {
+  } else if ((isDateProp(prop) || isTimeType(prop.type)) && !isIsoDate(value)) {
     return null;
-  } else if (prop.type === "number" && parseNumber(value) === null) {
+  } else if (isNumberProp(prop) && parseNumber(value) === null) {
     // Saisie en cours (« 1, ») : le filtre reste, inactif.
     return { prop: prop.id, op, value: "" };
   }
@@ -72,7 +75,7 @@ function matchesFilter(entry: EntryRow, filter: Filter, properties: readonly Pro
   }
   const target = filter.value ?? "";
   if (target === "") return true;
-  if (prop.type === "number") {
+  if (isNumberProp(prop)) {
     const wanted = parseNumber(target);
     if (wanted === null) return true;
     // « ≠ » garde les entrées vides, comme « n'est pas » d'une sélection.
@@ -147,6 +150,13 @@ function sortKey(propId: string, properties: readonly Property[]): SortKey | nul
     // Le titre de la première puce, lu à la lecture (entry.links).
     case "relation":
       return (entry) => entry.links?.[prop.id]?.[0]?.title || undefined;
+    // Un cumul se trie comme son résultat : nombre, ou date ISO.
+    case "rollup":
+      return (entry) => {
+        const value = normalizeValue(prop, entry.values[prop.id]);
+        if (rollupResultType(prop.calc) === "date") return typeof value === "string" ? Date.parse(value) : undefined;
+        return typeof value === "number" ? value : undefined;
+      };
     // Une sélection se trie dans l'ordre de ses options, pas par ordre
     // alphabétique : c'est aussi l'ordre des colonnes du Kanban.
     case "select":

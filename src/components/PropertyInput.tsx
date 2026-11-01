@@ -65,6 +65,9 @@ export function PropertyInput({ prop, value, onSave, onCreate, onCreateEntry, li
     case "updated_time":
       // Lecture seule : tirée de la vie de l'entrée, jamais saisie.
       return <ValueView prop={prop} value={value} />;
+    // Calculé à la lecture, jamais saisi.
+    case "rollup":
+      return <ValueView prop={prop} value={value} />;
     case "date":
       return <input type="date" aria-label={prop.name} value={text} onChange={(event) => onSave(event.target.value || null)} />;
     case "checkbox":

@@ -29,6 +29,9 @@ const INTERACTIVE = "a, button, input, select, textarea, label, .picker";
 
 export function TableView({ properties, entries, filtered, onCreate, onSave, onCreateOption, onCreateEntry, calcs, onCalc }: Props) {
   const router = useRouter();
+  // Un cumul cassé est signalé sur chaque entrée par fillRollups : même
+  // information partout, l'en-tête la reprend.
+  const broken = entries[0]?.brokenRollups ?? [];
   return (
     <div className="table-wrap">
       <table className="db-table">
@@ -46,6 +49,12 @@ export function TableView({ properties, entries, filtered, onCreate, onSave, onC
                   {propIcon(prop)}
                 </span>
                 {prop.name}
+                {broken.includes(prop.id) && (
+                  <span className="hint" title="La propriété visée a disparu ou changé de type : réparez le cumul dans les propriétés">
+                    {" "}
+                    ⚠
+                  </span>
+                )}
               </th>
             ))}
           </tr>
@@ -66,6 +75,10 @@ export function TableView({ properties, entries, filtered, onCreate, onSave, onC
                 <td key={prop.id} className="cell-edit">
                   {prop.type === "text" || prop.type === "url" ? (
                     <ExpandableCell prop={prop} value={entry.values[prop.id]} onSave={(value) => onSave(entry.id, prop.id, value)} />
+                  ) : prop.type === "rollup" && broken.includes(prop.id) ? (
+                    <span className="hint" title="Cible introuvable">
+                      —
+                    </span>
                   ) : (
                     <PropertyInput
                       prop={prop}

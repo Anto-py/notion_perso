@@ -13,6 +13,7 @@ import {
   formatNumber,
   normalizeValue,
   optionById,
+  rollupResultType,
   type EntryRow,
   type LinkRef,
   type Property,
@@ -70,6 +71,10 @@ function valueHtml(prop: Property, raw: unknown, refs: readonly LinkRef[] | unde
       return escapeHtml(dateText(value as string));
     case "number":
       return `<span class="number-view">${escapeHtml(formatNumber(value as number, prop.format))}</span>`;
+    case "rollup":
+      return rollupResultType(prop.calc) === "date"
+        ? escapeHtml(dateText(value as string))
+        : `<span class="number-view">${escapeHtml(formatNumber(value as number, prop.format))}</span>`;
     case "created_time":
     case "updated_time":
       return `<span class="time-view">${escapeHtml(dateTimeText(value as string))}</span>`;

@@ -10,10 +10,10 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { pages } from "@/db/schema";
 import { asValues, normalizeValue, valuesToText } from "./properties";
-import type { Property, TwinRef, Values } from "./properties";
-import { relationDelta, withLink } from "./relation";
+import type { Property, RollupCalc, TwinRef, Value, Values } from "./properties";
+import { computeRollup, relationDelta, targetFits, withLink, type RollupSource } from "./relation";
 import { parseConfig } from "./views";
-import { isTwin } from "./property_schema";
+import { isRollup, isTwin } from "./property_schema";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Executor = Pick<typeof db, "select" | "execute">;
@@ -78,6 +78,132 @@ export async function fillTwins<T extends { id: string; values: Values }>(
       }
     }
     return changed ? { ...entry, values } : entry;
+  });
+}
+
+// Un cumul prêt à calculer : sa relation traversée, la propriété visée lue
+// dans la base cible (null pour « count »), et rien d'autre.
+type RollupPlan = {
+  prop: Property & { type: "rollup" };
+  relation: Property & { type: "relation" };
+  target: Property | null;
+  calc: RollupCalc;
+};
+
+// Prépare les cumuls et repère ceux qui ne peuvent pas calculer : relation
+// introuvable, base cible partie, propriété visée disparue ou d'un type
+// étranger au calcul. Ces derniers font un tiret, signalé par l'en-tête.
+async function planRollups(
+  executor: Executor,
+  properties: readonly Property[],
+): Promise<{ plans: RollupPlan[]; broken: string[] }> {
+  const plans: RollupPlan[] = [];
+  const broken: string[] = [];
+  // Un seul chargement de schéma par base cible, quel que soit le nombre de
+  // cumuls qui la visent.
+  const configs = new Map<string, Property[] | null>();
+  for (const prop of properties.filter(isRollup)) {
+    const relation = properties.find(
+      (item) => item.id === prop.relation && item.type === "relation" && !item.twinOf,
+    ) as (Property & { type: "relation" }) | undefined;
+    if (!relation?.target) {
+      broken.push(prop.id);
+      continue;
+    }
+    let targetProps = configs.get(relation.target);
+    if (targetProps === undefined) {
+      const [base] = await executor
+        .select({ dbConfig: pages.dbConfig, trashedAt: pages.trashedAt })
+        .from(pages)
+        .where(and(eq(pages.id, relation.target), eq(pages.type, "database")));
+      targetProps = base && base.trashedAt === null ? parseConfig(base.dbConfig).properties : null;
+      configs.set(relation.target, targetProps);
+    }
+    const target = targetProps?.find((item) => item.id === prop.target) ?? null;
+    const calc = prop.calc ?? "count";
+    if (!targetProps || !targetFits(calc, target)) {
+      broken.push(prop.id);
+      continue;
+    }
+    plans.push({ prop, relation, target, calc });
+  }
+  return { plans, broken };
+}
+
+// Les valeurs des entrées cibles citées par toute la page affichée, en une
+// requête par cumul. Une entrée en corbeille ou purgée n'y est pas : elle
+// cesse de compter.
+async function citedTargets(
+  executor: Executor,
+  plan: RollupPlan,
+  entries: readonly { values: Values }[],
+): Promise<Map<string, Values>> {
+  const cited = new Set<string>();
+  for (const entry of entries) {
+    const ids = normalizeValue(plan.relation, entry.values[plan.relation.id]);
+    if (Array.isArray(ids)) for (const id of ids) cited.add(id);
+  }
+  const targets = new Map<string, Values>();
+  if (cited.size === 0) return targets;
+  const rows = await executor
+    .select({ id: pages.id, propertyValues: pages.propertyValues })
+    .from(pages)
+    .where(
+      and(
+        inArray(pages.id, [...cited]),
+        eq(pages.dbId, plan.relation.target ?? ""),
+        eq(pages.type, "entry"),
+        isNull(pages.trashedAt),
+      ),
+    );
+  for (const row of rows) targets.set(row.id, asValues(row.propertyValues));
+  return targets;
+}
+
+// Les sources d'un cumul pour une entrée : la valeur visée de chaque entrée
+// liée qui vit encore. Un id cité mais purgé, en corbeille ou hors de la base
+// cible n'apparaît pas.
+function rollupSources(plan: RollupPlan, entry: { values: Values }, targets: Map<string, Values>): RollupSource[] {
+  const ids = normalizeValue(plan.relation, entry.values[plan.relation.id]);
+  return (Array.isArray(ids) ? ids : []).flatMap((id) => {
+    const targetValues = targets.get(id);
+    if (!targetValues) return [];
+    const value: Value | undefined = plan.target ? normalizeValue(plan.target, targetValues[plan.target.id]) : undefined;
+    return [{ value }];
+  });
+}
+
+// Les valeurs calculées des cumuls, posées sur chaque entrée de la base. Une
+// lecture par cumul, jamais une valeur stockée : le résultat suit une puce
+// ajoutée ailleurs, une valeur changée dans la base cible, une entrée mise en
+// corbeille. `brokenRollups` porte les cumuls qui ne peuvent pas calculer.
+export async function fillRollups<T extends { id: string; values: Values }>(
+  properties: readonly Property[],
+  entries: readonly T[],
+  executor: Executor = db,
+): Promise<(T & { brokenRollups?: string[] })[]> {
+  const rollups = properties.filter(isRollup);
+  if (rollups.length === 0 || entries.length === 0) return [...entries];
+  const { plans, broken } = await planRollups(executor, properties);
+
+  const perEntry = new Map<string, Values>();
+  for (const plan of plans) {
+    const targets = await citedTargets(executor, plan, entries);
+    for (const entry of entries) {
+      const value = computeRollup(plan.calc, plan.target, rollupSources(plan, entry, targets));
+      const computed = perEntry.get(entry.id) ?? {};
+      if (value !== null) computed[plan.prop.id] = value;
+      perEntry.set(entry.id, computed);
+    }
+  }
+
+  return entries.map((entry) => {
+    const values = { ...entry.values };
+    // Aucune valeur de cumul ne doit survivre d'une lecture à l'autre.
+    for (const prop of rollups) delete values[prop.id];
+    Object.assign(values, perEntry.get(entry.id) ?? {});
+    const next = { ...entry, values };
+    return broken.length > 0 ? { ...next, brokenRollups: broken } : next;
   });
 }
 

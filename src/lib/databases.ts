@@ -31,7 +31,7 @@ import {
   type Values,
 } from "./properties";
 import { mergeTwins } from "./relation";
-import { fillTwins, writeTwin } from "./relation_query";
+import { fillRollups, fillTwins, writeTwin } from "./relation_query";
 import { parseConfig, sanitizeViews, type DbConfig } from "./views";
 
 const NOT_FOUND: Outcome = { ok: false, status: 404, error: "Base introuvable" };
@@ -276,9 +276,10 @@ export async function listEntries(dbId: string, executor: Pick<typeof db, "selec
     cover: row.cover,
     bodyImage: row.bodyImage,
   }));
-  // Les jumelles remplissent leurs valeurs avant la résolution des puces :
-  // elles se lisent dans l'autre base, jamais dans property_values.
-  return attachLinks(properties, await fillTwins(properties, entries, executor), executor);
+  // Les jumelles puis les cumuls remplissent leurs valeurs avant la résolution
+  // des puces : ils se lisent dans l'autre base, jamais dans property_values.
+  const timed = await fillTwins(properties, entries, executor);
+  return attachLinks(properties, await fillRollups(properties, timed, executor), executor);
 }
 
 // base : les listes que le navigateur avait avant sa modification (lib/web_save.ts).
@@ -370,6 +371,15 @@ export async function updateDatabase(id: string, patch: DatabasePatch): Promise<
         const source = declaring.find((item) => item.id === prop.twinOf!.prop);
         return !!source && source.type === "relation" && source.reciprocal === true && source.target === id;
       });
+
+      // Un cumul ne survit pas à la disparition de la relation qu'il
+      // traverse : il n'aurait plus rien à lire.
+      properties = properties.filter(
+        (prop) =>
+          prop.type !== "rollup" ||
+          !prop.relation ||
+          properties.some((item) => item.id === prop.relation && item.type === "relation" && !item.twinOf),
+      );
 
       // Supprimer une jumelle retire la relation qui la déclare, où qu'elle
       // vive (BRAINSTORMING §13) ; ses valeurs partent avec elle.

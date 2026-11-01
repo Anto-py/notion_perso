@@ -8,7 +8,7 @@ import { cache } from "react";
 import { safeHref } from "@/lib/blocks";
 import { linksForValues, listEntries } from "@/lib/databases";
 import { faviconHref } from "@/lib/icons";
-import { fillTwins } from "@/lib/relation_query";
+import { fillRollups, fillTwins } from "@/lib/relation_query";
 import { getPage } from "@/lib/pages";
 import { publicHref } from "@/lib/publication";
 import { listChildren, resolvePublication, type Publication } from "@/lib/publication_query";
@@ -80,7 +80,7 @@ async function PublicContent({ publicId, found }: { publicId: string; found: Pub
         getPage,
         listEntries,
         links: linksForValues,
-        twinValues: async (properties, entry) => (await fillTwins(properties, [entry]))[0],
+        computedValues: async (properties, entry) => (await fillRollups(properties, await fillTwins(properties, [entry])))[0],
       }}
     />
   );

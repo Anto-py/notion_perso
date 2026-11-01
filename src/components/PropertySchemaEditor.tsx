@@ -24,6 +24,7 @@ import {
 } from "@/lib/properties";
 import { CommitInput } from "./CommitInput";
 import { OptionChip } from "./propertyUi";
+import { RollupEditor } from "./RollupEditor";
 
 type Props = {
   properties: Property[];
@@ -40,6 +41,22 @@ export function PropertySchemaEditor({ properties, valuesList, databases, onChan
     onChange(properties.map((prop) => (prop.id === id ? change(prop) : prop)));
   }
 
+  // Supprimer une relation emporte les cumuls qui la traversent : sans elle,
+  // ils n'auraient plus rien à lire et le serveur refuserait la liste.
+  function removeProperty(id: string) {
+    onChange(properties.filter((prop) => prop.id !== id && !(prop.type === "rollup" && prop.relation === id)));
+  }
+
+  // Changer le type d'une relation la retire aux cumuls de la même manière.
+  function changeTypeOf(prop: Property, type: PropertyType) {
+    const changed = changeTypeTo(prop, type);
+    const next = properties.map((item) => (item.id === prop.id ? changed : item));
+    if (prop.type === "relation" && type !== "relation") {
+      return next.filter((item) => item.type !== "rollup" || item.relation !== prop.id);
+    }
+    return next;
+  }
+
   // Passer une propriété en relation demande sa base cible : la première de
   // l'arbre à défaut, que l'on change juste en dessous.
   function changeTypeTo(prop: Property, type: PropertyType): Property {
@@ -48,6 +65,16 @@ export function PropertySchemaEditor({ properties, valuesList, databases, onChan
       next.target = prop.target ?? databases[0]?.id ?? "";
       next.single = prop.single ?? false;
       next.reciprocal = prop.reciprocal ?? false;
+    }
+    // Un cumul part d'une relation de la base, quand il y en a une ; la
+    // propriété visée se choisit ensuite, une fois la base cible lue.
+    if (type === "rollup") {
+      const first = properties.find((item) => item.type === "relation" && !isTwin(item));
+      next.relation = prop.relation ?? first?.id;
+      // La propriété visée n'a rien à voir avec la base cible d'une relation :
+      // on repart d'un choix vierge.
+      next.target = undefined;
+      next.calc = prop.calc ?? "count";
     }
     return next;
   }
@@ -82,7 +109,7 @@ export function PropertySchemaEditor({ properties, valuesList, databases, onChan
                 <select
                   aria-label={`Type de ${prop.name}`}
                   value={prop.type}
-                  onChange={(event) => update(prop.id, (p) => changeTypeTo(p, event.target.value as PropertyType))}
+                  onChange={(event) => onChange(changeTypeOf(prop, event.target.value as PropertyType))}
                 >
                   {PROPERTY_TYPES.map((type) => (
                     <option key={type} value={type}>
@@ -102,6 +129,13 @@ export function PropertySchemaEditor({ properties, valuesList, databases, onChan
                       </option>
                     ))}
                   </select>
+                )}
+                {prop.type === "rollup" && (
+                  <RollupEditor
+                    prop={prop}
+                    properties={properties}
+                    onChange={(patch) => update(prop.id, (p) => ({ ...p, ...patch }))}
+                  />
                 )}
                 {prop.type === "relation" && (
                   <>
@@ -136,7 +170,7 @@ export function PropertySchemaEditor({ properties, valuesList, databases, onChan
                 )}
               </>
             )}
-            <button type="button" className="ghost" onClick={() => onChange(properties.filter((p) => p.id !== prop.id))}>
+            <button type="button" className="ghost" onClick={() => removeProperty(prop.id)}>
               Supprimer
             </button>
           </div>

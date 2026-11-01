@@ -7,6 +7,7 @@ import {
   formatNumber,
   normalizeValue,
   optionById,
+  rollupResultType,
   type LinkRef,
   type Property,
   type PropertyType,
@@ -25,6 +26,7 @@ export const TYPE_ICONS: Record<PropertyType, string> = {
   created_time: "⏱",
   updated_time: "↻",
   relation: "⇄",
+  rollup: "Σ",
 };
 
 // L'icône d'une propriété dans l'entrée. Une jumelle porte la flèche de retour :
@@ -133,6 +135,12 @@ export function ValueView({
       return <>{dateText(normalized as string)}</>;
     case "number":
       return <span className="number-view">{formatNumber(normalized as number, prop.format)}</span>;
+    case "rollup":
+      return rollupResultType(prop.calc) === "date" ? (
+        <>{dateText(normalized as string)}</>
+      ) : (
+        <span className="number-view">{formatNumber(normalized as number, prop.format)}</span>
+      );
     case "created_time":
     case "updated_time":
       return <span className="time-view">{dateTimeText(normalized as string)}</span>;

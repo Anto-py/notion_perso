@@ -7,9 +7,11 @@ import {
   isGroupableType,
   isOptionType,
   isTimeType,
+  filterOpsFor,
+  isDateProp,
+  isNumberProp,
   NO_COLUMN,
   OP_LABELS,
-  OPS_BY_TYPE,
   opNeedsValue,
   SORT_BUILTINS,
   TITLE_PROP,
@@ -146,7 +148,7 @@ export function ViewControls({ properties, view, columns, onChange }: Props) {
               value={prop.id}
               onChange={(event) => {
                 const next = filterable.find((p) => p.id === event.target.value) ?? TITLE_PROP;
-                setFilter(index, { prop: next.id, op: OPS_BY_TYPE[next.type][0], value: "" });
+                setFilter(index, { prop: next.id, op: filterOpsFor(next)[0], value: "" });
               }}
             >
               {filterable.map((p) => (
@@ -156,7 +158,7 @@ export function ViewControls({ properties, view, columns, onChange }: Props) {
               ))}
             </select>
             <select aria-label="Condition" value={filter.op} onChange={(event) => setFilter(index, { ...filter, op: event.target.value as FilterOp })}>
-              {OPS_BY_TYPE[prop.type].map((op) => (
+              {filterOpsFor(prop).map((op) => (
                 <option key={op} value={op}>
                   {OP_LABELS[op]}
                 </option>
@@ -275,10 +277,10 @@ function FilterValue({ prop, filter, onChange }: { prop: Property; filter: Filte
       </select>
     );
   }
-  if (prop.type === "date" || isTimeType(prop.type)) {
+  if (isDateProp(prop) || isTimeType(prop.type)) {
     return <input type="date" aria-label="Date du filtre" value={value} onChange={(event) => onChange(event.target.value)} />;
   }
-  if (prop.type === "number") {
+  if (isNumberProp(prop)) {
     return (
       <input
         aria-label="Nombre du filtre"

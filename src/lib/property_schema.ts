@@ -13,6 +13,7 @@ export const PROPERTY_TYPES = [
   "created_time",
   "updated_time",
   "relation",
+  "rollup",
 ] as const;
 export type PropertyType = (typeof PROPERTY_TYPES)[number];
 
@@ -27,6 +28,7 @@ export const TYPE_LABELS: Record<PropertyType, string> = {
   created_time: "Créé le",
   updated_time: "Modifié le",
   relation: "Relation",
+  rollup: "Cumul",
 };
 
 // Créé le, Modifié le : valeur tirée de created_at et updated_at de l'entrée,
@@ -38,6 +40,29 @@ export function isTimeType(type: PropertyType): boolean {
 export const NUMBER_FORMATS = ["number", "euro", "percent"] as const;
 export type NumberFormat = (typeof NUMBER_FORMATS)[number];
 export const FORMAT_LABELS: Record<NumberFormat, string> = { number: "Nombre", euro: "Euro", percent: "Pourcentage" };
+
+// Cumul (étape 10, palier c) : un calcul à travers une relation, jamais
+// stocké. Les cinq premiers rendent un nombre, les deux derniers une date.
+export const ROLLUP_CALCS = ["count", "count_filled", "percent", "sum", "avg", "min", "max", "oldest", "newest"] as const;
+export type RollupCalc = (typeof ROLLUP_CALCS)[number];
+export const ROLLUP_CALC_LABELS: Record<RollupCalc, string> = {
+  count: "Compter les entrées liées",
+  count_filled: "Compter les valeurs remplies",
+  percent: "Part remplie",
+  sum: "Somme",
+  avg: "Moyenne",
+  min: "Minimum",
+  max: "Maximum",
+  oldest: "La plus ancienne",
+  newest: "La plus récente",
+};
+const ROLLUP_DATE_CALCS: ReadonlySet<RollupCalc> = new Set(["oldest", "newest"]);
+
+// Type du résultat d'un cumul : une date pour les deux calculs de date, un
+// nombre sinon. C'est lui qui décide des filtres, du tri et du pied de tableau.
+export function rollupResultType(calc: RollupCalc | undefined): "number" | "date" {
+  return calc && ROLLUP_DATE_CALCS.has(calc) ? "date" : "number";
+}
 
 // Les types qui portent une liste d'options.
 export function isOptionType(type: PropertyType): boolean {
@@ -76,10 +101,13 @@ export type SelectOption = { id: string; name: string; color: OptionColor };
 // db est la base déclarante, prop sa relation. Aucune valeur n'est stockée, la
 // jumelle se lit à chaque affichage (étape 10, palier b).
 export type TwinRef = { db: string; prop: string };
-// format : Nombre seulement, « number » à défaut.
+// format : Nombre et cumul numérique, « number » à défaut.
 // target, single, reciprocal : Relation seulement. target désigne la base
 // cible (elle-même comprise), single limite la valeur à une entrée,
 // reciprocal demande la jumelle dans la base cible (étape 10, palier b).
+// relation, calc, target : Cumul seulement. relation désigne la Relation de
+// la même base à traverser, target la propriété visée dans la base cible,
+// calc le calcul (étape 10, palier c). Aucune valeur n'est stockée.
 export type Property = {
   id: string;
   name: string;
@@ -90,6 +118,8 @@ export type Property = {
   single?: boolean;
   reciprocal?: boolean;
   twinOf?: TwinRef;
+  relation?: string;
+  calc?: RollupCalc;
 };
 
 // text, url, date (AAAA-MM-JJ), select (id d'option) : chaîne ;
@@ -142,7 +172,16 @@ export const OPS_BY_TYPE: Record<PropertyType, FilterOp[]> = {
   updated_time: ["is", "before", "after"],
   // « contient » porte l'id d'une entrée de la base cible.
   relation: ["contains", "is_empty", "is_not_empty"],
+  // Jamais lue directement : les opérateurs d'un cumul sont ceux du type de
+  // son résultat, rendus par filterOpsFor.
+  rollup: [],
 };
+
+// Opérateurs d'un filtre sur une propriété. Un cumul emprunte ceux de son
+// résultat (Nombre ou Date), pas ceux de son type de schéma.
+export function filterOpsFor(prop: Property): FilterOp[] {
+  return prop.type === "rollup" ? OPS_BY_TYPE[rollupResultType(prop.calc)] : OPS_BY_TYPE[prop.type];
+}
 
 export const OP_LABELS: Record<FilterOp, string> = {
   contains: "contient",
@@ -186,6 +225,9 @@ export type EntryRow = {
   // Relation (étape 10) : les entrées citées, résolues à la lecture, par id
   // de propriété. Un id purgé n'a pas d'entrée ici.
   links?: Record<string, LinkRef[]>;
+  // Cumul (étape 10) : ids des cumuls dont la cible a disparu ou changé de
+  // type. La cellule affiche un tiret et l'en-tête le signale.
+  brokenRollups?: string[];
 };
 
 // Le titre de l'entrée est le titre de sa page : une colonne fixe, filtrable
@@ -226,6 +268,26 @@ export function isTwinRef(value: unknown): value is TwinRef {
 // calcule. Les branches de saisie s'appuient sur cette garde.
 export function isTwin(prop: Property): prop is Property & { twinOf: TwinRef } {
   return prop.type === "relation" && isTwinRef(prop.twinOf);
+}
+
+export function isRollup(prop: Property): prop is Property & { type: "rollup" } {
+  return prop.type === "rollup";
+}
+
+// Propriétés sans valeur saisissable : la jumelle et le cumul se calculent,
+// l'écriture y est refusée et les migrations les sautent.
+export function isComputed(prop: Property): boolean {
+  return prop.type === "rollup" || isTwin(prop);
+}
+
+// Une propriété dont la valeur se compare comme un nombre : le Nombre, et un
+// cumul numérique. Le pied de tableau et les filtres s'appuient dessus.
+export function isNumberProp(prop: Property): boolean {
+  return prop.type === "number" || (prop.type === "rollup" && rollupResultType(prop.calc) === "number");
+}
+
+export function isDateProp(prop: Property): boolean {
+  return prop.type === "date" || (prop.type === "rollup" && rollupResultType(prop.calc) === "date");
 }
 
 // Comparaison insensible à la casse et aux accents (« Évaluation » = « evaluation »).
@@ -325,7 +387,25 @@ export function validateProperties(raw: unknown): Property[] | string {
         prop.reciprocal = item.reciprocal === true;
       }
     }
+    // Un cumul peut rester incomplet le temps de sa configuration : relation
+    // et propriété visée facultatives, calcul « count » à défaut. Ce qui
+    // manque se voit à la lecture (tiret et en-tête signalé), jamais ici.
+    if (prop.type === "rollup") {
+      prop.calc = (ROLLUP_CALCS as readonly unknown[]).includes(item.calc) ? (item.calc as RollupCalc) : "count";
+      prop.format = (NUMBER_FORMATS as readonly unknown[]).includes(item.format) ? (item.format as NumberFormat) : "number";
+      if (typeof item.relation === "string" && ID_PATTERN.test(item.relation)) prop.relation = item.relation;
+      if (typeof item.target === "string" && ID_PATTERN.test(item.target)) prop.target = item.target;
+    }
     properties.push(prop);
+  }
+  // La relation traversée, quand elle est nommée, doit exister dans la même
+  // base, être une relation et ne pas être une jumelle : un cumul lit la
+  // relation qui déclare le lien, jamais une relation calculée. Un cumul de
+  // cumul n'existe pas.
+  for (const prop of properties) {
+    if (prop.type !== "rollup" || !prop.relation) continue;
+    const source = properties.find((item) => item.id === prop.relation);
+    if (!source || source.type !== "relation" || source.twinOf) return `${prop.name} : relation à traverser introuvable`;
   }
   return properties;
 }

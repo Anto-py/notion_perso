@@ -329,6 +329,26 @@ describe("calculs", () => {
     expect(calcText(note, "count_filled", 4)).toBe("Remplis 4");
     expect(calcText(prix, "max", null)).toBe("Max. —");
   });
+
+  it("traite un cumul numérique comme un Nombre, un cumul de date comme des comptes seuls", () => {
+    const compte: Property = {
+      id: "prop_compte",
+      name: "Compté",
+      type: "rollup",
+      relation: "prop_lien",
+      target: "prop_note",
+      calc: "count",
+      format: "number",
+    };
+    const derniere: Property = { ...compte, id: "prop_derniere", calc: "newest" };
+    const comptes = [entry("a", { prop_compte: 2 }), entry("b", { prop_compte: 3 }), entry("c", {})];
+    expect(calcOpsFor(compte)).toHaveLength(7);
+    expect(calcOpsFor(derniere)).toEqual(["count_all", "count_filled", "count_empty"]);
+    expect(computeCalc(comptes, compte, "sum")).toBe(5);
+    expect(computeCalc(comptes, compte, "count_filled")).toBe(2);
+    expect(calcText(compte, "sum", 5)).toBe("Somme 5");
+    expect(computeCalc(comptes, derniere, "sum")).toBeNull();
+  });
 });
 
 describe("vue liée", () => {

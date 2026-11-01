@@ -14,6 +14,7 @@ import {
   localId,
   normalizeValue,
   optionById,
+  rollupResultType,
   sanitizeFilter,
   SORT_BUILTINS,
   TITLE_PROP,
@@ -99,9 +100,11 @@ export const VIEW_LIMITS = { views: 20, name: 100 };
 export const LEGACY_VIEW_ID = "view_main";
 
 // Calculs proposés pour une colonne : les comptes partout, les calculs
-// numériques sur un Nombre seulement.
+// numériques sur un Nombre et sur un cumul qui rend un nombre. Un cumul de
+// date ne se somme pas, il ne garde que les comptes.
 export function calcOpsFor(prop: Property): CalcOp[] {
-  return CALC_OPS.filter((op) => !NUMERIC_CALCS.has(op) || prop.type === "number");
+  const numeric = prop.type === "number" || (prop.type === "rollup" && rollupResultType(prop.calc) === "number");
+  return CALC_OPS.filter((op) => !NUMERIC_CALCS.has(op) || numeric);
 }
 
 // Lecture tolérante d'une vue : ce qui pointe vers une propriété disparue,
