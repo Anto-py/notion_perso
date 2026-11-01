@@ -3,7 +3,7 @@
 // présent à la même taille rend le dépôt sans effet. Hors de proxy.ts, comme
 // api/upload : le proxy tronquerait un corps de plus de 10 Mo.
 import { fail } from "@/lib/api";
-import { fileSize, openFile, removeFile, saveFile } from "@/lib/storage";
+import { discardFile, fileSize, openFile, saveFile } from "@/lib/storage";
 import { requireSyncClient } from "@/lib/sync_server";
 import { MAX_UPLOAD_BYTES, isStoredName } from "@/lib/upload_rules";
 
@@ -46,7 +46,7 @@ export async function PUT(request: Request, ctx: RouteContext<"/api/sync/media/[
   }
   const size = await fileSize(file);
   if (size !== declared) {
-    await removeFile(file);
+    await discardFile(file);
     return fail(400, "Envoi incomplet, fichier non gardé");
   }
   return Response.json({ ok: true, size });

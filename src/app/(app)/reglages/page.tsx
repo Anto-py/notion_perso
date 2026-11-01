@@ -1,10 +1,12 @@
 import { Suspense } from "react";
 import { AccountSection } from "@/components/settings/AccountSection";
+import { BackupsSection } from "@/components/settings/BackupsSection";
 import { DevicesSection } from "@/components/settings/DevicesSection";
 import { PublicViewSection } from "@/components/settings/PublicViewSection";
 import { SyncSection } from "@/components/settings/SyncSection";
 import { VersionSection } from "@/components/settings/VersionSection";
 import { getCurrentUser } from "@/lib/auth";
+import { backupDir, listBackups } from "@/lib/backups";
 import { currentInstance, getSetting } from "@/lib/settings";
 import { sectionsFor, SYNC_THRESHOLD_DEFAULT, type SettingsSection } from "@/lib/settings_rules";
 import { listClients } from "@/lib/sync_clients";
@@ -73,8 +75,7 @@ async function Section({ section, username }: { section: SettingsSection; userna
       const remote = syncConfig()?.remote ?? "";
       return <SyncSection remote={remote} threshold={await readThreshold()} thresholdDefault={SYNC_THRESHOLD_DEFAULT} />;
     }
-    // Sauvegardes (Mac) : paliers c à e de l'étape 12.
     case "sauvegardes":
-      return null;
+      return <BackupsSection dir={backupDir()} backups={await listBackups()} />;
   }
 }

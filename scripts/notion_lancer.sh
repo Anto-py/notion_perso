@@ -18,8 +18,16 @@
 # partent avec la nouvelle version : l'ancienne serait refusée par le serveur
 # (schéma ou commit différent). Sans réseau, la version déjà construite sert.
 #
+# Sauvegardes (SPECS.md, « Sauvegardes, par le lanceur ») : un dump de la base
+# locale au premier lancement du jour et avant chaque mise à jour, serveur
+# arrêté, donc avant toute migration locale ; 7 quotidiennes et 3 d'avant mise
+# à jour gardées. Pas de migration sans dump : un dump raté reporte la mise à
+# jour. Synchronisation suspendue et version neuve : une fenêtre demande
+# l'accord, la version actuelle étant gardée par défaut.
+#
 # Données hors du vault, dans $NOTION_APP_DOSSIER (~/notion_perso_app) : clone
-# (app/), versions construites (versions/), médias (uploads/), profil Chrome
+# (app/), versions construites (versions/), médias (uploads/), médias effacés
+# depuis moins de 30 jours (quarantaine/), dumps (sauvegardes/), profil Chrome
 # (chrome/), journal (journal/). Réglages dans app.conf :
 #   NOTION_APP_DISTANT=https://<app web>           # serveur de synchronisation
 #   NOTION_APP_COOLIFY=https://<instance Coolify>/api/v1
@@ -104,6 +112,50 @@ if [ "$comptes" = "0" ] && { [ -z "${INITIAL_USERNAME:-}" ] || [ -z "${INITIAL_P
   export INITIAL_USERNAME INITIAL_PASSWORD
 fi
 
+# --- Sauvegardes ----------------------------------------------------------------
+
+# Écrites en .partiel puis renommées : un dump interrompu ne passe jamais pour
+# bon. Les médias n'y sont pas, d'où la quarantaine (QUARANTINE_DIR).
+sauvegardes="$dossier/sauvegardes"
+mkdir -p "$sauvegardes"
+rm -f "$sauvegardes"/*.partiel
+# Lue par la ligne d'état (BACKUP_ALERT) : daily_failed ou update_deferred.
+alerte_sauvegarde=""
+
+# Une base jamais migrée n'a rien à sauvegarder.
+base_migree() {
+  [ "$(psql -d "$base" -Atc "select to_regclass('drizzle.__drizzle_migrations') is not null" 2>/dev/null)" = "t" ]
+}
+
+# sauvegarder <préfixe> : quotidienne, ou avant_maj_<commit court>.
+sauvegarder() {
+  local fichier
+  fichier="$sauvegardes/${1}_$(date +%Y%m%d_%H%M).dmp"
+  if pg_dump -Fc -d "$base" -f "$fichier.partiel"; then
+    mv "$fichier.partiel" "$fichier"
+  else
+    rm -f "$fichier.partiel"
+    return 1
+  fi
+}
+
+# tourner <motif> <nombre> : garde les plus récentes par la date du nom (ses
+# deux derniers champs), l'ordre alphabétique rangeant les avant_maj par commit.
+tourner() {
+  find "$sauvegardes" -maxdepth 1 -type f -name "$1" \
+    | awk -F_ '{ print $(NF-1) "_" $NF "\t" $0 }' | sort -r | tail -n +"$(($2 + 1))" | cut -f2- \
+    | while IFS= read -r ancienne; do rm -f "$ancienne"; done
+}
+
+if base_migree && ! compgen -G "$sauvegardes/quotidienne_$(date +%Y%m%d)_*.dmp" >/dev/null; then
+  if sauvegarder quotidienne; then
+    tourner "quotidienne_*.dmp" 7
+  else
+    notifier "Sauvegarde du jour impossible (journal/lancer.log)"
+    alerte_sauvegarde=daily_failed
+  fi
+fi
+
 jeton_sync="$(security find-generic-password -s "${NOTION_APP_JETON:-notion-perso-sync}" -w 2>/dev/null)" \
   || echec "jeton de synchronisation absent du trousseau (service ${NOTION_APP_JETON:-notion-perso-sync})"
 
@@ -134,6 +186,20 @@ elif [ -n "$actuelle" ]; then
   choisi="$actuelle"
 else
   echec "premier lancement sans réseau : aucune version construite"
+fi
+
+# Suspendue et version neuve (choix d'Antonin du 2026-11-01) : « Garder la
+# version actuelle » par défaut, retenu aussi sans réponse au bout d'une minute
+# ou sans écran. Table settings absente (avant 0010) : synchronisation active.
+suspendue() {
+  [ "$(psql -d "$base" -Atc "select 1 from settings where key = 'sync.suspended'" 2>/dev/null)" = "1" ]
+}
+if [ "$choisi" != "$actuelle" ] && [ -n "$actuelle" ] && suspendue; then
+  reponse="$(osascript -e "display dialog \"La synchronisation est suspendue. Mettre à jour vers ${choisi:0:7} ?\" with title \"Notion perso\" buttons {\"Mettre à jour\", \"Garder la version actuelle\"} default button \"Garder la version actuelle\" giving up after 60" 2>/dev/null || true)"
+  case "$reponse" in
+    *"button returned:Mettre à jour"*) echo "Synchronisation suspendue : mise à jour acceptée." ;;
+    *) echo "Synchronisation suspendue : version ${actuelle:0:7} gardée."; choisi="$actuelle" ;;
+  esac
 fi
 
 # Appelée dans un if, la fonction ne profite plus de set -e : chaque étape
@@ -174,12 +240,22 @@ if [ "$choisi" != "$actuelle" ]; then
     notifier "Mise à jour vers la version ${choisi:0:7}, une à deux minutes"
   fi
   if [ -f "$versions/$choisi/server.js" ] || construire; then
-    ln -sfn "$choisi" "$courante"
-    # Garder la version qu'on quitte, en secours ; effacer les plus anciennes.
-    for v in "$versions"/*; do
-      nom="$(basename "$v")"
-      [ "$nom" = courante ] || [ "$nom" = "$choisi" ] || [ "$nom" = "$actuelle" ] || rm -rf "$v"
-    done
+    # Pas de migration sans sauvegarde : le dump fige la base juste avant la
+    # bascule ; raté, la version courante démarre et la mise à jour attend.
+    if base_migree && ! sauvegarder "avant_maj_${choisi:0:7}"; then
+      notifier "Mise à jour reportée : sauvegarde impossible (journal/lancer.log)"
+      alerte_sauvegarde=update_deferred
+      [ -n "$actuelle" ] || echec "sauvegarde impossible avant la première version"
+      choisi="$actuelle"
+    else
+      ln -sfn "$choisi" "$courante"
+      tourner "avant_maj_*.dmp" 3
+      # Garder la version qu'on quitte, en secours ; effacer les plus anciennes.
+      for v in "$versions"/*; do
+        nom="$(basename "$v")"
+        [ "$nom" = courante ] || [ "$nom" = "$choisi" ] || [ "$nom" = "$actuelle" ] || rm -rf "$v"
+      done
+    fi
   elif [ -n "$actuelle" ]; then
     notifier "Mise à jour en échec, version ${actuelle:0:7} gardée (journal/lancer.log)"
     choisi="$actuelle"
@@ -206,7 +282,8 @@ cd "$courante"
 exec env NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 MIGRATE_ON_START=1 \
   PORT="$port" HOSTNAME=127.0.0.1 \
   DATABASE_URL="postgres://$(whoami)@localhost:5432/$base" \
-  UPLOAD_DIR="$dossier/uploads" \
+  UPLOAD_DIR="$dossier/uploads" QUARANTINE_DIR="$dossier/quarantaine" \
+  BACKUP_DIR="$sauvegardes" BACKUP_ALERT="$alerte_sauvegarde" \
   SYNC_REMOTE_URL="$NOTION_APP_DISTANT" SYNC_TOKEN="$jeton_sync" \
   SOURCE_COMMIT="$choisi" \
   node server.js

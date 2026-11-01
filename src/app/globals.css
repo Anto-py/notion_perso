@@ -256,6 +256,7 @@ a {
 }
 
 .sync-conflict,
+.sync-backup,
 .sync-error,
 .sync-suspended {
   color: var(--danger);

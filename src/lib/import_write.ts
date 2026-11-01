@@ -6,7 +6,7 @@ import { db } from "@/db";
 import { media, pages } from "@/db/schema";
 import type { ImportPlan } from "./notion-import";
 import { keyFromIndex } from "./order_key";
-import { removeFile, saveFile } from "./storage";
+import { discardFile, saveFile } from "./storage";
 
 // PostgreSQL limite le nombre de paramètres d'une instruction ; cent lignes
 // par INSERT restent loin du plafond.
@@ -56,7 +56,7 @@ export async function applyImportPlan(plan: ImportPlan): Promise<void> {
       }
     });
   } catch (error) {
-    await Promise.all(written.map((name) => removeFile(name).catch(() => undefined)));
+    await Promise.all(written.map((name) => discardFile(name).catch(() => undefined)));
     throw error;
   }
 }

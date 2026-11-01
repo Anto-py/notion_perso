@@ -6,7 +6,7 @@
 // Actif seulement quand SYNC_REMOTE_URL et SYNC_TOKEN sont posés (l'instance
 // du Mac) ; le VPS et le serveur de développement n'en font rien.
 import type { SyncDirection } from "./settings_rules";
-import { fileSize, openFile, removeFile, saveFile } from "./storage";
+import { discardFile, fileSize, openFile, removeFile, saveFile } from "./storage";
 import {
   CONFIRMED_DELETION,
   countDamage,
@@ -119,7 +119,7 @@ async function download(config: SyncConfig, file: { filename: string; size: numb
   await saveFile(response.body, file.filename);
   const size = await fileSize(file.filename);
   if (size !== file.size) {
-    await removeFile(file.filename);
+    await discardFile(file.filename);
     throw new Error(`fichier incomplet (${size} octets sur ${file.size})`);
   }
   return size;

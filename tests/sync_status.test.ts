@@ -128,3 +128,26 @@ describe("syncLine, suspension", () => {
     expect(line({ suspended, online: false }).tone).toBe("suspended");
   });
 });
+
+describe("syncLine, sauvegardes", () => {
+  it("dit une mise à jour reportée et une quotidienne ratée", () => {
+    expect(line({ backupAlert: "update_deferred" })).toMatchObject({
+      tone: "backup",
+      text: "⚠ Mise à jour reportée : sauvegarde impossible",
+    });
+    expect(line({ backupAlert: "daily_failed" })).toMatchObject({
+      tone: "backup",
+      text: "⚠ Sauvegarde du jour impossible",
+    });
+  });
+
+  it("après la suspension, avant l'erreur, le conflit et le hors ligne", () => {
+    const backupAlert = "daily_failed" as const;
+    expect(line({ backupAlert, suspended: { at: "2026-11-01T10:00:00.000Z", by: "manual" } }).tone).toBe("suspended");
+    expect(line({ backupAlert, error: "Serveur injoignable", reason: "server" }).tone).toBe("backup");
+    expect(line({ backupAlert, error: "Commit refusé", reason: "version" }).tone).toBe("backup");
+    expect(line({ backupAlert, conflicts: 2 }).tone).toBe("backup");
+    expect(line({ backupAlert, online: false }).tone).toBe("backup");
+    expect(line({ backupAlert: null }).tone).toBe("calm");
+  });
+});

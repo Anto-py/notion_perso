@@ -5,6 +5,7 @@
 // et rend son bilan, 409 si la synchronisation est suspendue. 404 sur une instance qui ne se synchronise pas (VPS,
 // développement).
 import { fail, requireUser } from "@/lib/api";
+import { backupAlert } from "@/lib/backups";
 import { countConflicts } from "@/lib/conflicts";
 import { readProgress, readReason, runCycle, SyncError } from "@/lib/sync_client";
 import { syncConfig } from "@/lib/sync_config";
@@ -29,6 +30,8 @@ export async function GET(request: Request) {
     progress: readProgress(),
     // Suspension en cours (sync.suspended), null si la synchronisation est active.
     suspended,
+    // Sauvegarde ratée au lancement (BACKUP_ALERT du lanceur), null sinon.
+    backupAlert: backupAlert(),
   });
 }
 

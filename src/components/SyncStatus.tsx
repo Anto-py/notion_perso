@@ -5,6 +5,7 @@
 // la sidebar et la page ouverte ne peuvent pas diverger.
 import Link from "next/link";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import type { BackupAlert } from "@/lib/backup_rules";
 import type { SyncSuspension } from "@/lib/settings_rules";
 import { progressLabel, syncLine, type CycleProgress, type SyncReason } from "@/lib/sync_status";
 
@@ -19,6 +20,7 @@ type Status = {
   conflicts: number;
   progress: CycleProgress | null;
   suspended: SyncSuspension | null;
+  backupAlert: BackupAlert | null;
 };
 
 type Value = Status & {
@@ -38,6 +40,7 @@ const EMPTY: Status = {
   conflicts: 0,
   progress: null,
   suspended: null,
+  backupAlert: null,
 };
 const REFRESH_MS = 10_000;
 
@@ -145,13 +148,26 @@ export function usePagePending(pageId: string, savedTick: number): boolean | nul
 // La ligne d'état telle que la calcule syncLine, pour la barre latérale et
 // Réglages › Synchronisation.
 export function useSyncLine() {
-  const { syncedAt, error, reason, pending, conflicts, online, suspended } = useSyncStatus();
-  return syncLine({ syncedAt: syncedAt ? new Date(syncedAt) : null, error, reason, pending, conflicts, online, suspended });
+  const { syncedAt, error, reason, pending, conflicts, online, suspended, backupAlert } = useSyncStatus();
+  return syncLine({
+    syncedAt: syncedAt ? new Date(syncedAt) : null,
+    error,
+    reason,
+    pending,
+    conflicts,
+    online,
+    suspended,
+    backupAlert,
+  });
 }
 
 // Où mène un clic sur la ligne : un conflit vers sa liste, une suspension
-// vers ce qui la lève.
-const LINE_LINKS: Partial<Record<string, string>> = { conflict: "/conflits", suspended: "/reglages#synchronisation" };
+// vers ce qui la lève, une sauvegarde ratée vers la liste des sauvegardes.
+const LINE_LINKS: Partial<Record<string, string>> = {
+  conflict: "/conflits",
+  suspended: "/reglages#synchronisation",
+  backup: "/reglages#sauvegardes",
+};
 
 // Ligne d'état et bouton, en bas de la barre latérale. Rien sur une
 // instance qui ne se synchronise pas.
