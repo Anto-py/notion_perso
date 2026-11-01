@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
+  backupDatabaseName,
   backupMotive,
   parseBackupAlert,
   parseBackupName,
+  parseBackupTrial,
+  parseOpenBackup,
   QUARANTINE_DAYS,
   quarantineExpired,
   sortBackups,
+  TRIAL_DAYS,
+  trialDatabaseName,
+  trialDue,
+  trialFailed,
 } from "../src/lib/backup_rules";
 
 describe("parseBackupName", () => {
@@ -65,6 +72,78 @@ describe("parseBackupAlert", () => {
     expect(parseBackupAlert("")).toBeNull();
     expect(parseBackupAlert(undefined)).toBeNull();
     expect(parseBackupAlert("autre")).toBeNull();
+  });
+});
+
+describe("backupDatabaseName", () => {
+  it("dérive le nom de la base de sauvegarde du nom de la base vive", () => {
+    expect(backupDatabaseName("postgres://antonin@localhost:5432/notion_perso_local")).toBe("notion_perso_local_sauvegarde");
+    expect(backupDatabaseName("postgres://u:p@h:5432/notion_perso_dev?sslmode=disable")).toBe("notion_perso_dev_sauvegarde");
+  });
+
+  it("refuse une URL absente ou un nom qui ne peut pas être un identifiant", () => {
+    expect(backupDatabaseName(undefined)).toBeNull();
+    expect(backupDatabaseName("pas une url")).toBeNull();
+    expect(backupDatabaseName("postgres://localhost:5432/")).toBeNull();
+    expect(backupDatabaseName("postgres://localhost:5432/nom-invalide")).toBeNull();
+    expect(backupDatabaseName(`postgres://localhost:5432/${"x".repeat(53)}`)).toBeNull();
+  });
+});
+
+describe("parseOpenBackup", () => {
+  const name = "quotidienne_20261101_0912.dmp";
+
+  it("lit une sauvegarde ouverte", () => {
+    expect(parseOpenBackup({ name, at: "2026-11-01T09:20:00.000Z" })).toEqual({ name, at: "2026-11-01T09:20:00.000Z" });
+  });
+
+  it("refuse un nom qui n'est pas un dump, une date illisible ou une autre forme", () => {
+    expect(parseOpenBackup({ name: "notes.dmp", at: "2026-11-01T09:20:00.000Z" })).toBeNull();
+    expect(parseOpenBackup({ name, at: "hier" })).toBeNull();
+    expect(parseOpenBackup({ name })).toBeNull();
+    expect(parseOpenBackup("quotidienne_20261101_0912.dmp")).toBeNull();
+    expect(parseOpenBackup(null)).toBeNull();
+  });
+});
+
+describe("trialDatabaseName", () => {
+  it("suffixe le nom de la base vive par _essai", () => {
+    expect(trialDatabaseName("postgres://antonin@localhost:5432/notion_perso_local")).toBe("notion_perso_local_essai");
+    expect(trialDatabaseName(undefined)).toBeNull();
+    expect(trialDatabaseName("pas une url")).toBeNull();
+  });
+});
+
+describe("restauration d'essai", () => {
+  const now = new Date("2026-11-08T12:00:00Z").getTime();
+  const trial = (at: string, ok = true) => ({
+    at,
+    results: [{ source: "mac" as const, file: "quotidienne_20261101_0912.dmp", ok, ...(ok ? { pages: 42 } : { error: "pg_restore a échoué" }) }],
+  });
+
+  it("dit l'essai dû une semaine après le précédent, ou s'il n'y en a jamais eu", () => {
+    expect(TRIAL_DAYS).toBe(7);
+    expect(trialDue(null, now)).toBe(true);
+    expect(trialDue(trial("2026-11-01T12:00:00Z"), now)).toBe(true);
+    expect(trialDue(trial("2026-11-02T12:00:00Z"), now)).toBe(false);
+    expect(trialDue(trial("pas une date"), now)).toBe(true);
+  });
+
+  it("alerte tant qu'un essai a échoué, et se taît sur une source absente", () => {
+    expect(trialFailed(null)).toBe(false);
+    expect(trialFailed(trial("2026-11-01T12:00:00Z", true))).toBe(false);
+    expect(trialFailed(trial("2026-11-01T12:00:00Z", false))).toBe(true);
+    expect(trialFailed({ at: "2026-11-01T12:00:00Z", results: [] })).toBe(false);
+  });
+
+  it("relit un essai enregistré, et refuse une forme inattendue", () => {
+    const saved = trial("2026-11-01T12:00:00Z");
+    expect(parseBackupTrial(saved)).toEqual(saved);
+    expect(parseBackupTrial({ ...saved, at: "hier" })).toBeNull();
+    expect(parseBackupTrial({ ...saved, results: [{ source: "autre", file: "x", ok: true }] })).toBeNull();
+    expect(parseBackupTrial({ ...saved, results: [{ source: "mac", file: "x", ok: "oui" }] })).toBeNull();
+    expect(parseBackupTrial({ ...saved, results: [{ source: "mac", file: "x", ok: true, pages: -1 }] })).toBeNull();
+    expect(parseBackupTrial("essai")).toBeNull();
   });
 });
 

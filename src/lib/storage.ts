@@ -78,6 +78,31 @@ export async function discardFile(filename: string): Promise<void> {
   await rm(storedPath(filename), { force: true });
 }
 
+// Ramène en service un fichier parti en quarantaine, pour une page reprise
+// d'une sauvegarde. Déjà dans uploads/ : rien à faire. Rend sa taille, ou null
+// s'il n'est nulle part.
+export async function promoteQuarantinedFile(filename: string): Promise<number | null> {
+  if (!isStoredName(filename)) return null;
+  const target = storedPath(filename);
+  const present = await stat(target).catch(() => null);
+  if (present?.isFile()) return present.size;
+
+  const quarantine = quarantineDir();
+  if (!quarantine) return null;
+  const source = path.join(/*turbopackIgnore: true*/ quarantine, filename);
+  await mkdir(uploadDir(), { recursive: true });
+  try {
+    await rename(source, target);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== "EXDEV") return null;
+    await copyFile(source, target);
+    await rm(source, { force: true });
+  }
+  const info = await stat(target).catch(() => null);
+  return info?.isFile() ? info.size : null;
+}
+
 // Vide la quarantaine des fichiers de plus de 30 jours (instrumentation.ts,
 // au démarrage). Rend le nombre de fichiers effacés.
 export async function purgeQuarantine(now = Date.now()): Promise<number> {
@@ -107,6 +132,23 @@ export async function fileSize(filename: string): Promise<number | null> {
 
 export async function openFile(filename: string): Promise<{ stream: ReadableStream<Uint8Array>; size: number } | null> {
   const target = storedPath(filename);
+  try {
+    const { size } = await stat(target);
+    const stream = Readable.toWeb(createReadStream(target)) as ReadableStream<Uint8Array>;
+    return { stream, size };
+  } catch {
+    return null;
+  }
+}
+
+// Un média d'une sauvegarde n'est pas dans le dump : il vit dans uploads/,
+// ou en quarantaine si la synchronisation l'a effacé depuis (palier d).
+export async function openQuarantinedFile(
+  filename: string,
+): Promise<{ stream: ReadableStream<Uint8Array>; size: number } | null> {
+  const quarantine = quarantineDir();
+  if (!quarantine || !isStoredName(filename)) return null;
+  const target = path.join(/*turbopackIgnore: true*/ quarantine, filename);
   try {
     const { size } = await stat(target);
     const stream = Readable.toWeb(createReadStream(target)) as ReadableStream<Uint8Array>;

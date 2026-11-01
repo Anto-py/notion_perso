@@ -18,6 +18,8 @@ export type SyncSnapshot = {
   online: boolean;
   suspended?: SyncSuspension | null;
   backupAlert?: BackupAlert | null;
+  // Dernière restauration d'essai en échec (backup.trial), Mac seulement.
+  trialFailed?: boolean;
   // Version de secours épinglée (versions/.epingle), sur le Mac seulement.
   fallback?: boolean;
 };
@@ -95,20 +97,23 @@ export function suspensionMotive(suspension: Extract<SyncSuspension, { by: "auto
 }
 
 // Priorité : une suspension arrête tout échange (toute erreur affichée serait
-// d'avant elle) ; une sauvegarde ratée est un risque qui dure, une erreur de
-// synchronisation passe d'elle-même (choix d'Antonin du 2026-11-01) ; un
+// d'avant elle) ; une sauvegarde ratée ou illisible est un risque qui dure, une
+// erreur de synchronisation passe d'elle-même (choix d'Antonin du 2026-11-01) ; un
 // conflit demande un geste, le hors ligne explique l'attente, le reste est du
 // calme.
 // Un écart de version se règle en relançant l'app, qui se met à jour au
 // lancement (SPECS.md, « Versions ») : la ligne le dit plutôt que l'échec ;
 // sauf en version de secours, épinglée, que le relancement ne quitte pas.
-export function syncLine({ syncedAt, error, reason, pending, conflicts, online, suspended, backupAlert, fallback }: SyncSnapshot): SyncLine {
+export function syncLine({ syncedAt, error, reason, pending, conflicts, online, suspended, backupAlert, trialFailed, fallback }: SyncSnapshot): SyncLine {
   if (suspended) {
     const title = "Reprendre dans Réglages › Synchronisation";
     if (suspended.by === "auto") return { tone: "suspended", text: `⏸ Suspendue : ${suspensionMotive(suspended)}`, title };
     return { tone: "suspended", text: `⏸ Synchronisation suspendue${pending > 0 ? ` · ${pending} en attente` : ""}`, title };
   }
   if (backupAlert) return { tone: "backup", text: BACKUP_TEXT[backupAlert], title: "Voir Réglages › Sauvegardes" };
+  // Un dump illisible est le même risque qu'un dump raté : il dure jusqu'à un
+  // essai réussi, et passe donc avant les erreurs de synchronisation.
+  if (trialFailed) return { tone: "backup", text: "⚠ Sauvegarde illisible", title: "Voir Réglages › Sauvegardes" };
   if (error && reason === "version" && fallback) {
     return { tone: "fallback", text: "⚠ Version de secours : synchronisation arrêtée", title: "Mettre à jour dans Réglages › Version" };
   }

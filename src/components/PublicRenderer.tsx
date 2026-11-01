@@ -1,24 +1,20 @@
 // Vue publique d'une page, d'une base ou d'une entrée (BRAINSTORMING §7) :
 // lecture seule, sans sidebar, en-tête au nom du site et pied de page signé.
-// Composant serveur : le corps arrive en HTML déjà échappé (lib/blocks.ts).
+// Le rendu du contenu vit dans ReadOnlyPage.tsx, partagé avec l'écran de
+// sauvegarde, qui lui donne seulement une autre source de données.
 import type { Metadata } from "next";
 import Link from "next/link";
 import { cache } from "react";
-import { renderHtml, safeHref, subpageRefs } from "@/lib/blocks";
-import { configOf, listEntries } from "@/lib/databases";
-import { getPage, type Page } from "@/lib/pages";
-import { getSetting } from "@/lib/settings";
-import { matchesFilters, normalizeValues, sortEntries, withTimes } from "@/lib/properties";
-import { publicHref, type PublicNode } from "@/lib/publication";
-import { listChildren, resolvePublication, type Publication } from "@/lib/publication_query";
+import { safeHref } from "@/lib/blocks";
+import { listEntries } from "@/lib/databases";
 import { faviconHref } from "@/lib/icons";
-import { PageIcon, PageLabel } from "./PageIcon";
-import { PageCover } from "./PageCover";
-import { TYPE_ICONS, ValueView } from "./propertyUi";
+import { getPage } from "@/lib/pages";
+import { publicHref } from "@/lib/publication";
+import { listChildren, resolvePublication, type Publication } from "@/lib/publication_query";
+import { getSetting } from "@/lib/settings";
+import { ReadOnlyPage } from "./ReadOnlyPage";
 
 export type PublicParams = Promise<{ publicId: string; pageId?: string }>;
-
-type Href = (pageId: string) => string;
 
 // generateMetadata et la page lisent la même publication : une seule requête.
 const resolve = cache(resolvePublication);
@@ -72,147 +68,15 @@ export async function PublicPage({ params }: { params: PublicParams }) {
 
 async function PublicContent({ publicId, found }: { publicId: string; found: Publication }) {
   const { root, page, chain } = found;
-  const href: Href = (id) => publicHref(publicId, root.id, id);
-  // Un bloc-lien ne mène qu'à une vraie sous-page, hors corbeille : seule
-  // celle-là descend de la publication.
   const children = page.type === "page" ? await listChildren(page.id) : [];
-  const byId = new Map(children.map((child) => [child.id, child]));
-  const linked = subpageRefs(page.body);
   return (
-    <article>
-      <PageCover cover={page.cover} position={page.coverPosition} className="page-cover public-cover" />
-      {chain.length > 1 && <Crumbs chain={chain.slice(0, -1)} href={href} />}
-      <h1 className="public-title">
-        <PageIcon icon={page.icon} type={page.type} /> {page.title || "Sans titre"}
-      </h1>
-      {page.type === "entry" && <EntryProperties entry={page} />}
-      {page.type === "database" ? (
-        <PublicTable database={page} href={href} />
-      ) : (
-        <div
-          className="public-body"
-          dangerouslySetInnerHTML={{
-            __html: renderHtml(page.body, {
-              subpage: (id) => {
-                const child = byId.get(id);
-                return child ? { href: href(child.id), title: child.title, icon: child.icon, type: child.type } : null;
-              },
-            }),
-          }}
-        />
-      )}
-      <Children rows={children.filter((child) => !linked.has(child.id))} href={href} />
-    </article>
-  );
-}
-
-function Crumbs({ chain, href }: { chain: PublicNode[]; href: Href }) {
-  return (
-    <nav className="public-crumbs" aria-label="Fil d'Ariane">
-      {chain.map((node, index) => (
-        <span key={node.id}>
-          {index > 0 && <span aria-hidden="true"> / </span>}
-          <Link href={href(node.id)}><PageLabel row={node} /></Link>
-        </span>
-      ))}
-    </nav>
-  );
-}
-
-// Toutes les propriétés de l'entrée, masquées dans la vue comprises : le
-// masquage ne vaut que pour le tableau (choix d'Antonin du 2026-10-30). Une
-// valeur vide n'est pas affichée, une case l'est toujours.
-async function EntryProperties({ entry }: { entry: Page }) {
-  const base = entry.dbId ? await getPage(entry.dbId) : null;
-  if (!base || base.trashedAt) return null;
-  const { properties } = configOf(base);
-  const values = withTimes(properties, normalizeValues(properties, entry.propertyValues), {
-    createdAt: entry.createdAt.toISOString(),
-    updatedAt: entry.updatedAt.toISOString(),
-  });
-  const shown = properties.filter((prop) => prop.type === "checkbox" || values[prop.id] !== undefined);
-  if (!shown.length) return null;
-  return (
-    <div className="props public-props">
-      {shown.map((prop) => (
-        <div className="prop-row" key={prop.id}>
-          <span className="prop-name">
-            <span className="prop-icon" aria-hidden="true">
-              {TYPE_ICONS[prop.type]}
-            </span>
-            {prop.name}
-          </span>
-          <div className="prop-value">
-            <ValueView prop={prop} value={values[prop.id]} />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// Une base se lit en tableau selon sa première vue, Kanban et Liste compris :
-// filtres, tris et propriétés masquées respectés.
-async function PublicTable({ database, href }: { database: Page; href: Href }) {
-  const { properties, views } = configOf(database);
-  const view = views[0];
-  const entries = sortEntries(
-    (await listEntries(database.id))
-      .filter((entry) => matchesFilters(entry, view.filters, properties))
-      .map((entry) => ({ ...entry, values: withTimes(properties, entry.values, entry) })),
-    view.sorts,
-    properties,
-  );
-  if (!entries.length) return <p className="hint">Cette base ne contient aucune entrée.</p>;
-  const columns = properties.filter((prop) => !view.hidden.includes(prop.id));
-  return (
-    <div className="table-wrap">
-      <table className="db-table public-table">
-        <thead>
-          <tr>
-            <th scope="col">Titre</th>
-            {columns.map((prop) => (
-              <th scope="col" key={prop.id}>
-                {prop.name}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {entries.map((entry) => (
-            <tr key={entry.id}>
-              <td className="cell-title">
-                <Link href={href(entry.id)}><PageLabel row={entry} /></Link>
-              </td>
-              {columns.map((prop) => (
-                <td key={prop.id}>
-                  <ValueView prop={prop} value={entry.values[prop.id]} />
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-// Sous-pages sans bloc-lien dans le corps (nées avant le menu « / », ou
-// rangées là par glisser-déposer) : listées en bas de page pour rester
-// atteignables.
-function Children({ rows: children, href }: { rows: { id: string; type: Page["type"]; title: string; icon: string | null }[]; href: Href }) {
-  if (!children.length) return null;
-  return (
-    <nav className="public-children" aria-label="Sous-pages">
-      <h2 className="public-children-title">Dans cette page</h2>
-      <ul>
-        {children.map((child) => (
-          <li key={child.id}>
-            <Link href={href(child.id)}><PageLabel row={child} /></Link>
-          </li>
-        ))}
-      </ul>
-    </nav>
+    <ReadOnlyPage
+      page={page}
+      crumbs={chain.slice(0, -1)}
+      subpages={children}
+      href={(id) => publicHref(publicId, root.id, id)}
+      source={{ getPage, listEntries }}
+    />
   );
 }
 

@@ -426,6 +426,7 @@ while :; do
       DATABASE_URL="postgres://$(whoami)@localhost:5432/$base" \
       UPLOAD_DIR="$dossier/uploads" QUARANTINE_DIR="$dossier/quarantaine" \
       BACKUP_DIR="$sauvegardes" BACKUP_ALERT="$alerte_sauvegarde" \
+      MIRROR_DUMP_DIR="${NOTION_APP_MIROIR:-$HOME/notion_perso_miroir}/dumps" \
       SYNC_REMOTE_URL="$NOTION_APP_DISTANT" SYNC_TOKEN="$jeton_sync" \
       SOURCE_COMMIT="$version" NOTION_APP_DOSSIER="$dossier" \
       NOTION_APP_LANCEUR="$lanceur" APP_VERSIONS_DIR="$versions" \

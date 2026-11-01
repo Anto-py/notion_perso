@@ -48,8 +48,10 @@ export async function listRecent(limit = 10) {
     .limit(limit);
 }
 
-export async function getPage(id: string): Promise<Page | null> {
-  const [row] = await db.select().from(pages).where(eq(pages.id, id)).limit(1);
+// executor : la base vive par défaut, la copie d'une sauvegarde quand l'écran
+// de sauvegarde lit (lib/backup_read.ts).
+export async function getPage(id: string, executor: Pick<typeof db, "select"> = db): Promise<Page | null> {
+  const [row] = await executor.select().from(pages).where(eq(pages.id, id)).limit(1);
   return row ?? null;
 }
 

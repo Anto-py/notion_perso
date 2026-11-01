@@ -29,8 +29,12 @@ export function imageIcon(filename: string): string {
   return IMAGE_PREFIX + filename;
 }
 
-export function iconSrc(filename: string): string {
-  return `/api/media/${filename}`;
+// base : la route qui sert le fichier. L'écran de sauvegarde passe la sienne,
+// qui cherche aussi dans la quarantaine.
+export const MEDIA_BASE = "/api/media/";
+
+export function iconSrc(filename: string, base = MEDIA_BASE): string {
+  return `${base}${filename}`;
 }
 
 // Valeur stockée → icône, ou null (aucune, ou forme inconnue).

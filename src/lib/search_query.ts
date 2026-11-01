@@ -17,7 +17,9 @@ const LIMIT = 20;
 // avant de raciner : « Évaluation » est surligné pour « evaluation ».
 const HEADLINE_OPTIONS = `StartSel=${HIT_START}, StopSel=${HIT_END}, MaxWords=24, MinWords=10, MaxFragments=1, FragmentDelimiter=" … "`;
 
-export async function searchPages(query: string): Promise<SearchHit[]> {
+// executor : la base vive par défaut, la copie d'une sauvegarde quand
+// l'écran de sauvegarde cherche (lib/backup_read.ts).
+export async function searchPages(query: string, executor: Pick<typeof db, "execute"> = db): Promise<SearchHit[]> {
   const terms = searchTerms(query);
   if (!terms.length) return [];
 
@@ -31,7 +33,7 @@ export async function searchPages(query: string): Promise<SearchHit[]> {
 
   // MATERIALIZED : to_tsquery est évalué une fois par mot, et non une fois par
   // ligne (un mot vide comme « de » émettrait sinon un NOTICE à chaque page).
-  const result = await db.execute<{
+  const result = await executor.execute<{
     id: string;
     type: SearchKind;
     title: string;

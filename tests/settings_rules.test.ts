@@ -58,6 +58,15 @@ describe("parseSettingWrite", () => {
   });
 });
 
+describe("sauvegarde ouverte", () => {
+  it("se lit en base mais ne s'écrit jamais par PATCH /api/reglages : sa route propre décide", () => {
+    const open = { name: "quotidienne_20261101_0912.dmp", at: "2026-11-01T09:20:00.000Z" };
+    expect(readSettingValue("backup.open", open)).toEqual(open);
+    expect(readSettingValue("backup.open", { name: "notes.dmp", at: open.at })).toBeNull();
+    expect(parseSettingWrite("mac", "backup.open", open.name)).toEqual({ ok: false, error: "Réglage inconnu" });
+  });
+});
+
 describe("readSettingValue", () => {
   it("rend la valeur stockée si sa forme est la bonne, null sinon", () => {
     expect(readSettingValue("public.site_name", "Veille")).toBe("Veille");

@@ -8,6 +8,8 @@ import { fail, requireUser } from "@/lib/api";
 import { pinnedCommit } from "@/lib/app_version";
 import { backupAlert } from "@/lib/backups";
 import { countConflicts } from "@/lib/conflicts";
+import { trialFailed } from "@/lib/backup_rules";
+import { getSetting } from "@/lib/settings";
 import { readProgress, readReason, runCycle, SyncError } from "@/lib/sync_client";
 import { syncConfig } from "@/lib/sync_config";
 import { pagePending, readState, scanLocal } from "@/lib/sync_local";
@@ -19,12 +21,13 @@ export async function GET(request: Request) {
   if (!syncConfig()) return fail(404, "Cette instance ne se synchronise pas");
   const page = new URL(request.url).searchParams.get("page");
   if (page) return Response.json({ pagePending: await pagePending(page) });
-  const [state, scan, conflicts, suspended, pinned] = await Promise.all([
+  const [state, scan, conflicts, suspended, pinned, trial] = await Promise.all([
     readState(),
     scanLocal(),
     countConflicts(),
     readSuspension(),
     pinnedCommit(),
+    getSetting("backup.trial"),
   ]);
   return Response.json({
     syncedAt: state?.syncedAt ?? null,
@@ -39,6 +42,8 @@ export async function GET(request: Request) {
     suspended,
     // Sauvegarde ratée au lancement (BACKUP_ALERT du lanceur), null sinon.
     backupAlert: backupAlert(),
+    // Dernière restauration d'essai en échec : le dump ne se relit pas.
+    trialFailed: trialFailed(trial),
     // Version de secours épinglée : le serveur refuse l'échange (commit).
     fallback: pinned !== null,
   });

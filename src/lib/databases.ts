@@ -74,9 +74,10 @@ function checkValues(properties: readonly Property[], raw: Record<string, unknow
   return null;
 }
 
-// Entrées d'une base, hors corbeille, dans l'ordre manuel.
-export async function listEntries(dbId: string): Promise<EntryRow[]> {
-  const rows = await db
+// Entrées d'une base, hors corbeille, dans l'ordre manuel. executor : la base
+// vive par défaut, la copie d'une sauvegarde quand l'écran de sauvegarde lit.
+export async function listEntries(dbId: string, executor: Pick<typeof db, "select"> = db): Promise<EntryRow[]> {
+  const rows = await executor
     .select({
       id: pages.id,
       title: pages.title,

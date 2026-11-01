@@ -22,4 +22,13 @@ export async function register() {
     const { startSyncLoop } = await import("./lib/sync_client");
     startSyncLoop();
   }
+  // 5. Restauration d'essai (palier e), une minute après le démarrage : elle ne
+  //    retarde pas le service. Le module s'arrête seul hors du Mac.
+  if (process.env.BACKUP_DIR) {
+    setTimeout(() => {
+      void import("./lib/backup_trial")
+        .then(({ runTrialIfDue }) => runTrialIfDue())
+        .catch((error) => console.error("Restauration d'essai impossible :", error));
+    }, 60_000).unref();
+  }
 }

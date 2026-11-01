@@ -163,4 +163,10 @@ describe("syncLine, sauvegardes", () => {
     expect(line({ backupAlert, online: false }).tone).toBe("backup");
     expect(line({ backupAlert: null }).tone).toBe("calm");
   });
+
+  it("affiche un dump illisible avant une erreur de synchronisation, et se tait sans échec", () => {
+    expect(line({ trialFailed: true })).toMatchObject({ tone: "backup", text: "⚠ Sauvegarde illisible" });
+    expect(line({ trialFailed: true, error: "Serveur injoignable", reason: "server" }).tone).toBe("backup");
+    expect(line({ trialFailed: false })).toMatchObject({ tone: "calm" });
+  });
 });

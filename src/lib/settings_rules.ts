@@ -1,6 +1,7 @@
 // Règles de la page Réglages (BRAINSTORMING §12, SPECS « Réglages,
 // sauvegardes et suspension ») : sections par instance, clés écrivables et
 // leurs valeurs, mot de passe. Pur : lib/settings.ts lit et écrit la table.
+import { parseBackupTrial, parseOpenBackup, type BackupTrial, type OpenBackup } from "./backup_rules";
 
 export type Instance = "mac" | "web";
 
@@ -33,6 +34,10 @@ export type SettingValues = {
   "sync.threshold": number;
   // Accord donné par « Reprendre » pour le prochain lot dans ce sens.
   "sync.waiver": { direction: SyncDirection };
+  // Le dump affiché en lecture seule (palier d), absent : aucun.
+  "backup.open": OpenBackup;
+  // Dernière restauration d'essai (palier e), absente : jamais faite.
+  "backup.trial": BackupTrial;
 };
 
 export type SettingKey = keyof SettingValues;
@@ -108,12 +113,24 @@ function waiver(value: unknown): Parsed<{ direction: SyncDirection }> {
   return isRecord(value) && isDirection(value.direction) ? { value: { direction: value.direction } } : { error: "Valeur invalide" };
 }
 
+function backupOpen(value: unknown): Parsed<OpenBackup> {
+  const open = parseOpenBackup(value);
+  return open ? { value: open } : { error: "Valeur invalide" };
+}
+
+function backupTrial(value: unknown): Parsed<BackupTrial> {
+  const trial = parseBackupTrial(value);
+  return trial ? { value: trial } : { error: "Valeur invalide" };
+}
+
 const RULES: { [K in SettingKey]: Rule<K> } = {
   "public.site_name": { section: "vue_publique", editable: true, parse: text(SITE_NAME_MAX, "Le nom du site") },
   "public.linkedin_url": { section: "vue_publique", editable: true, parse: httpsUrl },
   "sync.suspended": { section: "synchronisation", editable: false, parse: suspension },
   "sync.threshold": { section: "synchronisation", editable: true, parse: threshold },
   "sync.waiver": { section: "synchronisation", editable: false, parse: waiver },
+  "backup.open": { section: "sauvegardes", editable: false, parse: backupOpen },
+  "backup.trial": { section: "sauvegardes", editable: false, parse: backupTrial },
 };
 
 function isKey(key: unknown): key is SettingKey {
