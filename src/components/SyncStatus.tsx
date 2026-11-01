@@ -5,7 +5,7 @@
 // la sidebar et la page ouverte ne peuvent pas diverger.
 import Link from "next/link";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { progressLabel, syncLine, type CycleProgress } from "@/lib/sync_status";
+import { progressLabel, syncLine, type CycleProgress, type SyncReason } from "@/lib/sync_status";
 
 type Status = {
   // null tant que le premier GET n'a pas répondu ; false sur une instance qui
@@ -13,6 +13,7 @@ type Status = {
   configured: boolean | null;
   syncedAt: string | null;
   error: string | null;
+  reason: SyncReason | null;
   pending: number;
   conflicts: number;
   progress: CycleProgress | null;
@@ -20,7 +21,7 @@ type Status = {
 
 type Value = Status & { online: boolean; syncing: boolean; version: number; syncNow: () => Promise<void> };
 
-const EMPTY: Status = { configured: null, syncedAt: null, error: null, pending: 0, conflicts: 0, progress: null };
+const EMPTY: Status = { configured: null, syncedAt: null, error: null, reason: null, pending: 0, conflicts: 0, progress: null };
 const REFRESH_MS = 10_000;
 
 const SyncContext = createContext<Value | null>(null);
@@ -127,9 +128,9 @@ export function usePagePending(pageId: string, savedTick: number): boolean | nul
 // Ligne d'état et bouton, en bas de la barre latérale. Rien sur une
 // instance qui ne se synchronise pas.
 export function SyncStatus() {
-  const { configured, syncedAt, error, pending, conflicts, progress, online, syncing, syncNow } = useSyncStatus();
+  const { configured, syncedAt, error, reason, pending, conflicts, progress, online, syncing, syncNow } = useSyncStatus();
   if (!configured) return null;
-  const line = syncLine({ syncedAt: syncedAt ? new Date(syncedAt) : null, error, pending, conflicts, online });
+  const line = syncLine({ syncedAt: syncedAt ? new Date(syncedAt) : null, error, reason, pending, conflicts, online });
   const busy = syncing || progress !== null;
   return (
     <div className={`sync-status sync-${line.tone}`}>

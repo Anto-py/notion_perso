@@ -3,9 +3,14 @@
 // sont fournis, rien n'est lu d'ici. Le même module sert la ligne du Mac et,
 // sur l'app web, l'heure du dernier passage du Mac.
 
+// Motif du dernier échec (SyncError de lib/sync_client.ts) : offline, serveur
+// injoignable ; version, schéma ou code différent ; token, jeton refusé.
+export type SyncReason = "offline" | "version" | "token" | "server";
+
 export type SyncSnapshot = {
   syncedAt: Date | null;
   error: string | null;
+  reason?: SyncReason | null;
   pending: number;
   conflicts: number;
   online: boolean;
@@ -64,7 +69,10 @@ export function progressLabel(progress: CycleProgress): string {
 
 // Priorité : une erreur empêche tout, un conflit demande un geste, le hors
 // ligne explique l'attente, le reste est du calme.
-export function syncLine({ syncedAt, error, pending, conflicts, online }: SyncSnapshot): SyncLine {
+// Un écart de version se règle en relançant l'app, qui se met à jour au
+// lancement (SPECS.md, « Versions ») : la ligne le dit plutôt que l'échec.
+export function syncLine({ syncedAt, error, reason, pending, conflicts, online }: SyncSnapshot): SyncLine {
+  if (error && reason === "version") return { tone: "error", text: "⚠ Redémarrer pour mettre à jour", title: error };
   if (error) return { tone: "error", text: "⚠ Synchronisation en échec", title: error };
   if (conflicts > 0) {
     return { tone: "conflict", text: `⚠ ${conflicts} ${plural(conflicts, "conflit", "conflits")}` };

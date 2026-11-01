@@ -6,7 +6,7 @@
 // développement).
 import { fail, requireUser } from "@/lib/api";
 import { countConflicts } from "@/lib/conflicts";
-import { readProgress, runCycle, SyncError, syncConfig } from "@/lib/sync_client";
+import { readProgress, readReason, runCycle, SyncError, syncConfig } from "@/lib/sync_client";
 import { pagePending, readState, scanLocal } from "@/lib/sync_local";
 
 export async function GET(request: Request) {
@@ -19,6 +19,8 @@ export async function GET(request: Request) {
   return Response.json({
     syncedAt: state?.syncedAt ?? null,
     error: state?.error ?? null,
+    // Motif du dernier échec depuis le démarrage (« version » : redémarrer).
+    reason: readReason(),
     pending: scan.pending.length,
     conflicts,
     // Avancement du cycle en cours, null au repos.

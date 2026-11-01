@@ -74,6 +74,17 @@ describe("syncLine", () => {
     });
   });
 
+  it("écart de version : redémarrer, le message du serveur au survol", () => {
+    const error = "Schéma différent (serveur 2, Mac 1). Redémarrez l'app Mac pour la mettre à jour.";
+    expect(line({ error, reason: "version", pending: 3 })).toEqual({
+      tone: "error",
+      text: "⚠ Redémarrer pour mettre à jour",
+      title: error,
+    });
+    // Le motif seul, sans erreur notée (cycle réussi depuis), ne dit rien.
+    expect(line({ reason: "version" })).toEqual({ tone: "calm", text: "✓ Synchronisé 14:05" });
+  });
+
   it("jamais synchronisé, rien en attente", () => {
     expect(line({ syncedAt: null })).toEqual({ tone: "pending", text: "↻ Pas encore synchronisé" });
   });

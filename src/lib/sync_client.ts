@@ -9,7 +9,7 @@ import { fileSize, openFile, removeFile, saveFile } from "./storage";
 import { CONFIRMED_DELETION, latestChanges, planPush, rowKey } from "./sync_client_plan";
 import { applyIncoming, listMediaFiles, readState, recordError, scanLocal } from "./sync_local";
 import type { Change, PushItem, SyncMedia } from "./sync_protocol";
-import type { CycleProgress } from "./sync_status";
+import type { CycleProgress, SyncReason } from "./sync_status";
 import type { PushOutcome } from "./sync_push";
 import { serverVersion, type ChangesBatch } from "./sync_server";
 
@@ -44,7 +44,7 @@ export type CycleReport = {
 // doit redémarrer pour se mettre à jour. token : jeton refusé.
 export class SyncError extends Error {
   constructor(
-    readonly reason: "offline" | "version" | "token" | "server",
+    readonly reason: SyncReason,
     message: string,
   ) {
     super(message);
@@ -235,13 +235,25 @@ async function cycle(config: SyncConfig): Promise<CycleReport> {
 // Un cycle à la fois : un second appel pendant qu'un cycle tourne reçoit le
 // même résultat. Un échec est noté dans sync_state, que lit la ligne d'état.
 let running: Promise<CycleReport> | null = null;
+// Motif du dernier échec, en mémoire seulement : un écart de version se règle
+// en redémarrant, ce qui l'efface ; un cycle réussi aussi.
+let lastReason: SyncReason | null = null;
+
+export function readReason(): SyncReason | null {
+  return lastReason;
+}
 
 export function runCycle(): Promise<CycleReport> {
   const config = syncConfig();
   if (!config) return Promise.reject(new SyncError("server", "Cette instance ne se synchronise pas (SYNC_REMOTE_URL absente)."));
   running ??= cycle(config)
+    .then((report) => {
+      lastReason = null;
+      return report;
+    })
     .catch(async (error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
+      lastReason = error instanceof SyncError ? error.reason : "server";
       await recordError(message).catch(() => {});
       throw error;
     })

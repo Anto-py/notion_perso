@@ -107,6 +107,32 @@ le miroir et son onglet, cliquer à nouveau sur l'icône rouvre l'onglet,
 la quitter (Cmd + Q) arrête le serveur. Échecs et construction s'annoncent
 par notification, le détail va dans `~/notion_perso_miroir/journal/consulter.log`.
 
+## App Mac synchronisée
+
+Une seconde instance tourne sur le Mac, contre sa propre base
+(`notion_perso_local`), utilisable sans réseau et synchronisée avec le serveur.
+Elle se prépare une fois :
+
+1. Créer un client de synchronisation sur le serveur
+   (`DATABASE_URL=… npm run sync:jeton -- "Mac"`) et ranger le jeton au
+   trousseau : `security add-generic-password -s notion-perso-sync -a mac -w`.
+2. Écrire `~/notion_perso_app/app.conf` :
+   ```bash
+   NOTION_APP_DISTANT=https://<app web>
+   NOTION_APP_COOLIFY=https://<instance Coolify>/api/v1
+   NOTION_APP_COOLIFY_APP=<uuid de l'application Coolify>
+   ```
+   Le jeton de l'API Coolify est lu au trousseau (service `coolify-api`).
+3. Lancer une première fois dans un terminal, qui demande le compte local :
+   `bash scripts/notion_lancer.sh`.
+4. Fabriquer l'app : `bash scripts/notion_app.sh` (dans `/Applications`).
+
+À chaque ouverture, l'app se cale sur le dernier déploiement Coolify réussi,
+le construit si besoin (la version précédente reste en secours), migre la base
+locale, lance le serveur sur `127.0.0.1:3200` et ouvre une fenêtre Chrome à
+profil dédié. Fermer cette fenêtre, ou Cmd + Q, arrête tout. Sans réseau, la
+version déjà construite sert. Journal : `~/notion_perso_app/journal/lancer.log`.
+
 ## Licence
 
 MIT, voir [LICENSE](LICENSE). BlockNote, l'éditeur, est sous MPL-2.0.
