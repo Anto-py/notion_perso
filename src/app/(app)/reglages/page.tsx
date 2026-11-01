@@ -5,6 +5,7 @@ import { DevicesSection } from "@/components/settings/DevicesSection";
 import { PublicViewSection } from "@/components/settings/PublicViewSection";
 import { SyncSection } from "@/components/settings/SyncSection";
 import { VersionSection } from "@/components/settings/VersionSection";
+import { canSwitchVersion } from "@/lib/app_version";
 import { getCurrentUser } from "@/lib/auth";
 import { backupDir, listBackups } from "@/lib/backups";
 import { currentInstance, getSetting } from "@/lib/settings";
@@ -44,7 +45,7 @@ async function Section({ section, username }: { section: SettingsSection; userna
     case "compte":
       return <AccountSection username={username} />;
     case "version":
-      return <VersionSection />;
+      return <VersionSection switchable={canSwitchVersion()} />;
     case "appareils": {
       const clients = await listClients();
       return (

@@ -1,10 +1,12 @@
 // Réglages › Version : le commit et le schéma qui tournent. Le journal des
 // migrations est lu au build, comme pour la synchronisation (serverVersion).
+// Sous le lanceur du Mac, en plus : mettre à jour, revenir en secours.
 import journal from "@/db/migrations/meta/_journal.json";
+import { VersionSwitch } from "./VersionSwitch";
 
 const DATE = new Intl.DateTimeFormat("fr-BE", { dateStyle: "long", timeZone: "Europe/Brussels" });
 
-export function VersionSection() {
+export function VersionSection({ switchable }: { switchable: boolean }) {
   const commit = process.env.SOURCE_COMMIT?.trim();
   const last = journal.entries.at(-1);
   return (
@@ -24,6 +26,7 @@ export function VersionSection() {
           )}
         </dd>
       </dl>
+      {switchable && <VersionSwitch />}
     </section>
   );
 }

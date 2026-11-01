@@ -76,8 +76,10 @@ on idle
 end idle
 
 -- Pendant la construction, le lanceur a des enfants (npm, next build) ; une
--- fois prêt, il est devenu le serveur (exec node). Le port couvre un serveur
--- lancé hors de l'app ; le profil, la fenêtre restée sans page.
+-- fois prêt, il surveille le serveur, son enfant, et s'arrête avec lui. Une
+-- bascule de version depuis Réglages ne le quitte pas : la fenêtre reste. Le
+-- port couvre un serveur lancé hors de l'app ; le profil, la fenêtre restée
+-- sans page.
 on quit
 	if lance is not "" then do shell script "/usr/bin/pkill -P " & lance & " || true; kill " & lance & " 2>/dev/null || true"
 	do shell script "/usr/sbin/lsof -tiTCP:" & port & " -sTCP:LISTEN | xargs kill 2>/dev/null || true"

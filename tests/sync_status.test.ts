@@ -85,6 +85,19 @@ describe("syncLine", () => {
     expect(line({ reason: "version" })).toEqual({ tone: "calm", text: "✓ Synchronisé 14:05" });
   });
 
+  it("version de secours épinglée : la synchronisation arrêtée, pas un redémarrage", () => {
+    const error = "Code différent (serveur 0a2197f, Mac 90bf8a4).";
+    expect(line({ error, reason: "version", pending: 3, fallback: true })).toEqual({
+      tone: "fallback",
+      text: "⚠ Version de secours : synchronisation arrêtée",
+      title: "Mettre à jour dans Réglages › Version",
+    });
+    // Épinglée mais acceptée par le serveur (même commit) : rien à dire.
+    expect(line({ fallback: true })).toEqual({ tone: "calm", text: "✓ Synchronisé 14:05" });
+    // Une sauvegarde ratée passe toujours devant.
+    expect(line({ error, reason: "version", fallback: true, backupAlert: "daily_failed" }).tone).toBe("backup");
+  });
+
   it("jamais synchronisé, rien en attente", () => {
     expect(line({ syncedAt: null })).toEqual({ tone: "pending", text: "↻ Pas encore synchronisé" });
   });

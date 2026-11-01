@@ -21,6 +21,7 @@ type Status = {
   progress: CycleProgress | null;
   suspended: SyncSuspension | null;
   backupAlert: BackupAlert | null;
+  fallback: boolean;
 };
 
 type Value = Status & {
@@ -41,6 +42,7 @@ const EMPTY: Status = {
   progress: null,
   suspended: null,
   backupAlert: null,
+  fallback: false,
 };
 const REFRESH_MS = 10_000;
 
@@ -148,7 +150,7 @@ export function usePagePending(pageId: string, savedTick: number): boolean | nul
 // La ligne d'état telle que la calcule syncLine, pour la barre latérale et
 // Réglages › Synchronisation.
 export function useSyncLine() {
-  const { syncedAt, error, reason, pending, conflicts, online, suspended, backupAlert } = useSyncStatus();
+  const { syncedAt, error, reason, pending, conflicts, online, suspended, backupAlert, fallback } = useSyncStatus();
   return syncLine({
     syncedAt: syncedAt ? new Date(syncedAt) : null,
     error,
@@ -158,15 +160,18 @@ export function useSyncLine() {
     online,
     suspended,
     backupAlert,
+    fallback,
   });
 }
 
 // Où mène un clic sur la ligne : un conflit vers sa liste, une suspension
-// vers ce qui la lève, une sauvegarde ratée vers la liste des sauvegardes.
+// vers ce qui la lève, une sauvegarde ratée vers la liste des sauvegardes,
+// la version de secours vers « Mettre à jour ».
 const LINE_LINKS: Partial<Record<string, string>> = {
   conflict: "/conflits",
   suspended: "/reglages#synchronisation",
   backup: "/reglages#sauvegardes",
+  fallback: "/reglages#version",
 };
 
 // Ligne d'état et bouton, en bas de la barre latérale. Rien sur une

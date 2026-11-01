@@ -258,6 +258,7 @@ a {
 .sync-conflict,
 .sync-backup,
 .sync-error,
+.sync-fallback,
 .sync-suspended {
   color: var(--danger);
 }
@@ -406,6 +407,13 @@ a {
 
 .settings-actions .hint {
   margin: 0;
+}
+
+/* Réglages › Version : confirmation du retour en secours, sur une ligne. */
+.settings-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
 
 .skeleton {

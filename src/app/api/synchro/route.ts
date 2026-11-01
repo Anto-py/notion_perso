@@ -5,6 +5,7 @@
 // et rend son bilan, 409 si la synchronisation est suspendue. 404 sur une instance qui ne se synchronise pas (VPS,
 // développement).
 import { fail, requireUser } from "@/lib/api";
+import { pinnedCommit } from "@/lib/app_version";
 import { backupAlert } from "@/lib/backups";
 import { countConflicts } from "@/lib/conflicts";
 import { readProgress, readReason, runCycle, SyncError } from "@/lib/sync_client";
@@ -18,7 +19,13 @@ export async function GET(request: Request) {
   if (!syncConfig()) return fail(404, "Cette instance ne se synchronise pas");
   const page = new URL(request.url).searchParams.get("page");
   if (page) return Response.json({ pagePending: await pagePending(page) });
-  const [state, scan, conflicts, suspended] = await Promise.all([readState(), scanLocal(), countConflicts(), readSuspension()]);
+  const [state, scan, conflicts, suspended, pinned] = await Promise.all([
+    readState(),
+    scanLocal(),
+    countConflicts(),
+    readSuspension(),
+    pinnedCommit(),
+  ]);
   return Response.json({
     syncedAt: state?.syncedAt ?? null,
     error: state?.error ?? null,
@@ -32,6 +39,8 @@ export async function GET(request: Request) {
     suspended,
     // Sauvegarde ratée au lancement (BACKUP_ALERT du lanceur), null sinon.
     backupAlert: backupAlert(),
+    // Version de secours épinglée : le serveur refuse l'échange (commit).
+    fallback: pinned !== null,
   });
 }
 

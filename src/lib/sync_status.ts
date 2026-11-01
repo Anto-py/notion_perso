@@ -18,9 +18,11 @@ export type SyncSnapshot = {
   online: boolean;
   suspended?: SyncSuspension | null;
   backupAlert?: BackupAlert | null;
+  // Version de secours épinglée (versions/.epingle), sur le Mac seulement.
+  fallback?: boolean;
 };
 
-export type SyncTone = "calm" | "pending" | "offline" | "conflict" | "error" | "suspended" | "backup";
+export type SyncTone = "calm" | "pending" | "offline" | "conflict" | "error" | "suspended" | "backup" | "fallback";
 
 const BACKUP_TEXT: Record<BackupAlert, string> = {
   update_deferred: "⚠ Mise à jour reportée : sauvegarde impossible",
@@ -98,14 +100,18 @@ export function suspensionMotive(suspension: Extract<SyncSuspension, { by: "auto
 // conflit demande un geste, le hors ligne explique l'attente, le reste est du
 // calme.
 // Un écart de version se règle en relançant l'app, qui se met à jour au
-// lancement (SPECS.md, « Versions ») : la ligne le dit plutôt que l'échec.
-export function syncLine({ syncedAt, error, reason, pending, conflicts, online, suspended, backupAlert }: SyncSnapshot): SyncLine {
+// lancement (SPECS.md, « Versions ») : la ligne le dit plutôt que l'échec ;
+// sauf en version de secours, épinglée, que le relancement ne quitte pas.
+export function syncLine({ syncedAt, error, reason, pending, conflicts, online, suspended, backupAlert, fallback }: SyncSnapshot): SyncLine {
   if (suspended) {
     const title = "Reprendre dans Réglages › Synchronisation";
     if (suspended.by === "auto") return { tone: "suspended", text: `⏸ Suspendue : ${suspensionMotive(suspended)}`, title };
     return { tone: "suspended", text: `⏸ Synchronisation suspendue${pending > 0 ? ` · ${pending} en attente` : ""}`, title };
   }
   if (backupAlert) return { tone: "backup", text: BACKUP_TEXT[backupAlert], title: "Voir Réglages › Sauvegardes" };
+  if (error && reason === "version" && fallback) {
+    return { tone: "fallback", text: "⚠ Version de secours : synchronisation arrêtée", title: "Mettre à jour dans Réglages › Version" };
+  }
   if (error && reason === "version") return { tone: "error", text: "⚠ Redémarrer pour mettre à jour", title: error };
   if (error) return { tone: "error", text: "⚠ Synchronisation en échec", title: error };
   if (conflicts > 0) {

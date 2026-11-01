@@ -143,7 +143,7 @@ async function fetchMissing(config: SyncConfig, report: CycleReport): Promise<vo
       const size = await download(config, file);
       report.filesDown++;
       report.bytesDown += size;
-      if (progress) progress.bytes += size;
+      if (memory.progress) memory.progress.bytes += size;
     } catch (error) {
       if (error instanceof SyncError && error.reason !== "server") throw error;
       report.filesMissing++;
@@ -154,12 +154,27 @@ async function fetchMissing(config: SyncConfig, report: CycleReport): Promise<vo
 
 // --- Cycle ------------------------------------------------------------------------
 
-// Avancement du cycle en cours, lu par GET /api/synchro (ligne d'état). En
-// mémoire, propre au processus : un état éphémère, jamais une donnée du vault.
-let progress: CycleProgress | null = null;
+// État du cycle, en mémoire, propre au processus : éphémère, jamais une donnée
+// du vault. Next charge ce module deux fois, pour instrumentation.ts (la
+// boucle) et pour les routes (ligne d'état, « Synchroniser maintenant ») ;
+// partagé par globalThis, il garde un seul verrou, un seul avancement et un
+// seul motif d'échec (sans quoi le motif posé par la boucle restait invisible
+// aux routes, constaté le 2026-11-01).
+type CycleMemory = {
+  // Avancement du cycle en cours, lu par GET /api/synchro (ligne d'état).
+  progress: CycleProgress | null;
+  // Un cycle à la fois : un second appel pendant qu'un cycle tourne reçoit le
+  // même résultat.
+  running: Promise<CycleReport> | null;
+  // Motif du dernier échec : un écart de version se règle en redémarrant, ce
+  // qui l'efface ; un cycle réussi aussi.
+  lastReason: SyncReason | null;
+};
+const shared = globalThis as typeof globalThis & { __notionSyncCycle?: CycleMemory };
+const memory: CycleMemory = (shared.__notionSyncCycle ??= { progress: null, running: null, lastReason: null });
 
 export function readProgress(): CycleProgress | null {
-  return progress;
+  return memory.progress;
 }
 
 // Plus de pages abîmées que le seuil, dans un sens que « Reprendre » n'a pas
@@ -177,7 +192,7 @@ async function cycle(config: SyncConfig): Promise<CycleReport> {
   // L'objet publié ne change pas pendant le cycle : la route lit toujours
   // une référence stable, dont les nombres avancent.
   const tracked: CycleProgress = { first: cursor === "0", pages: 0, pagesTotal: null, bytes: 0, bytesTotal: null };
-  progress = tracked;
+  memory.progress = tracked;
   try {
     // 1. Envoi. Un média dont le fichier n'a pas pu partir reste en attente.
     const scan = await scanLocal();
@@ -264,19 +279,14 @@ async function cycle(config: SyncConfig): Promise<CycleReport> {
     if (waiver) await clearWaiver();
     return report;
   } finally {
-    progress = null;
+    memory.progress = null;
   }
 }
 
-// Un cycle à la fois : un second appel pendant qu'un cycle tourne reçoit le
-// même résultat. Un échec est noté dans sync_state, que lit la ligne d'état.
-let running: Promise<CycleReport> | null = null;
-// Motif du dernier échec, en mémoire seulement : un écart de version se règle
-// en redémarrant, ce qui l'efface ; un cycle réussi aussi.
-let lastReason: SyncReason | null = null;
+// Un échec est noté dans sync_state, que lit la ligne d'état.
 
 export function readReason(): SyncReason | null {
-  return lastReason;
+  return memory.lastReason;
 }
 
 // Suspendue : aucun cycle, ni requête ni erreur notée ; le motif du dernier
@@ -284,24 +294,30 @@ export function readReason(): SyncReason | null {
 async function guardedCycle(config: SyncConfig): Promise<CycleReport> {
   if (await readSuspension()) return { ...emptyReport(), skipped: true };
   const report = await cycle(config);
-  lastReason = null;
+  memory.lastReason = null;
   return report;
 }
 
 export function runCycle(): Promise<CycleReport> {
   const config = syncConfig();
   if (!config) return Promise.reject(new SyncError("server", "Cette instance ne se synchronise pas (SYNC_REMOTE_URL absente)."));
-  running ??= guardedCycle(config)
+  memory.running ??= guardedCycle(config)
     .catch(async (error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
-      lastReason = error instanceof SyncError ? error.reason : "server";
+      memory.lastReason = error instanceof SyncError ? error.reason : "server";
       await recordError(message).catch(() => {});
       throw error;
     })
     .finally(() => {
-      running = null;
+      memory.running = null;
     });
-  return running;
+  return memory.running;
+}
+
+// Attend la fin du cycle en cours, réussi ou non : un changement de version
+// ne coupe pas le serveur au milieu d'une écriture.
+export async function settleCycle(): Promise<void> {
+  await memory.running?.catch(() => {});
 }
 
 // Lancé par instrumentation.ts au démarrage de l'instance du Mac.
