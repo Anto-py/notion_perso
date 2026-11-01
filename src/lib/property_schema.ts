@@ -145,6 +145,11 @@ export type EntryRow = {
   manualOrder: string;
   createdAt: string;
   updatedAt: string;
+  // Galerie (étape 9) : bandeau de l'entrée ("image:<fichier>" ou
+  // "color:<teinte>") et première image de son corps, lue en SQL. Absentes
+  // quand le producteur n'en a pas besoin.
+  cover?: string | null;
+  bodyImage?: string | null;
 };
 
 // Le titre de l'entrée est le titre de sa page : une colonne fixe, filtrable

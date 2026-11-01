@@ -7,7 +7,8 @@ import { renderHtml, subpageRefs } from "@/lib/blocks";
 import { configOf } from "@/lib/databases";
 import { MEDIA_BASE } from "@/lib/icons";
 import type { Page } from "@/lib/pages";
-import { matchesFilters, normalizeValues, sortEntries, withTimes, type EntryRow } from "@/lib/properties";
+import { matchesFilters, normalizeValues, sortEntries, withTimes, type EntryRow, type Property } from "@/lib/properties";
+import { cardImage, type View } from "@/lib/views";
 import { PageCover } from "./PageCover";
 import { PageIcon, PageLabel } from "./PageIcon";
 import { TYPE_ICONS, ValueView } from "./propertyUi";
@@ -50,7 +51,7 @@ export function ReadOnlyPage({ page, crumbs, subpages, href, source, mediaBase =
       </h1>
       {page.type === "entry" && <EntryProperties entry={page} source={source} />}
       {page.type === "database" ? (
-        <PublicTable database={page} href={href} source={source} mediaBase={mediaBase} />
+        <PublicDatabase database={page} href={href} source={source} mediaBase={mediaBase} />
       ) : (
         <div className="public-body" dangerouslySetInnerHTML={{ __html: bodyHtml(page, byId, href, mediaBase) }} />
       )}
@@ -118,9 +119,10 @@ async function EntryProperties({ entry, source }: { entry: Page; source: ReadOnl
   );
 }
 
-// Une base se lit en tableau selon sa première vue, Kanban et Liste compris :
-// filtres, tris et propriétés masquées respectés.
-async function PublicTable({
+// Une base se lit selon sa première vue : tableau pour un Kanban ou une
+// Liste, galerie pour une Galerie. Filtres, tris et propriétés masquées
+// respectés dans les deux cas.
+async function PublicDatabase({
   database,
   href,
   source,
@@ -133,14 +135,75 @@ async function PublicTable({
 }) {
   const { properties, views } = configOf(database);
   const view = views[0];
-  const entries = sortEntries(
+  const entries = await publicEntries(database, view, properties, source);
+  if (!entries.length) return <p className="hint">Cette base ne contient aucune entrée.</p>;
+  return view.kind === "gallery" ? (
+    <ul className={`gallery-grid public-gallery gallery-${view.card_size}`}>
+      {entries.map((entry) => {
+        const image = cardImage(entry);
+        return (
+          <li key={entry.id}>
+            <Link href={href(entry.id)} className="gallery-card">
+              <span className="gallery-image">
+                {image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={withMediaBase(image, mediaBase)} alt={view.show_title ? "" : entry.title} loading="lazy" />
+                ) : (
+                  <span className="gallery-fallback">
+                    <PageIcon icon={entry.icon} type="entry" big mediaBase={mediaBase} />
+                  </span>
+                )}
+              </span>
+              {view.show_title && (
+                <span className="gallery-title">
+                  <PageLabel row={entry} mediaBase={mediaBase} />
+                </span>
+              )}
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  ) : (
+    <PublicTable entries={entries} properties={properties} view={view} href={href} mediaBase={mediaBase} />
+  );
+}
+
+// Entrées d'une vue : filtres appliqués, horodatages ajoutés, tri de la vue.
+async function publicEntries(
+  database: Page,
+  view: View,
+  properties: Property[],
+  source: ReadOnlySource,
+): Promise<EntryRow[]> {
+  return sortEntries(
     (await source.listEntries(database.id))
       .filter((entry) => matchesFilters(entry, view.filters, properties))
       .map((entry) => ({ ...entry, values: withTimes(properties, entry.values, entry) })),
     view.sorts,
     properties,
   );
-  if (!entries.length) return <p className="hint">Cette base ne contient aucune entrée.</p>;
+}
+
+// L'image d'une carte peut vivre dans la copie d'une sauvegarde : sa base est
+// réécrite, comme pour les liens du corps.
+function withMediaBase(url: string, mediaBase: string): string {
+  return mediaBase === MEDIA_BASE ? url : url.replaceAll(MEDIA_BASE, mediaBase);
+}
+
+function PublicTable({
+  entries,
+  properties,
+  view,
+  href,
+  mediaBase,
+}: {
+  entries: EntryRow[];
+  properties: Property[];
+  view: View;
+  href: (id: string) => string;
+  mediaBase: string;
+}) {
   const columns = properties.filter((prop) => !view.hidden.includes(prop.id));
   return (
     <div className="table-wrap">

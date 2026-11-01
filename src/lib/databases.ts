@@ -82,6 +82,10 @@ export async function listEntries(dbId: string, executor: Pick<typeof db, "selec
       id: pages.id,
       title: pages.title,
       icon: pages.icon,
+      cover: pages.cover,
+      // Première image du corps, colonnes comprises, sans charger le corps
+      // entier pour la Galerie (BRAINSTORMING §4, SPECS « views »).
+      bodyImage: sql<string | null>`jsonb_path_query_first(${pages.body}, '$.** ? (@.type == "image").props.url') #>> '{}'`,
       propertyValues: pages.propertyValues,
       manualOrder: pages.manualOrder,
       createdAt: pages.createdAt,
@@ -98,6 +102,8 @@ export async function listEntries(dbId: string, executor: Pick<typeof db, "selec
     manualOrder: row.manualOrder,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    cover: row.cover,
+    bodyImage: row.bodyImage,
   }));
 }
 

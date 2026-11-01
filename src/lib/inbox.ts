@@ -5,12 +5,15 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { pages } from "@/db/schema";
 import { CAPTURE_TITLE_MAX, noteFromText } from "./capture";
+import { COVER_POSITION_DEFAULT, imageCover } from "./covers";
 import { keyAfterLast, updateDatabase } from "./databases";
 import { newId } from "./ids";
-import type { Page } from "./pages";
+import { recordMedia, updatePage, type Page } from "./pages";
 import { valuesToText, type Property, type Values } from "./properties";
 import { parseConfig, sanitizeView, type DbConfig } from "./views";
 import { domainOf } from "./unfurl";
+import { fetchRemoteImage } from "./unfurl_fetch";
+import { saveFile } from "./storage";
 
 export const INBOX_TITLE = "Vide-cerveau";
 export const INBOX_URL_PROP = "prop_inbox_url";
@@ -106,7 +109,31 @@ export async function captureNote(text: string): Promise<{ id: string }> {
   return { id };
 }
 
-export type LinkCapture = { url: string; title?: string; description?: string; source?: string };
+export type LinkCapture = { url: string; title?: string; description?: string; source?: string; image?: string | null };
+
+// L'image Open Graph est rapatriée dans les médias et posée en bandeau : elle
+// survit à l'expiration de l'adresse distante et illustre la Galerie
+// (BRAINSTORMING §5). Un échec laisse la capture sans bandeau, sans erreur.
+async function attachCover(pageId: string, imageUrl: string): Promise<void> {
+  const remote = await fetchRemoteImage(imageUrl);
+  if (!remote) return;
+  const mediaId = newId("up");
+  const filename = `${mediaId}.${remote.ext}`;
+  try {
+    await saveFile(new Blob([remote.bytes]).stream(), filename);
+  } catch {
+    return;
+  }
+  await recordMedia({
+    id: mediaId,
+    filename,
+    originalName: filename,
+    mime: remote.mime,
+    size: remote.bytes.byteLength,
+    pageId,
+  });
+  await updatePage(pageId, { cover: imageCover(filename), coverPosition: COVER_POSITION_DEFAULT });
+}
 
 // Un lien capturé garde son URL même sans métadonnées : le titre retombe sur
 // le domaine, la description et la source restent vides.
@@ -123,6 +150,7 @@ export async function captureLink(link: LinkCapture): Promise<{ id: string }> {
   }
   const title = (link.title?.trim() || domainOf(link.url)).slice(0, CAPTURE_TITLE_MAX);
   const id = await insertCapture(inbox.id, properties, values, { title, kind: "link" });
+  if (link.image) await attachCover(id, link.image);
   return { id };
 }
 

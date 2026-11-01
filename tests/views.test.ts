@@ -23,6 +23,8 @@ import {
 import {
   calcOpsFor,
   calcText,
+  cardImage,
+  CARD_SIZE_DEFAULT,
   computeCalc,
   duplicateView,
   LEGACY_VIEW_ID,
@@ -32,6 +34,7 @@ import {
   prefillValues,
   sanitizeView,
   sanitizeViews,
+  VIEW_LABELS,
 } from "@/lib/views";
 
 const duree: Property = { id: "prop_duree", name: "Durée", type: "number", format: "number" };
@@ -50,6 +53,8 @@ const statut: Property = {
 const tags: Property = { id: "prop_tags", name: "Tags", type: "multiselect", options: [{ id: "t1", name: "IA", color: "blue" }] };
 const lu: Property = { id: "prop_lu", name: "Lu", type: "checkbox" };
 const note: Property = { id: "prop_note", name: "Note", type: "text" };
+const echeance: Property = { id: "prop_echeance", name: "Échéance", type: "date" };
+const depart: Property = { id: "prop_depart", name: "Départ", type: "date" };
 const all = [duree, prix, cree, modifie, statut, tags, lu, note];
 
 let order = 0;
@@ -233,6 +238,70 @@ describe("vues", () => {
     );
     expect(prefillValues(view, all)).toEqual({ prop_statut: "s2", prop_tags: ["t1"], prop_lu: true });
     expect(prefillValues(sanitizeView({ filters: [{ prop: statut.id, op: "is_not", value: "s1" }] }, all), all)).toEqual({});
+  });
+});
+
+describe("galerie", () => {
+  it("relit la vue Galerie avec ses valeurs par défaut et garde ses réglages", () => {
+    const view = sanitizeView({ id: "view_galerie", kind: "gallery" }, all);
+    expect(view).toMatchObject({ kind: "gallery", name: VIEW_LABELS.gallery, card_size: CARD_SIZE_DEFAULT, show_title: true });
+    expect(sanitizeView({ kind: "gallery", card_size: "grande", show_title: false }, all)).toMatchObject({
+      card_size: CARD_SIZE_DEFAULT,
+      show_title: false,
+    });
+    expect(sanitizeView({ kind: "gallery", card_size: "small" }, all).card_size).toBe("small");
+    expect(sanitizeView({ kind: "gallery", show_title: "oui" }, all).show_title).toBe(true);
+  });
+
+  it("change de type en gardant la taille de carte et le titre", () => {
+    const galerie = sanitizeView({ id: "v_g", kind: "gallery", card_size: "large", show_title: false }, all);
+    expect(sanitizeView({ ...galerie, kind: "table" }, all, galerie.id)).toMatchObject({ card_size: "large", show_title: false });
+    expect(duplicateView([galerie], galerie).card_size).toBe("large");
+    expect(newView([galerie], "gallery", all).name).toBe("Galerie 2");
+  });
+
+  it("choisit l'illustration : bandeau, puis image du corps, puis rien", () => {
+    expect(cardImage({ cover: "image:up_abcdefghijklmnop.png" })).toBe("/api/media/up_abcdefghijklmnop.png");
+    // Un bandeau de couleur ne masque pas l'image du corps.
+    expect(cardImage({ cover: "color:teal", bodyImage: "https://exemple.org/a.jpg" })).toBe("https://exemple.org/a.jpg");
+    expect(cardImage({ bodyImage: "/api/media/up_abcdefghijklmnop.png" })).toBe("/api/media/up_abcdefghijklmnop.png");
+    // Un nom qui n'est pas un média stocké, ou un schéma étranger, ne passe pas.
+    expect(cardImage({ bodyImage: "/api/media/autre.png" })).toBeNull();
+    expect(cardImage({ bodyImage: "javascript:alert(1)" })).toBeNull();
+    expect(cardImage({ cover: "image:up_abcdefghijklmnop.svg" })).toBeNull();
+    expect(cardImage({})).toBeNull();
+  });
+});
+
+describe("calendrier", () => {
+  const dates = [note, echeance, depart];
+
+  it("relit la vue Calendrier, sa propriété Date et son échelle", () => {
+    const view = sanitizeView({ id: "view_cal", kind: "calendar" }, dates);
+    expect(view).toMatchObject({
+      kind: "calendar",
+      name: VIEW_LABELS.calendar,
+      calendar_scale: "month",
+      date_prop: "prop_echeance",
+    });
+    expect(sanitizeView({ kind: "calendar", date_prop: "prop_depart", calendar_scale: "week" }, dates)).toMatchObject({
+      date_prop: "prop_depart",
+      calendar_scale: "week",
+    });
+    // Une propriété disparue ou qui n'est pas une Date retombe sur la première.
+    expect(sanitizeView({ kind: "calendar", date_prop: "prop_note" }, dates).date_prop).toBe("prop_echeance");
+    expect(sanitizeView({ kind: "calendar", calendar_scale: "année" }, dates).calendar_scale).toBe("month");
+  });
+
+  it("ne désigne aucune Date quand la base n'en a pas", () => {
+    expect(sanitizeView({ kind: "calendar" }, [note]).date_prop).toBeNull();
+    expect(sanitizeView({ kind: "calendar" }, []).date_prop).toBeNull();
+  });
+
+  it("garde la Date et l'échelle en changeant de type ou en dupliquant", () => {
+    const vue = sanitizeView({ id: "v_cal", kind: "calendar", date_prop: "prop_depart", calendar_scale: "week" }, dates);
+    expect(sanitizeView({ ...vue, kind: "table" }, dates, vue.id)).toMatchObject({ date_prop: "prop_depart", calendar_scale: "week" });
+    expect(duplicateView([vue], vue)).toMatchObject({ date_prop: "prop_depart", calendar_scale: "week" });
   });
 });
 

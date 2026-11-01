@@ -19,7 +19,8 @@ import {
   type Property,
   type Sort,
 } from "@/lib/properties";
-import type { View } from "@/lib/views";
+import { CALENDAR_SCALES, CALENDAR_SCALE_LABELS, type CalendarScale } from "@/lib/calendar";
+import { CARD_SIZE_LABELS, CARD_SIZES, type CardSize, type View } from "@/lib/views";
 
 type Props = { properties: Property[]; view: View; columns: Column[]; onChange: (view: View, delay?: number) => void };
 
@@ -30,6 +31,7 @@ export function ViewControls({ properties, view, columns, onChange }: Props) {
   const [boardColumnsOpen, setBoardColumnsOpen] = useState(false);
   const filterable = [TITLE_PROP, ...properties];
   const groupables = properties.filter((prop) => isGroupableType(prop.type));
+  const dateProps = properties.filter((prop) => prop.type === "date");
   const groupProp = groupables.find((prop) => prop.id === view.group_by) ?? groupables[0];
   const hiddenColumnKeys = new Set(groupProp ? (view.hidden_columns[groupProp.id] ?? []) : []);
   const hiddenColumnCount = columns.filter((column) => hiddenColumnKeys.has(column.key ?? NO_COLUMN)).length;
@@ -73,6 +75,61 @@ export function ViewControls({ properties, view, columns, onChange }: Props) {
             {groupables.map((prop) => (
               <option key={prop.id} value={prop.id}>
                 {prop.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {view.kind === "gallery" && (
+        <>
+          <div className="control-row">
+            <span className="control-label">Cartes</span>
+            <select
+              aria-label="Taille des cartes"
+              value={view.card_size}
+              onChange={(event) => onChange({ ...view, card_size: event.target.value as CardSize })}
+            >
+              {CARD_SIZES.map((size) => (
+                <option key={size} value={size}>
+                  {CARD_SIZE_LABELS[size]}
+                </option>
+              ))}
+            </select>
+            <label className="column-toggle">
+              <input type="checkbox" checked={view.show_title} onChange={(event) => onChange({ ...view, show_title: event.target.checked })} />
+              Titre affiché
+            </label>
+          </div>
+        </>
+      )}
+
+      {view.kind === "calendar" && (
+        <div className="control-row">
+          <span className="control-label">Date</span>
+          {dateProps.length > 0 ? (
+            <select
+              aria-label="Propriété Date du calendrier"
+              value={view.date_prop ?? dateProps[0].id}
+              onChange={(event) => onChange({ ...view, date_prop: event.target.value })}
+            >
+              {dateProps.map((prop) => (
+                <option key={prop.id} value={prop.id}>
+                  {prop.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="hint">Aucune propriété Date dans cette base</span>
+          )}
+          <select
+            aria-label="Échelle du calendrier"
+            value={view.calendar_scale}
+            onChange={(event) => onChange({ ...view, calendar_scale: event.target.value as CalendarScale })}
+          >
+            {CALENDAR_SCALES.map((scale) => (
+              <option key={scale} value={scale}>
+                {CALENDAR_SCALE_LABELS[scale]}
               </option>
             ))}
           </select>

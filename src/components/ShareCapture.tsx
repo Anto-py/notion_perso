@@ -29,7 +29,7 @@ export function ShareCapture({
   // moment où la réponse arrive, pas celle, figée, du montage.
   const touched = useRef(false);
   const [text, setText] = useState(payload.kind === "note" ? payload.text : "");
-  const [preview, setPreview] = useState({ description: "", source: "" });
+  const [preview, setPreview] = useState({ description: "", source: "", image: "" as string });
   const [loading, setLoading] = useState(link !== null);
   const [target, setTarget] = useState(inbox.id);
   const [busy, setBusy] = useState(false);
@@ -45,11 +45,11 @@ export function ShareCapture({
     fetch(`/api/unfurl?url=${encodeURIComponent(url)}`)
       .then((response) => (response.ok ? response.json() : null))
       .catch(() => null)
-      .then((data: { title?: string; description?: string; site?: string } | null) => {
+      .then((data: { title?: string; description?: string; site?: string; image?: string | null } | null) => {
         if (!alive) return;
         setLoading(false);
         if (!data) return;
-        setPreview({ description: data.description ?? "", source: data.site ?? "" });
+        setPreview({ description: data.description ?? "", source: data.site ?? "", image: data.image ?? "" });
         // Le titre lu sur la page l'emporte sur celui du partage, jamais sur
         // celui que l'utilisateur a déjà retouché.
         const pageTitle = data.title;
@@ -67,7 +67,7 @@ export function ShareCapture({
     setError(null);
     setBusy(true);
     const body = link
-      ? { url: link.url, title: title.trim() || domainOf(link.url), description: preview.description, source: preview.source }
+      ? { url: link.url, title: title.trim() || domainOf(link.url), description: preview.description, source: preview.source, image: preview.image || null }
       : { text };
     const captured = await send("/api/inbox", "POST", body);
     if (!captured.ok) {

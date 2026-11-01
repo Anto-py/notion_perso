@@ -24,10 +24,26 @@ import {
   type Sort,
   type Values,
 } from "./properties";
+import { parseCover } from "./covers";
+import { CALENDAR_SCALES, CALENDAR_SCALE_DEFAULT, type CalendarScale } from "./calendar";
+import { MEDIA_BASE } from "./icons";
+import { isStoredName } from "./upload_rules";
 
-export const VIEW_KINDS = ["table", "board", "list"] as const;
+export const VIEW_KINDS = ["table", "board", "list", "gallery", "calendar"] as const;
 export type ViewKind = (typeof VIEW_KINDS)[number];
-export const VIEW_LABELS: Record<ViewKind, string> = { table: "Tableau", board: "Kanban", list: "Liste" };
+export const VIEW_LABELS: Record<ViewKind, string> = {
+  table: "Tableau",
+  board: "Kanban",
+  list: "Liste",
+  gallery: "Galerie",
+  calendar: "Calendrier",
+};
+
+// Galerie : taille des cartes, titre affiché ou non.
+export const CARD_SIZES = ["small", "medium", "large"] as const;
+export type CardSize = (typeof CARD_SIZES)[number];
+export const CARD_SIZE_LABELS: Record<CardSize, string> = { small: "Petite", medium: "Moyenne", large: "Grande" };
+export const CARD_SIZE_DEFAULT: CardSize = "medium";
 
 export const CALC_OPS = ["count_all", "count_filled", "count_empty", "sum", "avg", "min", "max"] as const;
 export type CalcOp = (typeof CALC_OPS)[number];
@@ -54,9 +70,12 @@ const NUMERIC_CALCS: ReadonlySet<CalcOp> = new Set(["sum", "avg", "min", "max"])
 
 // group_by : id d'une propriété discrète (Kanban). hidden : ids des
 // propriétés absentes de la vue (colonnes, champs des cartes, valeurs de la
-// liste), toujours modifiables dans l'entrée. hidden_columns : colonnes du
-// Kanban masquées, par propriété de regroupement. calcs : calcul en pied de
-// colonne, par propriété (« title » pour le titre).
+// liste et de la galerie), toujours modifiables dans l'entrée.
+// hidden_columns : colonnes du Kanban masquées, par propriété de regroupement.
+// calcs : calcul en pied de colonne, par propriété (« title » pour le titre).
+// card_size, show_title, calendar_scale et date_prop ne servent qu'aux vues
+// Galerie et Calendrier, mais sont relus pour toute vue : changer de type ne
+// les perd pas.
 export type View = {
   id: string;
   name: string;
@@ -67,6 +86,10 @@ export type View = {
   hidden: string[];
   hidden_columns: Record<string, string[]>;
   calcs: Record<string, CalcOp>;
+  card_size: CardSize;
+  show_title: boolean;
+  calendar_scale: CalendarScale;
+  date_prop: string | null;
 };
 export type DbConfig = { properties: Property[]; views: View[] };
 
@@ -131,6 +154,11 @@ export function sanitizeView(raw: unknown, properties: readonly Property[], fall
     }
   }
 
+  // Calendrier : la propriété Date choisie, à défaut la première de la base
+  // (null s'il n'y en a pas, la vue invite alors à en créer une).
+  const dateProps = properties.filter((prop) => prop.type === "date");
+  const dateProp = dateProps.some((prop) => prop.id === view.date_prop) ? (view.date_prop as string) : (dateProps[0]?.id ?? null);
+
   return {
     id,
     name: typedName || VIEW_LABELS[kind],
@@ -141,6 +169,12 @@ export function sanitizeView(raw: unknown, properties: readonly Property[], fall
     hidden,
     hidden_columns: hiddenColumns,
     calcs,
+    card_size: (CARD_SIZES as readonly unknown[]).includes(view.card_size) ? (view.card_size as CardSize) : CARD_SIZE_DEFAULT,
+    show_title: typeof view.show_title === "boolean" ? view.show_title : true,
+    calendar_scale: (CALENDAR_SCALES as readonly unknown[]).includes(view.calendar_scale)
+      ? (view.calendar_scale as CalendarScale)
+      : CALENDAR_SCALE_DEFAULT,
+    date_prop: dateProp,
   };
 }
 
@@ -244,6 +278,22 @@ export function prefillValues(view: View, properties: readonly Property[]): Valu
     if (prop.type === "multiselect" && filter.op === "contains") values[prop.id] = [filter.value];
   }
   return values;
+}
+
+// --- Galerie --------------------------------------------------------------
+
+// Image d'une carte : le bandeau de l'entrée, à défaut la première image de son
+// corps (lue en SQL par listEntries), à défaut rien. Une adresse de corps n'est
+// gardée que si elle est un média stocké ou une adresse web, même filtre que
+// pour le rendu du corps (safeSrc de lib/blocks.ts).
+export function cardImage(entry: Pick<EntryRow, "cover" | "bodyImage">): string | null {
+  const cover = parseCover(entry.cover ?? null);
+  if (cover?.kind === "image") return `${MEDIA_BASE}${cover.filename}`;
+  const raw = entry.bodyImage;
+  if (typeof raw !== "string") return null;
+  const media = raw.match(/^\/api\/media\/([^/?#]+)$/);
+  if (media) return isStoredName(media[1]) ? raw : null;
+  return /^https?:\/\/[^\s]+$/i.test(raw) ? raw : null;
 }
 
 // --- Calculs en pied de tableau ------------------------------------------

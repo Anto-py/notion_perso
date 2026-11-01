@@ -1,8 +1,9 @@
 "use client";
-// Onglets des vues d'une base : choisir, créer (Tableau, Kanban, Liste),
-// renommer, dupliquer, changer de type, supprimer, réordonner au glisser ou
-// par le menu (clavier). Chaque geste remonte la liste complète des vues ;
-// DatabaseView l'enregistre. La dernière vue ne se supprime pas.
+// Onglets des vues d'une base : choisir, créer (Tableau, Kanban, Liste,
+// Galerie, Calendrier), renommer, dupliquer, changer de type, supprimer,
+// réordonner au glisser ou par le menu (clavier). Chaque geste remonte la
+// liste complète des vues ; DatabaseView l'enregistre. La dernière vue ne se
+// supprime pas.
 import {
   DndContext,
   MouseSensor,
@@ -18,7 +19,7 @@ import { moveInOrder, type Property } from "@/lib/properties";
 import { duplicateView, newView, sanitizeView, VIEW_KINDS, VIEW_LABELS, VIEW_LIMITS, type View, type ViewKind } from "@/lib/views";
 import { CommitInput } from "./CommitInput";
 
-export const VIEW_ICONS: Record<ViewKind, string> = { table: "▦", board: "▥", list: "☰" };
+export const VIEW_ICONS: Record<ViewKind, string> = { table: "▦", board: "▥", list: "☰", gallery: "⊞", calendar: "▤" };
 
 type Props = {
   views: View[];

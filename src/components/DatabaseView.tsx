@@ -27,6 +27,8 @@ import { pickView, prefillValues, type CalcOp, type DbConfig, type View } from "
 import { IconPicker } from "./IconPicker";
 import { CoverPicker } from "./CoverPicker";
 import { KanbanView } from "./KanbanView";
+import { CalendarView } from "./CalendarView";
+import { GalleryView } from "./GalleryView";
 import { ListView } from "./ListView";
 import { SaveIndicator, TitleField } from "./PageView";
 import { PropertySchemaEditor } from "./PropertySchemaEditor";
@@ -166,6 +168,8 @@ export function DatabaseView({ database, config, entries, initialViewId }: Props
   // colonne ne doit pas disparaître du menu de masquage quand un filtre vide
   // ses cartes.
   const boardColumns = useMemo(() => (groupProp ? groupEntries(timed, groupProp) : []), [timed, groupProp]);
+  // Calendrier : la propriété Date choisie par la vue, si elle existe encore.
+  const dateProp = properties.find((prop) => prop.id === view.date_prop && prop.type === "date") ?? null;
 
   // Toute modification renvoie la liste complète des vues ; une frappe
   // (delay > 0) n'est envoyée qu'après un temps de calme.
@@ -253,6 +257,14 @@ export function DatabaseView({ database, config, entries, initialViewId }: Props
     };
     // Le serveur rattache la vue à la première propriété groupable.
     await saveProperties([...properties, statut]);
+  }
+
+  // Un Calendrier sans propriété Date ne peut pas poser d'entrée : on en
+  // propose une, que l'éditeur de propriétés permet ensuite de nommer et de
+  // montrer ailleurs.
+  async function createDateProperty() {
+    const date: Property = { id: localId("prop"), name: uniqueName(properties, "Date"), type: "date" };
+    await saveProperties([...properties, date]);
   }
 
   // Saisie dans une cellule du tableau : la valeur est affichée tout de suite,
@@ -384,6 +396,33 @@ export function DatabaseView({ database, config, entries, initialViewId }: Props
           onCreate={() => createEntry()}
         />
       )}
+      {view.kind === "gallery" && (
+        <GalleryView
+          properties={properties.filter((prop) => !view.hidden.includes(prop.id))}
+          entries={visible}
+          filtered={view.filters.length > 0}
+          onCreate={() => createEntry()}
+          cardSize={view.card_size}
+          showTitle={view.show_title}
+        />
+      )}
+      {view.kind === "calendar" &&
+        (dateProp ? (
+          <CalendarView
+            dateProp={dateProp}
+            scale={view.calendar_scale}
+            entries={visible}
+            onCreate={(values) => createEntry(values)}
+            onMove={(entryId, day) => saveValue(entryId, dateProp.id, day)}
+          />
+        ) : (
+          <div className="board-invite">
+            <p>Le Calendrier pose les entrées sur une propriété Date : il n&apos;y en a pas encore.</p>
+            <button type="button" onClick={createDateProperty}>
+              Créer la propriété « Date »
+            </button>
+          </div>
+        ))}
       {view.kind === "board" &&
         (groupProp ? (
           <KanbanView

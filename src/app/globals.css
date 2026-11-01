@@ -1336,6 +1336,276 @@ a {
   }
 }
 
+/* --- Vue Galerie --------------------------------------------------------- */
+
+.gallery-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fill, minmax(var(--gallery-card, 200px), 1fr));
+}
+
+.gallery-small {
+  --gallery-card: 140px;
+}
+
+.gallery-medium {
+  --gallery-card: 200px;
+}
+
+.gallery-large {
+  --gallery-card: 280px;
+}
+
+.gallery-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--r-surface);
+  overflow: hidden;
+  background: var(--bg);
+  color: inherit;
+  text-decoration: none;
+}
+
+.gallery-card:hover {
+  background: var(--bg-side);
+  border-color: var(--hover);
+}
+
+.gallery-image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 4 / 3;
+  background: var(--bg-side);
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.gallery-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gallery-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+}
+
+.gallery-title {
+  padding: 0.55rem 0.65rem 0;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.gallery-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.7rem;
+  padding: 0.3rem 0.65rem 0.65rem;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.gallery-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Vue Calendrier ------------------------------------------------------ */
+
+.calendar-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.calendar-title {
+  flex: 1 1 auto;
+  font-family: var(--font-label);
+  font-size: 0.92rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.calendar-nav {
+  font-size: 1.2rem;
+  line-height: 1;
+  padding: 0.1rem 0.45rem;
+}
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 1px;
+  padding-bottom: 0.3rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.calendar-weekdays span {
+  padding-left: 0.35rem;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
+
+.calendar-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  min-height: 96px;
+  padding: 0.3rem;
+  background: var(--bg);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.calendar-week .calendar-cell {
+  min-height: 320px;
+}
+
+.calendar-cell.outside {
+  background: var(--bg-side);
+  color: var(--ink-soft);
+}
+
+.calendar-cell.today {
+  background: var(--accent-soft);
+}
+
+.calendar-cell.over {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+
+.calendar-dayhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 1.5rem;
+}
+
+.calendar-daynum {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  padding-left: 0.15rem;
+}
+
+.calendar-cell.today .calendar-daynum {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.calendar-add {
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 0 0.3rem;
+  opacity: 0;
+}
+
+.calendar-cell:hover .calendar-add,
+.calendar-cell:focus-within .calendar-add {
+  opacity: 1;
+}
+
+/* Pas de survol au doigt : le « + » reste offert. */
+@media (hover: none) {
+  .calendar-add {
+    opacity: 1;
+  }
+}
+
+.calendar-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.calendar-chip {
+  display: block;
+  padding: 0.1rem 0.3rem;
+  border-radius: var(--r-inner);
+  background: var(--bg-side);
+  font-size: 0.8rem;
+  overflow: hidden;
+}
+
+.calendar-chip a {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-chip.dragging {
+  opacity: 0.4;
+}
+
+.drag-overlay-chip {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  box-shadow: 3px 3px 0 var(--hover);
+}
+
+.calendar-undated {
+  margin-top: 1rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
+}
+
+.calendar-undated h3 {
+  margin: 0 0 0.4rem;
+  font-family: var(--font-label);
+  font-size: 0.8rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.calendar-undated ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.calendar-undated .calendar-chip {
+  max-width: 16rem;
+}
+
 /* --- Vue Kanban ---------------------------------------------------------- */
 
 .board {
