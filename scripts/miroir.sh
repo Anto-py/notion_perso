@@ -125,7 +125,7 @@ medias="$(psql -d "$neuf" -At -c 'select count(*) from media')"
 [ "$pages" -gt 0 ] || { dropdb --if-exists "$neuf"; echec "dump restauré sans aucune page"; }
 # Droits du rôle de consultation : une base restaurée sans ACL n'en porte aucun.
 psql -d "$neuf" -q -v ON_ERROR_STOP=1 -f "$(dirname "$0")/miroir_droits.sql" 2>> "$journal" \
-  || log "droits du rôle de consultation non posés, miroir_consulter.sh les reposera"
+  || log "droits du rôle de lecture seule non posés sur le miroir"
 dropdb --if-exists --force "$base"
 psql -d postgres -q -c "alter database \"$neuf\" rename to \"$base\""
 
