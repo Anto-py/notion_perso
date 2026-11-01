@@ -2,11 +2,14 @@ import { Suspense } from "react";
 import { AccountSection } from "@/components/settings/AccountSection";
 import { DevicesSection } from "@/components/settings/DevicesSection";
 import { PublicViewSection } from "@/components/settings/PublicViewSection";
+import { SyncSection } from "@/components/settings/SyncSection";
 import { VersionSection } from "@/components/settings/VersionSection";
 import { getCurrentUser } from "@/lib/auth";
 import { currentInstance, getSetting } from "@/lib/settings";
-import { sectionsFor, type SettingsSection } from "@/lib/settings_rules";
+import { sectionsFor, SYNC_THRESHOLD_DEFAULT, type SettingsSection } from "@/lib/settings_rules";
 import { listClients } from "@/lib/sync_clients";
+import { syncConfig } from "@/lib/sync_config";
+import { readThreshold } from "@/lib/sync_suspension";
 
 // Réglages de cette instance (BRAINSTORMING §12) : chaque instance n'affiche
 // que ses sections, jamais un secret. Chaque section porte un id, pour qu'un
@@ -65,8 +68,12 @@ async function Section({ section, username }: { section: SettingsSection; userna
         />
       );
     }
-    // Synchronisation et Sauvegardes (Mac) : paliers b à e de l'étape 12.
-    case "synchronisation":
+    case "synchronisation": {
+      // L'adresse seule, jamais le jeton.
+      const remote = syncConfig()?.remote ?? "";
+      return <SyncSection remote={remote} threshold={await readThreshold()} thresholdDefault={SYNC_THRESHOLD_DEFAULT} />;
+    }
+    // Sauvegardes (Mac) : paliers c à e de l'étape 12.
     case "sauvegardes":
       return null;
   }

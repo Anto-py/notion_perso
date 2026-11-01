@@ -5,6 +5,7 @@
 // la sidebar et la page ouverte ne peuvent pas diverger.
 import Link from "next/link";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import type { SyncSuspension } from "@/lib/settings_rules";
 import { progressLabel, syncLine, type CycleProgress, type SyncReason } from "@/lib/sync_status";
 
 type Status = {
@@ -17,11 +18,27 @@ type Status = {
   pending: number;
   conflicts: number;
   progress: CycleProgress | null;
+  suspended: SyncSuspension | null;
 };
 
-type Value = Status & { online: boolean; syncing: boolean; version: number; syncNow: () => Promise<void> };
+type Value = Status & {
+  online: boolean;
+  syncing: boolean;
+  version: number;
+  syncNow: () => Promise<void>;
+  refresh: () => Promise<void>;
+};
 
-const EMPTY: Status = { configured: null, syncedAt: null, error: null, reason: null, pending: 0, conflicts: 0, progress: null };
+const EMPTY: Status = {
+  configured: null,
+  syncedAt: null,
+  error: null,
+  reason: null,
+  pending: 0,
+  conflicts: 0,
+  progress: null,
+  suspended: null,
+};
 const REFRESH_MS = 10_000;
 
 const SyncContext = createContext<Value | null>(null);
@@ -87,7 +104,7 @@ export function SyncStatusProvider({ children }: { children: ReactNode }) {
   }, [refresh, syncNow]);
 
   return (
-    <SyncContext.Provider value={{ ...status, online, syncing, version, syncNow }}>
+    <SyncContext.Provider value={{ ...status, online, syncing, version, syncNow, refresh }}>
       {children}
     </SyncContext.Provider>
   );
@@ -125,17 +142,29 @@ export function usePagePending(pageId: string, savedTick: number): boolean | nul
   return configured && known?.pageId === pageId ? known.pending : null;
 }
 
+// La ligne d'état telle que la calcule syncLine, pour la barre latérale et
+// Réglages › Synchronisation.
+export function useSyncLine() {
+  const { syncedAt, error, reason, pending, conflicts, online, suspended } = useSyncStatus();
+  return syncLine({ syncedAt: syncedAt ? new Date(syncedAt) : null, error, reason, pending, conflicts, online, suspended });
+}
+
+// Où mène un clic sur la ligne : un conflit vers sa liste, une suspension
+// vers ce qui la lève.
+const LINE_LINKS: Partial<Record<string, string>> = { conflict: "/conflits", suspended: "/reglages#synchronisation" };
+
 // Ligne d'état et bouton, en bas de la barre latérale. Rien sur une
 // instance qui ne se synchronise pas.
 export function SyncStatus() {
-  const { configured, syncedAt, error, reason, pending, conflicts, progress, online, syncing, syncNow } = useSyncStatus();
+  const { configured, progress, online, syncing, syncNow, suspended } = useSyncStatus();
+  const line = useSyncLine();
   if (!configured) return null;
-  const line = syncLine({ syncedAt: syncedAt ? new Date(syncedAt) : null, error, reason, pending, conflicts, online });
   const busy = syncing || progress !== null;
+  const href = LINE_LINKS[line.tone];
   return (
     <div className={`sync-status sync-${line.tone}`}>
-      {line.tone === "conflict" ? (
-        <Link href="/conflits" title={line.title}>
+      {href ? (
+        <Link href={href} title={line.title}>
           {line.text}
         </Link>
       ) : (
@@ -146,9 +175,11 @@ export function SyncStatus() {
         type="button"
         className="sync-now"
         onClick={() => void syncNow()}
-        disabled={!online || busy}
+        disabled={!online || busy || suspended !== null}
         title={
-          !online
+          suspended
+            ? "Synchronisation suspendue : reprendre dans Réglages › Synchronisation"
+            : !online
             ? "Serveur injoignable : synchronisation impossible hors ligne"
             : busy
               ? "Synchronisation en cours"

@@ -256,7 +256,8 @@ a {
 }
 
 .sync-conflict,
-.sync-error {
+.sync-error,
+.sync-suspended {
   color: var(--danger);
 }
 
@@ -379,6 +380,31 @@ a {
   margin-left: auto;
   display: flex;
   gap: 0.4rem;
+}
+
+/* Réglages › Synchronisation : le motif d'une suspension automatique, puis
+   « Suspendre » ou « Reprendre » au-dessus du seuil. */
+.settings-alert {
+  margin: 1rem 0 0;
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--r-inner);
+  background: var(--danger-soft);
+}
+
+.settings-alert p {
+  margin: 0.3rem 0;
+}
+
+.settings-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.settings-actions .hint {
+  margin: 0;
 }
 
 .skeleton {

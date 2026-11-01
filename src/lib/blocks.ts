@@ -138,6 +138,12 @@ export function columnHasContent(block: Json): boolean {
   return childrenOf(block).some(columnHasContent);
 }
 
+// Un corps « pèse » si l'un de ses blocs pèse, au même sens : la suspension
+// automatique compte un corps qui pesait et ne pèse plus (sync_client_plan.ts).
+export function bodyHasContent(body: Json): boolean {
+  return Array.isArray(body) && body.some(columnHasContent);
+}
+
 // --- Blocs-liens vers les sous-pages --------------------------------------------
 //
 // Une sous-page créée par le menu « / » laisse dans le corps de sa mère un bloc

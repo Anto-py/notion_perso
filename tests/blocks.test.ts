@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendOrphans, columnHasContent, columnStructure, flattenToText, refChanges, renderHtml, safeHref, subpageRefs } from "@/lib/blocks";
+import { appendOrphans, bodyHasContent, columnHasContent, columnStructure, flattenToText, refChanges, renderHtml, safeHref, subpageRefs } from "@/lib/blocks";
 
 describe("flattenToText", () => {
   it("aplatit titres, paragraphes et liens, un bloc par ligne", () => {
@@ -282,6 +282,14 @@ describe("colonnes", () => {
     expect(columnHasContent(column([block("image", [], { url: "/api/media/up_x.png" })]))).toBe(true);
     expect(columnHasContent(column([block("divider")]))).toBe(true);
     expect(columnHasContent(column([block("paragraph", [], {}, [sub("pg_a")])]))).toBe(true);
+  });
+
+  it("dit qu'un corps pèse si l'un de ses blocs pèse", () => {
+    expect(bodyHasContent([])).toBe(false);
+    expect(bodyHasContent(null)).toBe(false);
+    expect(bodyHasContent([block("paragraph", [text(" ")]), block("paragraph")])).toBe(false);
+    expect(bodyHasContent([block("paragraph"), block("paragraph", [text("Une phrase")])])).toBe(true);
+    expect(bodyHasContent([block("image", [], { url: "/api/media/up_x.png" })])).toBe(true);
   });
 
   it("rend les colonnes côte à côte dans la vue publique", () => {

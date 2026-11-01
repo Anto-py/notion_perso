@@ -4,7 +4,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { settings } from "@/db/schema";
-import { syncConfig } from "./sync_client";
+import { syncConfig } from "./sync_config";
 import { readSettingValue, type Instance, type SettingKey, type SettingValues } from "./settings_rules";
 
 // Le Mac se reconnaît à sa configuration de synchronisation ; tout le reste

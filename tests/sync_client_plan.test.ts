@@ -4,10 +4,13 @@ import {
   CONFIRMED_DELETION,
   applyOrder,
   canonicalJson,
+  countDamage,
   decideIncoming,
+  incomingPageChanges,
   isPending,
   latestChanges,
   localPage,
+  pendingPageChanges,
   planPush,
   rowHash,
   type BaseEntry,
@@ -240,5 +243,77 @@ describe("localPage", () => {
 
   it("n'écrit pas une entrée dont la base manque", () => {
     expect(localPage(page({ type: "entry", dbId: "db_gone" }), exists)).toBeNull();
+  });
+});
+
+describe("countDamage", () => {
+  const para = (text: string) => ({ type: "paragraph", content: [{ type: "text", text, styles: {} }], children: [] });
+  const full = (over: Partial<SyncPage> = {}) => page({ body: [para("Une idée")], ...over });
+  const TRASH = "2026-11-01T10:00:00.000Z";
+
+  it("compte une mise en corbeille, un corps vidé et la purge d'une page vivante", () => {
+    const damage = countDamage([
+      { before: full({ id: "pg_a", title: "A" }), after: full({ id: "pg_a", trashedAt: TRASH }) },
+      { before: full({ id: "pg_b", title: "B" }), after: full({ id: "pg_b", body: [para("  ")] }) },
+      { before: full({ id: "pg_c", title: "C" }), after: null },
+    ]);
+    expect(damage).toEqual({ count: 3, kinds: { trashed: 1, emptied: 1, purged: 1 }, titles: ["A", "B", "C"] });
+  });
+
+  it("ne compte pas la purge d'une page déjà en corbeille", () => {
+    expect(countDamage([{ before: full({ trashedAt: TRASH }), after: null }]).count).toBe(0);
+  });
+
+  it("ne compte ni une création, ni une page déjà vide, ni une page restée en corbeille", () => {
+    const damage = countDamage([
+      { before: null, after: full() },
+      { before: page({ body: [] }), after: page({ body: [], title: "Renommée" }) },
+      { before: full({ trashedAt: TRASH }), after: page({ trashedAt: TRASH }) },
+      { before: null, after: null },
+    ]);
+    expect(damage.count).toBe(0);
+  });
+
+  it("compte une seule fois une page mise en corbeille et vidée", () => {
+    const damage = countDamage([{ before: full(), after: page({ body: [], trashedAt: TRASH }) }]);
+    expect(damage.count).toBe(1);
+    expect(damage.kinds.trashed).toBe(1);
+  });
+
+  it("garde cinq titres au plus", () => {
+    const changes = Array.from({ length: 8 }, (_, i) => ({ before: full({ id: `pg_${i}`, title: `P${i}` }), after: null }));
+    const damage = countDamage(changes);
+    expect(damage.count).toBe(8);
+    expect(damage.titles).toEqual(["P0", "P1", "P2", "P3", "P4"]);
+  });
+});
+
+describe("pendingPageChanges", () => {
+  it("compare chaque page en attente à sa dernière version reçue, et ignore les autres lignes", () => {
+    const before = page({ id: "pg_a" });
+    const after = page({ id: "pg_a", title: "Neuve" });
+    const media: Candidate = { kind: "media", id: "md_1", row: mediaRow(), base: null };
+    expect(pendingPageChanges([candidate(after, base(before)), candidate(null, base(before)), media])).toEqual([
+      { before, after },
+      { before, after: null },
+    ]);
+    expect(pendingPageChanges([candidate(after, null)])).toEqual([{ before: null, after }]);
+  });
+});
+
+describe("incomingPageChanges", () => {
+  it("compare chaque page reçue à la ligne locale du même id", () => {
+    const local = page({ id: "pg_a" });
+    const row = page({ id: "pg_a", title: "Reçue" });
+    const changes: Change[] = [
+      { kind: "page", id: "pg_a", rev: 3, row },
+      { kind: "page", id: "pg_b", rev: 4, deleted: true },
+      { kind: "media", id: "md_1", rev: 5, deleted: true },
+    ];
+    const locals = new Map([["pg_a", local]]);
+    expect(incomingPageChanges(changes, locals)).toEqual([
+      { before: local, after: row },
+      { before: null, after: null },
+    ]);
   });
 });

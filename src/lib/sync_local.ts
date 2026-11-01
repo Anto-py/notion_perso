@@ -54,6 +54,13 @@ async function readLocal(tx: Tx | typeof db, kind: SyncKind, ids: string[], lock
   return (await (lock ? query.for("update") : query)).map((r) => ({ id: r.id, localRev: r.rev, row: iconImageToSync(r) }));
 }
 
+// Pages locales par id, au format d'échange : le sens descendant de la
+// suspension automatique les compare au flux reçu, avant toute écriture.
+export async function readLocalPages(ids: string[]): Promise<Map<string, SyncPage>> {
+  const rows = await readLocal(db, "page", ids);
+  return new Map(rows.map((local) => [local.id, local.row as SyncPage]));
+}
+
 async function readBases(tx: Tx | typeof db, kind: SyncKind, ids: string[]): Promise<Map<string, BaseEntry>> {
   if (!ids.length) return new Map();
   const rows = await tx.select().from(syncBase).where(and(eq(syncBase.kind, kind), inArray(syncBase.id, ids)));

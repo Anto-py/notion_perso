@@ -66,6 +66,47 @@ describe("readSettingValue", () => {
   });
 });
 
+describe("réglages de la synchronisation", () => {
+  it("accepte le seuil sur le Mac, en texte comme en nombre, et le refuse sur l'app web", () => {
+    expect(parseSettingWrite("mac", "sync.threshold", " 50 ")).toEqual({ ok: true, key: "sync.threshold", value: 50 });
+    expect(parseSettingWrite("mac", "sync.threshold", 5)).toEqual({ ok: true, key: "sync.threshold", value: 5 });
+    expect(parseSettingWrite("mac", "sync.threshold", "")).toEqual({ ok: true, key: "sync.threshold", value: null });
+    expect(parseSettingWrite("web", "sync.threshold", "50").ok).toBe(false);
+  });
+
+  it("refuse un seuil nul, négatif, décimal ou démesuré", () => {
+    for (const value of ["0", "-3", "2.5", "vingt", 0, 1.5, 10_001]) {
+      expect(parseSettingWrite("mac", "sync.threshold", value).ok).toBe(false);
+    }
+  });
+
+  it("n'écrit jamais l'état de suspension ni l'accord par PATCH", () => {
+    expect(parseSettingWrite("mac", "sync.suspended", "x").ok).toBe(false);
+    expect(parseSettingWrite("mac", "sync.waiver", "up").ok).toBe(false);
+  });
+
+  it("relit une suspension manuelle ou automatique, et écarte une forme inattendue", () => {
+    const at = "2026-11-01T10:00:00.000Z";
+    expect(readSettingValue("sync.suspended", { at, by: "manual" })).toEqual({ at, by: "manual" });
+    const auto = {
+      at,
+      by: "auto",
+      direction: "down",
+      count: 40,
+      kinds: { trashed: 0, emptied: 0, purged: 40 },
+      titles: ["Veille"],
+    };
+    expect(readSettingValue("sync.suspended", auto)).toEqual(auto);
+    expect(readSettingValue("sync.suspended", { ...auto, direction: "sideways" })).toBeNull();
+    expect(readSettingValue("sync.suspended", { ...auto, kinds: { trashed: 1 } })).toBeNull();
+    expect(readSettingValue("sync.suspended", "manual")).toBeNull();
+    expect(readSettingValue("sync.waiver", { direction: "up" })).toEqual({ direction: "up" });
+    expect(readSettingValue("sync.waiver", { direction: "left" })).toBeNull();
+    expect(readSettingValue("sync.threshold", 30)).toBe(30);
+    expect(readSettingValue("sync.threshold", "trente")).toBeNull();
+  });
+});
+
 describe("newPasswordProblem", () => {
   it("exige 10 caractères au moins", () => {
     expect(newPasswordProblem("ancien mot de passe", "court")).toMatch(/10 caractères/);

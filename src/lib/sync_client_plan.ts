@@ -3,6 +3,7 @@
 // envois, et ce qu'on écrit en local à la réception. Les lectures, écritures
 // et appels au serveur sont dans sync_client.ts.
 import { createHash } from "node:crypto";
+import { bodyHasContent } from "./blocks";
 import type { SyncPage } from "./sync_merge";
 import { SYNC_BATCH, writeOrder, type Change, type PushItem, type SyncIconImage, type SyncKind, type SyncMedia } from "./sync_protocol";
 
@@ -170,4 +171,62 @@ export function localPage(row: SyncPage, exists: (id: string) => boolean): SyncP
   if (row.dbId && !exists(row.dbId)) return null;
   if (row.parentId && !exists(row.parentId)) return { ...row, parentId: null };
   return row;
+}
+
+// --- Suspension automatique -----------------------------------------------------
+//
+// Un cycle qui enverrait, ou écrirait, plus de pages abîmées que le seuil
+// s'arrête et se suspend (SPECS.md, « Suspension automatique »). Une page
+// abîmée : mise en corbeille, corps qui pesait vidé, ou purgée alors qu'elle
+// n'était pas en corbeille. Purger une page déjà en corbeille confirme un
+// geste compté le jour de la mise en corbeille (choix d'Antonin du 2026-11-01) ;
+// la vider aussi.
+
+export type DamageKind = "trashed" | "emptied" | "purged";
+export type Damage = { count: number; kinds: Record<DamageKind, number>; titles: string[] };
+// before : la page telle qu'on la tient ; after : ce qu'elle deviendrait,
+// null pour une purge. before null : page inconnue ici, rien à abîmer.
+export type PageChange = { before: SyncPage | null; after: SyncPage | null };
+
+const DAMAGE_TITLES = 5;
+
+function damageOf({ before, after }: PageChange): DamageKind | null {
+  // Rien de ce qui arrive à une page déjà en corbeille ne compte.
+  if (!before || before.trashedAt !== null) return null;
+  if (!after) return "purged";
+  if (after.trashedAt !== null) return "trashed";
+  if (bodyHasContent(before.body) && !bodyHasContent(after.body)) return "emptied";
+  return null;
+}
+
+export function countDamage(changes: Iterable<PageChange>): Damage {
+  const damage: Damage = { count: 0, kinds: { trashed: 0, emptied: 0, purged: 0 }, titles: [] };
+  for (const change of changes) {
+    const kind = damageOf(change);
+    if (!kind) continue;
+    damage.count++;
+    damage.kinds[kind]++;
+    if (damage.titles.length < DAMAGE_TITLES) damage.titles.push(change.before!.title);
+  }
+  return damage;
+}
+
+// Sens montant : chaque page en attente contre sa dernière version reçue.
+export function pendingPageChanges(pending: readonly Candidate[]): PageChange[] {
+  return pending
+    .filter((candidate) => candidate.kind === "page")
+    .map((candidate) => ({
+      before: (candidate.base?.snapshot as SyncPage | undefined) ?? null,
+      after: candidate.row as SyncPage | null,
+    }));
+}
+
+// Sens descendant : chaque page reçue contre la ligne locale du même id.
+export function incomingPageChanges(changes: readonly Change[], locals: ReadonlyMap<string, SyncPage>): PageChange[] {
+  return changes
+    .filter((change) => change.kind === "page")
+    .map((change) => ({
+      before: locals.get(change.id) ?? null,
+      after: "deleted" in change ? null : (change.row as SyncPage),
+    }));
 }

@@ -89,3 +89,42 @@ describe("syncLine", () => {
     expect(line({ syncedAt: null })).toEqual({ tone: "pending", text: "↻ Pas encore synchronisé" });
   });
 });
+
+describe("syncLine, suspension", () => {
+  const at = "2026-11-01T10:00:00.000Z";
+  const auto = (kinds: { trashed: number; emptied: number; purged: number }, direction: "up" | "down" = "down") => ({
+    at,
+    by: "auto" as const,
+    direction,
+    count: kinds.trashed + kinds.emptied + kinds.purged,
+    kinds,
+    titles: [],
+  });
+
+  it("manuelle : le nombre en attente, rien quand rien n'attend", () => {
+    expect(line({ suspended: { at, by: "manual" }, pending: 3 })).toMatchObject({
+      tone: "suspended",
+      text: "⏸ Synchronisation suspendue · 3 en attente",
+    });
+    expect(line({ suspended: { at, by: "manual" } }).text).toBe("⏸ Synchronisation suspendue");
+  });
+
+  it("automatique : le nombre, le geste seul en cause et le côté du lot", () => {
+    expect(line({ suspended: auto({ trashed: 0, emptied: 0, purged: 1638 }) }).text).toBe(
+      "⏸ Suspendue : 1638 pages purgées sur le serveur",
+    );
+    expect(line({ suspended: auto({ trashed: 50, emptied: 0, purged: 0 }, "up") }).text).toBe(
+      "⏸ Suspendue : 50 pages mises en corbeille sur le Mac",
+    );
+    expect(line({ suspended: auto({ trashed: 10, emptied: 15, purged: 0 }, "up") }).text).toBe(
+      "⏸ Suspendue : 25 pages abîmées sur le Mac",
+    );
+  });
+
+  it("passe devant l'erreur, le conflit et le hors ligne, qu'elle rend caducs", () => {
+    const suspended = { at, by: "manual" as const };
+    expect(line({ suspended, error: "Serveur injoignable", reason: "offline" }).tone).toBe("suspended");
+    expect(line({ suspended, conflicts: 2 }).tone).toBe("suspended");
+    expect(line({ suspended, online: false }).tone).toBe("suspended");
+  });
+});

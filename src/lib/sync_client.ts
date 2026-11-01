@@ -5,21 +5,25 @@
 // modifiée ici, le serveur l'ayant reçue et mise en corbeille avant.
 // Actif seulement quand SYNC_REMOTE_URL et SYNC_TOKEN sont posés (l'instance
 // du Mac) ; le VPS et le serveur de développement n'en font rien.
+import type { SyncDirection } from "./settings_rules";
 import { fileSize, openFile, removeFile, saveFile } from "./storage";
-import { CONFIRMED_DELETION, latestChanges, planPush, rowKey } from "./sync_client_plan";
-import { applyIncoming, listMediaFiles, readState, recordError, scanLocal } from "./sync_local";
+import {
+  CONFIRMED_DELETION,
+  countDamage,
+  incomingPageChanges,
+  latestChanges,
+  pendingPageChanges,
+  planPush,
+  rowKey,
+  type Damage,
+} from "./sync_client_plan";
+import { syncConfig, type SyncConfig } from "./sync_config";
+import { applyIncoming, listMediaFiles, readLocalPages, readState, recordError, scanLocal } from "./sync_local";
 import type { Change, PushItem, SyncMedia } from "./sync_protocol";
 import type { CycleProgress, SyncReason } from "./sync_status";
 import type { PushOutcome } from "./sync_push";
 import { serverVersion, type ChangesBatch } from "./sync_server";
-
-export type SyncConfig = { remote: string; token: string };
-
-export function syncConfig(): SyncConfig | null {
-  const remote = process.env.SYNC_REMOTE_URL;
-  const token = process.env.SYNC_TOKEN;
-  return remote && token ? { remote, token } : null;
-}
+import { clearWaiver, readSuspension, readThreshold, readWaiver, suspendForDamage } from "./sync_suspension";
 
 // Rythme décidé (choix d'Antonin du 2026-10-31) : au lancement, puis toutes
 // les 5 minutes ; le bouton « Synchroniser maintenant » en lance un de plus.
@@ -38,7 +42,28 @@ export type CycleReport = {
   filesMissing: number;
   bytesDown: number;
   errors: string[];
+  // Cycle non lancé : la synchronisation était suspendue.
+  skipped: boolean;
+  // Lot arrêté dans ce sens par la suspension automatique, rien d'écrit ni
+  // d'envoyé dans ce sens.
+  halted: SyncDirection | null;
 };
+
+const emptyReport = (): CycleReport => ({
+  pushed: 0,
+  conflicts: 0,
+  received: 0,
+  applied: 0,
+  kept: 0,
+  filesUp: 0,
+  filesDown: 0,
+  filesRemoved: 0,
+  filesMissing: 0,
+  bytesDown: 0,
+  errors: [],
+  skipped: false,
+  halted: null,
+});
 
 // offline : serveur injoignable. version : schéma ou code différent, l'app
 // doit redémarrer pour se mettre à jour. token : jeton refusé.
@@ -137,20 +162,17 @@ export function readProgress(): CycleProgress | null {
   return progress;
 }
 
+// Plus de pages abîmées que le seuil, dans un sens que « Reprendre » n'a pas
+// accordé : la synchronisation se suspend, le lot n'est ni envoyé ni écrit.
+async function haltsOn(direction: SyncDirection, damage: Damage, waiver: SyncDirection | null, threshold: number) {
+  if (waiver === direction || damage.count <= threshold) return false;
+  await suspendForDamage(direction, damage);
+  return true;
+}
+
 async function cycle(config: SyncConfig): Promise<CycleReport> {
-  const report: CycleReport = {
-    pushed: 0,
-    conflicts: 0,
-    received: 0,
-    applied: 0,
-    kept: 0,
-    filesUp: 0,
-    filesDown: 0,
-    filesRemoved: 0,
-    filesMissing: 0,
-    bytesDown: 0,
-    errors: [],
-  };
+  const report = emptyReport();
+  const [waiver, threshold] = await Promise.all([readWaiver(), readThreshold()]);
   const cursor = (await readState())?.cursor ?? "0";
   // L'objet publié ne change pas pendant le cycle : la route lit toujours
   // une référence stable, dont les nombres avancent.
@@ -159,6 +181,10 @@ async function cycle(config: SyncConfig): Promise<CycleReport> {
   try {
     // 1. Envoi. Un média dont le fichier n'a pas pu partir reste en attente.
     const scan = await scanLocal();
+    if (await haltsOn("up", countDamage(pendingPageChanges(scan.pending)), waiver, threshold)) {
+      report.halted = "up";
+      return report;
+    }
     const failedUploads = new Set<string>();
     for (const candidate of scan.pending) {
       if (candidate.kind !== "media" || !candidate.row || candidate.base) continue;
@@ -214,8 +240,16 @@ async function cycle(config: SyncConfig): Promise<CycleReport> {
       after = batch.changes.at(-1)!.rev;
     }
 
-    // 3. Écriture, en une transaction, curseur compris.
-    const outcome = await applyIncoming({ changes: [...latestChanges(received).values()], sent: plan.sent, clean: scan.clean, cursor: nextCursor });
+    // 3. Écriture, en une transaction, curseur compris. Un lot arrêté laisse
+    // le curseur en place : ce qui vient de partir sera relu au cycle suivant,
+    // comme une ligne qui bouge avant l'écriture.
+    const changes = [...latestChanges(received).values()];
+    const locals = await readLocalPages(changes.filter((change) => change.kind === "page").map((change) => change.id));
+    if (await haltsOn("down", countDamage(incomingPageChanges(changes, locals)), waiver, threshold)) {
+      report.halted = "down";
+      return report;
+    }
+    const outcome = await applyIncoming({ changes, sent: plan.sent, clean: scan.clean, cursor: nextCursor });
     report.applied = outcome.applied;
     report.kept = outcome.kept;
     report.errors.push(...outcome.skipped);
@@ -226,6 +260,8 @@ async function cycle(config: SyncConfig): Promise<CycleReport> {
       report.filesRemoved++;
     }
     await fetchMissing(config, report);
+    // L'accord ne vaut que pour un lot : effacé au premier cycle réussi.
+    if (waiver) await clearWaiver();
     return report;
   } finally {
     progress = null;
@@ -243,14 +279,19 @@ export function readReason(): SyncReason | null {
   return lastReason;
 }
 
+// Suspendue : aucun cycle, ni requête ni erreur notée ; le motif du dernier
+// échec reste celui d'avant la suspension.
+async function guardedCycle(config: SyncConfig): Promise<CycleReport> {
+  if (await readSuspension()) return { ...emptyReport(), skipped: true };
+  const report = await cycle(config);
+  lastReason = null;
+  return report;
+}
+
 export function runCycle(): Promise<CycleReport> {
   const config = syncConfig();
   if (!config) return Promise.reject(new SyncError("server", "Cette instance ne se synchronise pas (SYNC_REMOTE_URL absente)."));
-  running ??= cycle(config)
-    .then((report) => {
-      lastReason = null;
-      return report;
-    })
+  running ??= guardedCycle(config)
     .catch(async (error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
       lastReason = error instanceof SyncError ? error.reason : "server";
@@ -268,7 +309,11 @@ export function startSyncLoop(): void {
   if (!syncConfig()) return;
   const tick = () => {
     runCycle()
-      .then((report) => console.log("Synchronisation :", JSON.stringify(report)))
+      .then((report) => {
+        if (report.skipped) return;
+        if (report.halted) console.warn(`Synchronisation suspendue : lot ${report.halted === "up" ? "montant" : "descendant"} arrêté.`);
+        else console.log("Synchronisation :", JSON.stringify(report));
+      })
       .catch((error) => console.error("Synchronisation en échec :", error instanceof Error ? error.message : error));
   };
   setTimeout(tick, 3_000);
