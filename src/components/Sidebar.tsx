@@ -187,6 +187,9 @@ export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
           <Link href="/trash" className={pathname === "/trash" ? "active" : undefined}>
             Corbeille
           </Link>
+          <Link href="/reglages" className={pathname === "/reglages" ? "active" : undefined}>
+            Réglages
+          </Link>
           <form method="post" action="/api/auth/logout">
             <span>{username}</span>{" "}
             <button type="submit" className="link">

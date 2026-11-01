@@ -71,6 +71,13 @@
       "when": 1793460675770,
       "tag": "0009_sync_client",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793521252244,
+      "tag": "0010_reglages",
+      "breakpoints": true
     }
   ]
 }

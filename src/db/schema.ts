@@ -218,6 +218,16 @@ export const syncBase = pgTable(
   (t) => [primaryKey({ columns: [t.kind, t.id] })],
 );
 
+// Réglages propres à l'instance (page Réglages, SPECS « Réglages, sauvegardes
+// et suspension ») : jamais synchronisés, d'où ni rev ni sync_xid. Une clé
+// absente vaut sa valeur par défaut ; lib/settings_rules.ts type et valide
+// chaque clé.
+export const settings = pgTable("settings", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 // Côté Mac seulement : une ligne unique (id 1). cursor : curseur du flux des
 // changements, à renvoyer au cycle suivant ; synced_at : fin du dernier cycle
 // réussi ; error : raison du dernier échec, effacée au succès suivant.

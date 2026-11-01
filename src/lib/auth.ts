@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { cache } from "react";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { sessions, users } from "@/db/schema";
 import { hashToken, newToken } from "./ids";
@@ -41,6 +41,20 @@ export async function createSession(userId: string): Promise<string> {
 
 export async function deleteSession(token: string): Promise<void> {
   await db.delete(sessions).where(eq(sessions.tokenHash, hashToken(token)));
+}
+
+// Réglages › Compte (BRAINSTORMING §12) : exige le mot de passe actuel, puis
+// ferme toutes les autres sessions de l'utilisateur ; celle d'où vient la
+// demande reste ouverte. false si le mot de passe actuel est faux.
+export async function changePassword(userId: string, current: string, next: string, keepToken: string): Promise<boolean> {
+  const [row] = await db.select({ passwordHash: users.passwordHash }).from(users).where(eq(users.id, userId)).limit(1);
+  if (!row || !(await verifyPassword(current, row.passwordHash))) return false;
+  const passwordHash = await hashPassword(next);
+  await db.transaction(async (tx) => {
+    await tx.update(users).set({ passwordHash }).where(eq(users.id, userId));
+    await tx.delete(sessions).where(and(eq(sessions.userId, userId), ne(sessions.tokenHash, hashToken(keepToken))));
+  });
+  return true;
 }
 
 async function userFromToken(token: string): Promise<User | null> {

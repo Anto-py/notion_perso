@@ -7,6 +7,7 @@ import { cache } from "react";
 import { renderHtml, safeHref, subpageRefs } from "@/lib/blocks";
 import { configOf, listEntries } from "@/lib/databases";
 import { getPage, type Page } from "@/lib/pages";
+import { getSetting } from "@/lib/settings";
 import { matchesFilters, normalizeValues, sortEntries, withTimes } from "@/lib/properties";
 import { publicHref, type PublicNode } from "@/lib/publication";
 import { listChildren, resolvePublication, type Publication } from "@/lib/publication_query";
@@ -22,13 +23,17 @@ type Href = (pageId: string) => string;
 // generateMetadata et la page lisent la même publication : une seule requête.
 const resolve = cache(resolvePublication);
 
-// Réglables sans toucher au code. Lus au rendu, jamais au build : ce composant
-// est toujours rendu à la demande (il lit la base).
-function siteName(): string {
-  return process.env.SITE_NAME?.trim() || "notion_perso";
-}
+// Réglables sans toucher au code : Réglages › Vue publique d'abord, puis les
+// variables SITE_NAME et LINKEDIN_URL en repli. Lus au rendu, jamais au
+// build : ce composant est toujours rendu à la demande (il lit la base).
+// cache() : métadonnées et page lisent le même réglage, une seule requête.
+const siteName = cache(async (): Promise<string> => {
+  return (await getSetting("public.site_name")) ?? (process.env.SITE_NAME?.trim() || "notion_perso");
+});
 
-function linkedinUrl(): string | null {
+async function linkedinUrl(): Promise<string | null> {
+  const stored = await getSetting("public.linkedin_url");
+  if (stored) return stored;
   const href = safeHref(process.env.LINKEDIN_URL ?? "");
   return href && href.startsWith("https://") ? href : null;
 }
@@ -36,25 +41,25 @@ function linkedinUrl(): string | null {
 export async function publicMetadata(params: PublicParams): Promise<Metadata> {
   const { publicId, pageId } = await params;
   const found = await resolve(publicId, pageId);
-  if (!found) return { title: `Contenu indisponible · ${siteName()}`, robots: { index: false } };
+  if (!found) return { title: `Contenu indisponible · ${await siteName()}`, robots: { index: false } };
   return {
-    title: `${found.page.title || "Sans titre"} · ${siteName()}`,
+    title: `${found.page.title || "Sans titre"} · ${await siteName()}`,
     icons: { icon: faviconHref(found.page.icon, found.page.type) },
   };
 }
 
 export async function PublicPage({ params }: { params: PublicParams }) {
   const { publicId, pageId } = await params;
-  const found = await resolve(publicId, pageId);
+  const [found, site] = await Promise.all([resolve(publicId, pageId), siteName()]);
   return (
     <div className="public">
       <header className="public-header">
         {found ? (
           <Link href={`/p/${publicId}`} className="public-site">
-            {siteName()}
+            {site}
           </Link>
         ) : (
-          <span className="public-site">{siteName()}</span>
+          <span className="public-site">{site}</span>
         )}
       </header>
       <main className="public-main">
@@ -211,8 +216,8 @@ function Children({ rows: children, href }: { rows: { id: string; type: Page["ty
   );
 }
 
-function PublicFooter() {
-  const linkedin = linkedinUrl();
+async function PublicFooter() {
+  const linkedin = await linkedinUrl();
   return (
     <footer className="public-footer">
       <span className="public-ornament" aria-hidden="true">
