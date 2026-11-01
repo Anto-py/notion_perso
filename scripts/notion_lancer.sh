@@ -13,8 +13,9 @@
 #   --verifier            écrit le commit du dernier déploiement Coolify
 #   --preparer <commit>   construit versions/<commit>, journal/preparer.log
 #
-# Premier lancement dans un terminal : il demande le compte local (identifiant,
-# mot de passe), que le serveur crée au démarrage ; le compte ne voyage pas.
+# Premier lancement : il demande le compte local (identifiant, mot de passe),
+# que le serveur crée au démarrage ; le compte ne voyage pas. Depuis l'app, la
+# demande passe par deux fenêtres macOS ; dans un terminal, par le clavier.
 #
 # Mise à jour d'abord (choix d'Antonin du 2026-11-01) : le commit est celui du
 # dernier déploiement Coolify réussi ; construit à part, il ne remplace la
@@ -210,12 +211,18 @@ fi
 
 # Le serveur crée le compte au démarrage (db/bootstrap.ts) s'il n'en trouve
 # aucun ; il lui faut alors un identifiant et un mot de passe, demandés ici
-# s'ils ne sont pas déjà dans l'environnement.
+# s'ils ne sont pas déjà dans l'environnement. Lancée par l'app, l'entrée
+# standard n'est pas un terminal : deux fenêtres les demandent, pour que le
+# premier lancement se fasse sans terminal.
 comptes="$(psql -d "$base" -Atc 'select count(*) from users' 2>/dev/null || echo 0)"
 if [ "$comptes" = "0" ] && { [ -z "${INITIAL_USERNAME:-}" ] || [ -z "${INITIAL_PASSWORD:-}" ]; }; then
-  [ -t 0 ] || echec "aucun compte local : lancer une première fois bash scripts/notion_lancer.sh dans un terminal"
-  read -rp "Compte local, identifiant : " INITIAL_USERNAME
-  read -rsp "Mot de passe : " INITIAL_PASSWORD; echo
+  if [ -t 0 ]; then
+    read -rp "Compte local, identifiant : " INITIAL_USERNAME
+    read -rsp "Mot de passe : " INITIAL_PASSWORD; echo
+  else
+    INITIAL_USERNAME="$(osascript -e 'text returned of (display dialog "Application Mac. Identifiant du compte local :" default answer "" with title "Notion perso" buttons {"Annuler", "Continuer"} default button "Continuer")' 2>/dev/null || true)"
+    INITIAL_PASSWORD="$(osascript -e 'text returned of (display dialog "Mot de passe de ce compte (il reste sur ce Mac) :" default answer "" with hidden answer with title "Notion perso" buttons {"Annuler", "Créer le compte"} default button "Créer le compte")' 2>/dev/null || true)"
+  fi
   [ -n "$INITIAL_USERNAME" ] && [ -n "$INITIAL_PASSWORD" ] || echec "identifiant et mot de passe requis"
   export INITIAL_USERNAME INITIAL_PASSWORD
 fi
