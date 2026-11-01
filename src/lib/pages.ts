@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { media, pages } from "@/db/schema";
 import { flattenToText } from "./blocks";
 import { newId } from "./ids";
+import { removeCitedEntries } from "./relation_query";
 import { emptyConfig } from "./views";
 import { wouldCreateCycle, type TreeRow } from "./tree";
 import { mergeWebSave, type WebFields } from "./web_save";
@@ -243,16 +244,30 @@ export async function restorePage(id: string): Promise<Outcome> {
 // (media_cleanup_query.ts) les efface aussitôt pour une purge manuelle, le
 // balayage 30 jours après pour la purge automatique.
 export async function purgePage(id: string): Promise<Outcome> {
-  const result = await db.execute(sql`DELETE FROM pages WHERE id IN (${trashedBatch(id)})`);
-  return result.rowCount ? { ok: true } : NOT_FOUND;
+  return db.transaction(async (tx) => {
+    const batch = await tx.execute<{ id: string }>(sql`SELECT id FROM (${trashedBatch(id)}) AS lot`);
+    const ids = batch.rows.map((row) => row.id);
+    if (ids.length === 0) return NOT_FOUND;
+    // Les relations qui citaient ces entrées perdent leurs ids morts avant que
+    // les lignes ne disparaissent (étape 10, palier d).
+    await removeCitedEntries(tx, ids);
+    await tx.execute(sql`DELETE FROM pages WHERE id IN (${trashedBatch(id)})`);
+    return { ok: true } as const;
+  });
 }
 
 // Purge des éléments en corbeille depuis plus de 30 jours. Un lot partage son
-// trashed_at, il part donc toujours en entier.
+// trashed_at, il part donc toujours en entier. Les relations qui citaient les
+// entrées purgées sont nettoyées dans la même transaction.
 export async function purgeExpired(): Promise<number> {
-  const limit = new Date(Date.now() - TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000);
-  const deleted = await db.delete(pages).where(lt(pages.trashedAt, limit)).returning({ id: pages.id });
-  return deleted.length;
+  return db.transaction(async (tx) => {
+    const limit = new Date(Date.now() - TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    const expired = await tx.select({ id: pages.id }).from(pages).where(lt(pages.trashedAt, limit));
+    if (expired.length === 0) return 0;
+    await removeCitedEntries(tx, expired.map((row) => row.id));
+    await tx.delete(pages).where(lt(pages.trashedAt, limit));
+    return expired.length;
+  });
 }
 
 // --- Médias ----------------------------------------------------------------

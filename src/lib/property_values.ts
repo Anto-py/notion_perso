@@ -267,12 +267,14 @@ export type Orphan = { name: string; type: PropertyType; text: string };
 // Valeurs qui ne suivront pas le déplacement. Elles sont écrites dans le corps
 // de la page par moveEntry, plutôt que perdues en silence. Une propriété
 // accueillie dont l'option n'existe pas dans la cible compte aussi comme
-// orpheline : transferValues l'a laissée derrière.
+// orpheline : transferValues l'a laissée derrière. Une relation orpheline n'a
+// pas de texte propre : l'appelant lui donne les titres des entrées citées.
 export function orphanValues(
   from: readonly Property[],
   to: readonly Property[],
   values: Values,
   transferred: Values = transferValues(from, to, values),
+  titles: ReadonlyMap<string, string> = new Map(),
 ): Orphan[] {
   const orphans: Orphan[] = [];
   for (const prop of from) {
@@ -280,10 +282,20 @@ export function orphanValues(
     if (value === undefined) continue;
     const hosted = to.find((target) => fold(target.name) === fold(prop.name) && target.type === prop.type);
     if (hosted && transferred[hosted.id] !== undefined) continue;
-    const text = valueText(prop, value).trim();
+    const text = prop.type === "relation" ? relationTitles(value, titles) : valueText(prop, value).trim();
     if (text) orphans.push({ name: prop.name, type: prop.type, text });
   }
   return orphans;
+}
+
+// Les titres des entrées citées, dans l'ordre de la valeur, séparés par des
+// virgules. Un id purgé, sans ligne, n'a pas de titre et disparaît.
+function relationTitles(value: Value, titles: ReadonlyMap<string, string>): string {
+  const ids = Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
+  return ids
+    .map((id) => titles.get(id))
+    .filter((title): title is string => typeof title === "string" && title !== "")
+    .join(", ");
 }
 
 // Valeurs d'une entrée après un changement de la liste des propriétés : les

@@ -9,6 +9,7 @@ import {
   isTwin,
   matchesFilters,
   normalizeValue,
+  orphanValues,
   rollupResultType,
   sortEntries,
   transferValues,
@@ -96,6 +97,20 @@ describe("transferValues, relation", () => {
     const values: Values = { prop_ressources: ["pg_a"] };
     expect(transferValues([ressources], [{ ...ressources, id: "prop_r2" }], values)).toEqual({ prop_r2: ["pg_a"] });
     expect(transferValues([ressources], [{ ...sequences, id: "prop_r2", name: "Ressources" }], values)).toEqual({});
+  });
+
+  it("écrit les titres des entrées citées quand la relation n'a pas d'accueil", () => {
+    const values: Values = { prop_ressources: ["pg_a", "pg_b"] };
+    const titles = new Map([
+      ["pg_a", "Horta"],
+      ["pg_b", "Van de Velde"],
+    ]);
+    const orphans = orphanValues([ressources], [{ id: "prop_titre", name: "Titre", type: "text" }], values, undefined, titles);
+    expect(orphans).toEqual([{ name: "Ressources", type: "relation", text: "Horta, Van de Velde" }]);
+  });
+
+  it("n'écrit rien quand aucun titre n'est résolu", () => {
+    expect(orphanValues([ressources], [], { prop_ressources: ["pg_a"] }, undefined, new Map())).toEqual([]);
   });
 });
 

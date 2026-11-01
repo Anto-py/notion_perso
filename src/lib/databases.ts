@@ -510,6 +510,18 @@ export async function moveEntry(id: string, targetDbId: string): Promise<Outcome
       .where(eq(pages.id, id));
     const previous = asValues(row?.propertyValues);
     const values = transferValues(source.properties, target.properties, previous);
+    // Les titres des entrées citées : une relation qui ne trouve pas d'accueil
+    // dans la base d'arrivée écrit ses titres dans le corps, pas ses ids.
+    const cited = new Set<string>();
+    for (const prop of source.properties) {
+      if (prop.type !== "relation") continue;
+      const ids = normalizeValue(prop, previous[prop.id]);
+      if (Array.isArray(ids)) for (const id of ids) cited.add(id);
+    }
+    const titles = new Map<string, string>();
+    if (cited.size > 0) {
+      for (const [entryId, ref] of await resolveRefs(cited, tx)) titles.set(entryId, ref.title);
+    }
     const manualOrder = await keyAfterLast(tx, targetDbId);
     const [targetMeta] = await tx.select({ isInbox: pages.isInbox }).from(pages).where(eq(pages.id, targetDbId));
 
@@ -521,7 +533,7 @@ export async function moveEntry(id: string, targetDbId: string): Promise<Outcome
     };
     // Une valeur sans propriété d'accueil n'est pas jetée : elle rejoint le
     // corps de la page, préfixée de son nom, l'URL restant cliquable.
-    const orphans = orphanValues(source.properties, target.properties, previous, values);
+    const orphans = orphanValues(source.properties, target.properties, previous, values, titles);
     if (orphans.length > 0) {
       const body = appendOrphans(row?.body, orphans);
       patch.body = body;

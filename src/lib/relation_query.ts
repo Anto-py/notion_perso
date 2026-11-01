@@ -207,6 +207,58 @@ export async function fillRollups<T extends { id: string; values: Values }>(
   });
 }
 
+// Après la purge d'entrées, les ids morts quittent les relations qui les
+// citaient, corbeille comprise : une entrée restaurée plus tard ne doit pas
+// garder une puce qui ne reviendra jamais. Le balayage part des bases des
+// entrées purgées, puis des bases qui portent une relation vers elles.
+// L'appelant fournit la transaction de la purge.
+export async function removeCitedEntries(tx: Tx, ids: readonly string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const removed = new Set(ids);
+  const listed = sql.join(
+    ids.map((id) => sql`${id}`),
+    sql`, `,
+  );
+  const bases = await tx.execute<{ db_id: string }>(sql`
+    SELECT DISTINCT db_id FROM pages
+    WHERE id IN (${listed}) AND type = 'entry' AND db_id IS NOT NULL`);
+  const targets = new Set(bases.rows.map((row) => row.db_id));
+  if (targets.size === 0) return;
+  const databases = await tx.select({ id: pages.id, dbConfig: pages.dbConfig }).from(pages).where(eq(pages.type, "database"));
+  for (const database of databases) {
+    // Une base qui part dans le même lot n'a pas à être nettoyée.
+    if (removed.has(database.id)) continue;
+    const properties = parseConfig(database.dbConfig).properties;
+    const links = properties.filter(
+      (prop) => prop.type === "relation" && !prop.twinOf && !!prop.target && targets.has(prop.target),
+    );
+    if (links.length === 0) continue;
+    const entries = await tx
+      .select({ id: pages.id, propertyValues: pages.propertyValues })
+      .from(pages)
+      .where(eq(pages.dbId, database.id));
+    for (const entry of entries) {
+      const current = asValues(entry.propertyValues);
+      const values = { ...current };
+      let changed = false;
+      for (const link of links) {
+        const list = normalizeValue(link, current[link.id]);
+        if (!Array.isArray(list)) continue;
+        const kept = list.filter((id) => !removed.has(id));
+        if (kept.length === list.length) continue;
+        if (kept.length > 0) values[link.id] = kept;
+        else delete values[link.id];
+        changed = true;
+      }
+      if (!changed) continue;
+      await tx
+        .update(pages)
+        .set({ propertyValues: values, valuesText: valuesToText(properties, values) })
+        .where(eq(pages.id, entry.id));
+    }
+  }
+}
+
 // Écrit depuis la jumelle : les entrées ajoutées reçoivent l'entrée citée dans
 // leur relation déclarante, les entrées retirées la perdent. C'est la seule
 // écriture croisée d'une relation, d'où la transaction et les verrous des deux

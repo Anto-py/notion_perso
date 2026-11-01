@@ -85,15 +85,62 @@ describe("buildCsvDatabase", () => {
     expect(ignored).toEqual([{ reason: "colonne vide « Vide »", count: 1 }]);
   });
 
-  it("convertit une relation en texte et en liens", () => {
+  it("convertit une relation vers une page ordinaire en texte et en liens", () => {
     const ctx = context({
-      resolveLink: (href) => (href === NOTION_URL ? { href: "/page/pg_1", title: "Page liée" } : null),
+      resolveLink: (href) => (href === NOTION_URL ? { href: "/page/pg_1", title: "Page liée", pageId: "pg_1", kind: "page" } : null),
     });
     const { config, entries, notes } = buildCsvDatabase(parseCsv(`Name,Lié\nA,${NOTION_URL}\n`), ctx);
     expect(config.properties[0]).toMatchObject({ name: "Lié", type: "text" });
     expect(entries[0].values[config.properties[0].id]).toBe("Page liée");
     expect(entries[0].extraMarkdown).toBe(`**Lié** : [Page liée](${NOTION_URL})`);
-    expect(notes[0].reason).toContain("relation");
+    expect(notes[0].reason).toContain("convertie en texte");
+  });
+
+  it("importe une relation quand toutes les cellules citent des entrées d'une même base", () => {
+    const links: Record<string, { pageId: string; title: string }> = {
+      "https://notion.so/a": { pageId: "pg_a", title: "Horta" },
+      "https://notion.so/b": { pageId: "pg_b", title: "Van de Velde" },
+    };
+    const ctx = context({
+      resolveLink: (href) => {
+        const link = links[href];
+        return link
+          ? { href: `/page/${link.pageId}`, title: link.title, pageId: link.pageId, kind: "page", dbId: "pg_veille", dbTitle: "Veille" }
+          : null;
+      },
+    });
+    const csv = ['Name,Ressources', 'A,https://notion.so/a', 'B,"https://notion.so/a, https://notion.so/b"'].join("\n");
+    const { config, entries, notes } = buildCsvDatabase(parseCsv(csv), ctx);
+    expect(config.properties[0]).toMatchObject({ name: "Ressources", type: "relation", target: "pg_veille", single: false });
+    expect(entries[0].values[config.properties[0].id]).toEqual(["pg_a"]);
+    expect(entries[1].values[config.properties[0].id]).toEqual(["pg_a", "pg_b"]);
+    expect(notes[0].reason).toBe("relation « Ressources » importée vers « Veille »");
+  });
+
+  it("laisse en texte une colonne qui cite deux bases", () => {
+    const ctx = context({
+      resolveLink: (href) => ({
+        href: `/page/${href}`,
+        title: href,
+        pageId: href,
+        kind: "page",
+        dbId: href === "https://notion.so/a" ? "pg_a" : "pg_b",
+        dbTitle: "Une base",
+      }),
+    });
+    const csv = ['Name,Lien', "A,https://notion.so/a", "B,https://notion.so/b"].join("\n");
+    const { config, notes } = buildCsvDatabase(parseCsv(csv), ctx);
+    expect(config.properties[0]).toMatchObject({ type: "text" });
+    expect(notes[0].reason).toContain("convertie en texte");
+  });
+
+  it("laisse en texte une cellule qui mêle du texte à un lien", () => {
+    const ctx = context({
+      resolveLink: () => ({ href: "/page/pg_a", title: "A", pageId: "pg_a", kind: "page", dbId: "pg_veille", dbTitle: "Veille" }),
+    });
+    const { config, notes } = buildCsvDatabase(parseCsv("Name,Lien\nA,voir https://notion.so/a\n"), ctx);
+    expect(config.properties[0]).toMatchObject({ type: "text" });
+    expect(notes[0].reason).toContain("convertie en texte");
   });
 
   it("renomme une colonne qui prendrait le nom réservé du titre", () => {

@@ -115,6 +115,30 @@ describe("buildImportPlan", () => {
     expect(plan.report.notes).toContainEqual({ reason: "racines de l'export regroupées dans une page conteneur", count: 1 });
   });
 
+  it("importe une colonne de liens en vraie relation entre deux bases", () => {
+    const VEILLE_ID = "e".repeat(32);
+    const SEQ_ID = "f".repeat(32);
+    const HORTA_ID = "1".repeat(32);
+    const VELDE_ID = "2".repeat(32);
+    const plan = buildImportPlan(
+      archive({
+        [`Veille ${VEILLE_ID}.csv`]: "Name,Note\nHorta,4\nVan de Velde,6\n",
+        [`Veille ${VEILLE_ID}/Horta ${HORTA_ID}.md`]: "Horta",
+        [`Veille ${VEILLE_ID}/Van de Velde ${VELDE_ID}.md`]: "Van de Velde",
+        [`Séquences ${SEQ_ID}.csv`]: `Name,Ressources\nSéquence,https://www.notion.so/Horta-${HORTA_ID}\n`,
+      }),
+      ids(),
+    );
+    const sequence = plan.pages.find((page) => page.title === "Séquence")!;
+    const database = plan.pages.find((page) => page.id === sequence.dbId)!;
+    const veille = plan.pages.find((page) => page.title === "Veille")!;
+    const horta = plan.pages.find((page) => page.title === "Horta")!;
+    const relation = database.dbConfig!.properties.find((prop) => prop.name === "Ressources")!;
+    expect(relation).toMatchObject({ type: "relation", target: veille.id });
+    expect(sequence.propertyValues?.[relation.id]).toEqual([horta.id]);
+    expect(plan.report.notes).toContainEqual({ reason: "relation « Ressources » importée vers « Veille »", count: 1 });
+  });
+
   it("refuse un export HTML", () => {
     expect(() => buildImportPlan(archive({ [`Note ${ROOT_ID}.html`]: "<p>x</p>" }), ids())).toThrow(NotionImportError);
   });

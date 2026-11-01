@@ -76,7 +76,9 @@ export type ImportPlan = { rootId: string; pages: PlanPage[]; media: PlanMedia[]
 
 export type ImportOptions = { newId?: (prefix: string) => string; newBlockId?: () => string };
 
-type Target = { id: string; kind: "page" | "database"; title: string };
+// dbId et dbTitle ne sont posés que pour une entrée : un lien de CSV s'en sert
+// pour reconnaître une relation vers des entrées d'une même base.
+type Target = { id: string; kind: "page" | "database"; title: string; dbId?: string; dbTitle?: string };
 
 function count(map: Map<string, number>, reason: string, amount = 1): void {
   map.set(reason, (map.get(reason) ?? 0) + amount);
@@ -149,11 +151,33 @@ export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}):
   // Le CSV complet (_all) et le stub .md de la même base partagent le dossier
   // « Base <id> », qui est la clé commune des liens.
   const dbFolder = (db: NotionItem) => joinPath(db.dir, db.base.replace(/_all$/i, ""));
+  // Le dossier des entrées porte l'identifiant de la base, ou son seul titre
+  // quand la base est une page du même nom (voir indexArchive).
+  const entryDirsOf = (db: NotionItem): string[] => {
+    const dirs = [dbFolder(db)];
+    if (db.title) dirs.push(joinPath(db.dir, db.title));
+    return dirs;
+  };
   for (const db of archive.databases) {
     remember(dbFolder(db), { id: databaseIds.get(db.path)!, kind: "database", title: db.title }, db.notionId);
   }
+  // La base de chaque entrée, connue avant la lecture des CSV : une colonne de
+  // liens ne devient une relation que si toutes ses cibles partagent la même.
+  const entryBase = new Map<string, { id: string; title: string }>();
+  for (const db of archive.databases) {
+    const base = { id: databaseIds.get(db.path)!, title: db.title };
+    const dirs = new Set(entryDirsOf(db));
+    for (const entry of archive.entries) {
+      if (dirs.has(entry.dir)) entryBase.set(entry.path, base);
+    }
+  }
   for (const entry of archive.entries) {
-    remember(stripExtension(entry.path), { id: entryIds.get(entry.path)!, kind: "page", title: entry.title }, entry.notionId);
+    const base = entryBase.get(entry.path);
+    remember(
+      stripExtension(entry.path),
+      { id: entryIds.get(entry.path)!, kind: "page", title: entry.title, dbId: base?.id, dbTitle: base?.title },
+      entry.notionId,
+    );
   }
 
   const mediaByPath = new Map<string, PlanMedia>();
@@ -290,7 +314,14 @@ export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}):
         const notion = NOTION_URL_ID.exec(href);
         const target = notion ? targetByNotionId.get(notion[1].toLowerCase()) : undefined;
         if (!target) return null;
-        return { href: target.kind === "database" ? `/db/${target.id}` : `/page/${target.id}`, title: target.title };
+        return {
+          href: target.kind === "database" ? `/db/${target.id}` : `/page/${target.id}`,
+          title: target.title,
+          pageId: target.id,
+          kind: target.kind,
+          dbId: target.dbId,
+          dbTitle: target.dbTitle,
+        };
       },
     });
     for (const note of built.notes) count(converted, note.reason, note.count);
@@ -311,10 +342,7 @@ export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}):
       manualOrder: 0,
     });
 
-    // Le dossier des entrées porte l'identifiant de la base, ou son seul titre
-    // quand la base est une page du même nom (voir indexArchive).
-    const entryDirs = new Set([dbFolder(db)]);
-    if (db.title) entryDirs.add(joinPath(db.dir, db.title));
+    const entryDirs = new Set(entryDirsOf(db));
     const entryFiles = archive.entries.filter((entry) => entryDirs.has(entry.dir));
     const byTitle = new Map<string, NotionItem[]>();
     for (const file of entryFiles) {

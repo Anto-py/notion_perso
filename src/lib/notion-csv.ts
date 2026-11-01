@@ -29,10 +29,22 @@ export type CsvBuild = {
   ignored: { reason: string; count: number }[];
 };
 
+// Une cible de lien lue dans une cellule de CSV. dbId et dbTitle ne sont
+// posés que pour une entrée : c'est ce qui distingue une relation vers des
+// entrées d'un lien vers une page ou une base.
+export type LinkTarget = {
+  href: string;
+  title: string;
+  pageId: string;
+  kind: "page" | "database";
+  dbId?: string;
+  dbTitle?: string;
+};
+
 export type CsvContext = {
   makeId: (prefix: string) => string;
-  // URL Notion connue de l'archive, avec le titre de sa page.
-  resolveLink: (href: string) => { href: string; title: string } | null;
+  // URL Notion connue de l'archive, avec sa page et, pour une entrée, sa base.
+  resolveLink: (href: string) => LinkTarget | null;
 };
 
 type ColumnKind = "checkbox" | "number" | "date" | "url" | "relation" | "select" | "multiselect" | "text";
@@ -153,6 +165,28 @@ function isRelation(value: string, ctx: CsvContext): boolean {
   return urls.length > 0 && urls.every((url) => ctx.resolveLink(url) !== null);
 }
 
+// La base commune d'une colonne de liens, quand toutes ses cellules non vides
+// ne contiennent que des liens vers des entrées d'une même base. null : la
+// colonne reste en texte et en liens, avec sa note dans le rapport.
+function relationTarget(values: readonly string[], ctx: CsvContext): { dbId: string; dbTitle: string } | null {
+  let found: { dbId: string; dbTitle: string } | null = null;
+  for (const value of values) {
+    const urls = splitUrls(value);
+    if (urls.length === 0) continue;
+    // Un fragment de texte mêlé aux liens disqualifie la cellule : une
+    // relation ne garde pas de commentaire.
+    const remainder = urls.reduce((text, url) => text.split(url).join(""), value).replace(/[\s,]+/g, "");
+    if (remainder !== "") return null;
+    for (const url of urls) {
+      const link = ctx.resolveLink(url);
+      if (!link?.dbId) return null;
+      if (!found) found = { dbId: link.dbId, dbTitle: link.dbTitle ?? "" };
+      else if (found.dbId !== link.dbId) return null;
+    }
+  }
+  return found;
+}
+
 // Plus strict que la saisie : un numéro de téléphone (« 0470 12 34 56 »,
 // « +32 … ») ou une liste de chiffres (« 1, 2 ») reste du texte ou une
 // sélection.
@@ -256,8 +290,16 @@ export function buildCsvDatabase(table: CsvTable, ctx: CsvContext): CsvBuild {
     } else if (kind === "url") {
       prop = { id, name, type: "url" };
     } else if (kind === "relation") {
-      prop = { id, name, type: "text" };
-      notes.push({ reason: `relation « ${name} » convertie en texte et en liens`, count: 1 });
+      const target = relationTarget(filled, ctx);
+      if (target) {
+        // Le CSV ne dit pas si la relation Notion est limitée à une entrée :
+        // elle reste ouverte, une valeur à un seul id restant valide.
+        prop = { id, name, type: "relation", target: target.dbId, single: false };
+        notes.push({ reason: `relation « ${name} » importée vers « ${target.dbTitle || "une base"} »`, count: 1 });
+      } else {
+        prop = { id, name, type: "text" };
+        notes.push({ reason: `relation « ${name} » convertie en texte et en liens`, count: 1 });
+      }
     } else if (kind === "multiselect" || kind === "select") {
       options = makeOptions(distinct(filled.flatMap(kind === "multiselect" ? splitMulti : (value) => [value])), ctx.makeId);
       prop = { id, name, type: kind, options };
@@ -292,6 +334,14 @@ export function buildCsvDatabase(table: CsvTable, ctx: CsvContext): CsvBuild {
         if (start && /→|->/.test(raw)) extras[index].push(`**${name}** : ${raw}`);
       } else if (kind === "url") {
         value = raw.slice(0, LIMITS.url);
+      } else if (kind === "relation" && prop.type === "relation") {
+        // Une vraie relation stocke les ids des entrées citées, jamais leurs
+        // titres : la puce se relit à l'affichage.
+        const ids = splitUrls(raw)
+          .map((url) => ctx.resolveLink(url)?.pageId)
+          .filter((pageId): pageId is string => typeof pageId === "string");
+        const unique = [...new Set(ids)].slice(0, LIMITS.links);
+        value = unique.length > 0 ? unique : undefined;
       } else if (kind === "relation") {
         const links = splitUrls(raw);
         if (links.length > 0) {
