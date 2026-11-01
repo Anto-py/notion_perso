@@ -32,6 +32,12 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
+// L'annuaire tel qu'un bloc le lit : blocs-liens de sous-page et sélecteur de
+// base d'une vue liée.
+export function usePageDirectory(): ReadonlyMap<string, TreeRow> {
+  return useSyncExternalStore(subscribe, () => directory, () => directory);
+}
+
 export const subpageBlock = createReactBlockSpec(
   {
     type: "subpage",
@@ -47,7 +53,7 @@ export const subpageBlock = createReactBlockSpec(
 );
 
 function SubpageLink({ pageId, kind }: { pageId: string; kind: "page" | "database" }) {
-  const pages = useSyncExternalStore(subscribe, () => directory, () => directory);
+  const pages = usePageDirectory();
   if (!pageId) {
     return (
       <div className="subpage-block subpage-pending" contentEditable={false}>

@@ -1,6 +1,23 @@
+import { canAccess } from "@/lib/access";
 import { fail, readJson, reply, requirePage } from "@/lib/api";
-import { updateDatabase, type DatabasePatch } from "@/lib/databases";
+import { configOf, listEntries, updateDatabase, type DatabasePatch } from "@/lib/databases";
 import { validateProperties } from "@/lib/properties";
+
+// GET : la base, sa configuration et ses entrées, pour une vue liée ouverte
+// dans une page (le bloc « linked » de l'éditeur). Rien du corps des entrées :
+// la vue liée n'affiche que titre, icône, valeurs et image de carte.
+export async function GET(_request: Request, ctx: RouteContext<"/api/databases/[id]">) {
+  const { id } = await ctx.params;
+  const found = await requirePage(id, "read");
+  if (found instanceof Response) return found;
+  if (found.page.type !== "database") return fail(404, "Base introuvable");
+  const entries = (await listEntries(id)).filter((entry) => canAccess(found.user, entry, "read"));
+  return Response.json({
+    database: { id: found.page.id, title: found.page.title, icon: found.page.icon },
+    config: configOf(found.page),
+    entries,
+  });
+}
 
 // PATCH { properties?, views? } : liste complète des propriétés (le serveur en
 // déduit la migration des valeurs) et/ou liste complète des vues (type,

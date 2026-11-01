@@ -28,8 +28,10 @@ import {
   computeCalc,
   duplicateView,
   LEGACY_VIEW_ID,
+  linkedConfigText,
   newView,
   parseConfig,
+  parseLinkedConfig,
   pickView,
   prefillValues,
   sanitizeView,
@@ -326,5 +328,50 @@ describe("calculs", () => {
     expect(calcText(duree, "avg", 2 / 3)).toBe("Moyenne 0,67");
     expect(calcText(note, "count_filled", 4)).toBe("Remplis 4");
     expect(calcText(prix, "max", null)).toBe("Max. —");
+  });
+});
+
+describe("vue liée", () => {
+  it("retombe sur une vue Tableau quand la configuration du bloc est vide", () => {
+    const linked = parseLinkedConfig("", [duree]);
+    expect(linked.views).toHaveLength(1);
+    expect(linked.views[0].kind).toBe("table");
+    expect(linked.active).toBe(linked.views[0].id);
+  });
+
+  it("relit une configuration écrite par le bloc, onglet actif compris", () => {
+    const linked = parseLinkedConfig(
+      JSON.stringify({
+        views: [
+          { id: "view_semaine", name: "Cette semaine", kind: "list" },
+          { id: "view_tout", name: "Tout", kind: "table" },
+        ],
+        active: "view_tout",
+      }),
+      [duree],
+    );
+    expect(linked.views.map((view) => view.id)).toEqual(["view_semaine", "view_tout"]);
+    expect(linked.active).toBe("view_tout");
+    expect(parseLinkedConfig(JSON.stringify({ views: [{ id: "view_a" }], active: "disparu" }), []).active).toBe("view_a");
+  });
+
+  it("écarte un filtre qui vise une propriété absente de la base source", () => {
+    const linked = parseLinkedConfig(
+      JSON.stringify({ views: [{ id: "view_a", filters: [{ prop: "prop_inconnue", op: "is_empty" }] }] }),
+      [duree],
+    );
+    expect(linked.views[0].filters).toEqual([]);
+  });
+
+  it("tolère un texte illisible sans lever", () => {
+    expect(parseLinkedConfig("{pas du json", [duree]).views).toHaveLength(1);
+    expect(parseLinkedConfig("null", [duree]).views).toHaveLength(1);
+  });
+
+  it("fait l'aller-retour par le texte du bloc", () => {
+    const linked = parseLinkedConfig("", [duree]);
+    expect(parseLinkedConfig(linkedConfigText({ ...linked, active: linked.views[0].id }), [duree])).toMatchObject({
+      active: linked.views[0].id,
+    });
   });
 });

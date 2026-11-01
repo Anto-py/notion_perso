@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendOrphans, bodyHasContent, columnHasContent, columnStructure, flattenToText, refChanges, renderHtml, safeHref, subpageRefs } from "@/lib/blocks";
+import { appendOrphans, bodyHasContent, columnHasContent, columnStructure, flattenToText, linkedRefs, refChanges, renderHtml, safeHref, subpageRefs } from "@/lib/blocks";
 
 describe("flattenToText", () => {
   it("aplatit titres, paragraphes et liens, un bloc par ligne", () => {
@@ -312,5 +312,34 @@ describe("colonnes", () => {
       ]),
     ];
     expect(flattenToText(body)).toBe("gauche\ndroite");
+  });
+});
+
+describe("vues liées", () => {
+  const linked = (databaseId: string, config = "") => block("linked", [], { databaseId, config });
+
+  it("ramasse les vues liées, colonnes comprises, et ignore celles sans base", () => {
+    const body = [
+      linked("db_veille", '{"views":[]}'),
+      block("columnList", [], {}, [
+        column([linked("")]),
+        column([block("paragraph", [], {}, [linked("db_todo")])]),
+      ]),
+    ];
+    expect(linkedRefs(body)).toEqual([
+      { databaseId: "db_veille", config: '{"views":[]}' },
+      { databaseId: "db_todo", config: "" },
+    ]);
+  });
+
+  it("compte comme du contenu une vue liée pourvue d'une base", () => {
+    expect(columnHasContent(column([linked("")]))).toBe(false);
+    expect(columnHasContent(column([linked("db_veille")]))).toBe(true);
+  });
+
+  it("pose le HTML de la vue liée fourni par l'appelant, rien sans lui", () => {
+    const body = [linked("db_veille", "cfg")];
+    expect(renderHtml(body, { linked: (id, config) => `<div>${id}:${String(config)}</div>` })).toBe('<div>db_veille:cfg</div>');
+    expect(renderHtml(body)).toBe("");
   });
 });

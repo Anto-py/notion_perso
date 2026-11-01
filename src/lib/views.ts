@@ -280,6 +280,40 @@ export function prefillValues(view: View, properties: readonly Property[]): Valu
   return values;
 }
 
+// --- Vue liée -------------------------------------------------------------
+//
+// Un bloc « linked » montre une base existante avec des vues qui lui sont
+// propres : elles vivent dans le bloc, sous forme de texte JSON, jamais dans
+// la base source. Ses filtres et tris ne touchent donc pas ceux de la base.
+
+export type LinkedConfig = { views: View[]; active: string };
+
+function configRecord(raw: unknown): Record<string, unknown> | null {
+  if (typeof raw === "string") {
+    if (!raw.trim()) return null;
+    try {
+      const value: unknown = JSON.parse(raw);
+      return isRecord(value) ? value : null;
+    } catch {
+      return null;
+    }
+  }
+  return isRecord(raw) ? raw : null;
+}
+
+// Lecture tolérante : une configuration absente, illisible ou vidée par une
+// propriété supprimée retombe sur une vue Tableau.
+export function parseLinkedConfig(raw: unknown, properties: readonly Property[]): LinkedConfig {
+  const record = configRecord(raw);
+  const views = sanitizeViews(record?.views, properties);
+  return { views, active: pickView(views, typeof record?.active === "string" ? record.active : null).id };
+}
+
+// Texte rangé dans la propriété du bloc.
+export function linkedConfigText(config: LinkedConfig): string {
+  return JSON.stringify(config);
+}
+
 // --- Galerie --------------------------------------------------------------
 
 // Image d'une carte : le bandeau de l'entrée, à défaut la première image de son

@@ -14,6 +14,7 @@ import { planBlockRuns } from "@/lib/web_save";
 import { youtubeId } from "@/lib/youtube";
 import { columnBlock, columnListBlock } from "./columnsBlock";
 import { conflictBlock } from "./conflictBlock";
+import { linkedBlock } from "./linkedBlock";
 import { youtubeBlock } from "./mediaBlocks";
 import { subpageBlock } from "./subpageBlock";
 
@@ -48,6 +49,7 @@ const schema = BlockNoteSchema.create({
     file,
     youtube: youtubeBlock(),
     subpage: subpageBlock(),
+    linked: linkedBlock(),
     columnList: columnListBlock(),
     column: columnBlock(),
     // Jamais proposé au menu « / » : seule une fusion le pose.
@@ -144,12 +146,22 @@ function childItems(editor: EditorInstance, onCreateChild: (kind: ChildKind) => 
   ];
 }
 
+// Une base existante, montrée avec ses propres vues (bloc « linked »).
+const linkedItem = (editor: EditorInstance) => ({
+  title: "Vue liée",
+  subtext: "Afficher une base existante, avec ses propres vues",
+  aliases: ["vue liée", "vue liee", "liée", "linked", "base", "embed"],
+  group: "Pages",
+  icon: <span aria-hidden>🔗</span>,
+  onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: "linked" }),
+});
+
 function slashItems(editor: EditorInstance, onCreateChild?: (kind: ChildKind) => Promise<string | null>) {
   const items = getDefaultReactSlashMenuItems(editor).map((item) =>
     item.group === "Média" ? { ...item, group: MEDIA_GROUP } : item,
   );
-  // Pages, puis colonnes, puis les blocs courants.
-  items.unshift(...(onCreateChild ? childItems(editor, onCreateChild) : []), ...columnItems(editor));
+  // Pages, puis la vue liée, puis colonnes, puis les blocs courants.
+  items.unshift(...(onCreateChild ? childItems(editor, onCreateChild) : []), linkedItem(editor), ...columnItems(editor));
   const youtube = {
     title: "Vidéo YouTube",
     subtext: "Intégrer une vidéo par son lien",

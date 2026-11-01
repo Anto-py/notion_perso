@@ -127,6 +127,7 @@ export function columnHasContent(block: Json): boolean {
   if (typeof block.type === "string") {
     if (MEDIA_BLOCKS.has(block.type)) return typeof props.url === "string" && props.url.trim() !== "";
     if (block.type === SUBPAGE_BLOCK) return typeof props.pageId === "string" && props.pageId !== "";
+    if (block.type === LINKED_BLOCK) return typeof props.databaseId === "string" && props.databaseId !== "";
     if (block.type === "divider") return true;
   }
   const { content } = block;
@@ -183,6 +184,35 @@ export function refChanges(
   };
 }
 
+// --- Vues liées ----------------------------------------------------------------
+//
+// Un bloc « linked » montre une base existante avec des vues propres au bloc
+// (lib/views.ts, parseLinkedConfig). Le bloc ne garde que l'id de la base et
+// son texte de vues : rien de la base source n'est recopié.
+
+export const LINKED_BLOCK = "linked";
+
+export type LinkedRef = { databaseId: string; config: unknown };
+
+// Vues liées d'un corps, récursivement (colonnes comprises). Un bloc encore
+// vide (base non choisie) ne compte pas.
+export function linkedRefs(body: Json): LinkedRef[] {
+  const refs: LinkedRef[] = [];
+  const visit = (blocks: Json) => {
+    if (!Array.isArray(blocks)) return;
+    for (const block of blocks) {
+      if (!isObject(block)) continue;
+      const props = propsOf(block);
+      if (block.type === LINKED_BLOCK && typeof props.databaseId === "string" && props.databaseId) {
+        refs.push({ databaseId: props.databaseId, config: props.config });
+      }
+      visit(block.children);
+    }
+  };
+  visit(body);
+  return refs;
+}
+
 // --- Rendu HTML de la vue publique -------------------------------------------
 //
 // Le HTML produit est injecté tel quel dans la page publique : tout texte est
@@ -192,7 +222,7 @@ const COLORS = new Set(["gray", "brown", "red", "orange", "yellow", "green", "bl
 const ALIGNMENTS = new Set(["center", "right", "justify"]);
 const ENTITIES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 
-function escapeHtml(text: string): string {
+export function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (char) => ENTITIES[char]);
 }
 
@@ -277,7 +307,12 @@ function blockAttrs(props: Record<string, Json>, extra: string[] = []): string {
 // pas lisible par ce lien (corbeille, déplacée hors du sous-arbre), le bloc
 // disparaît.
 export type SubpageLink = { href: string; title: string; icon: string | null; type?: string };
-export type RenderOptions = { subpage?: (pageId: string) => SubpageLink | null };
+export type RenderOptions = {
+  subpage?: (pageId: string) => SubpageLink | null;
+  // HTML d'une vue liée, calculé à part : il demande les entrées de la base
+  // source. Absent : le bloc ne rend rien (écran de sauvegarde, par exemple).
+  linked?: (databaseId: string, config: unknown) => string | null;
+};
 
 // Double HTML de PageIcon (components/PageIcon.tsx) pour le corps public.
 export function iconHtml(icon: string | null, type?: string): string {
@@ -368,6 +403,10 @@ function blockHtml(block: Json, options: RenderOptions): string {
         ' allow="accelerometer; encrypted-media; gyroscope; picture-in-picture" allowfullscreen' +
         ' referrerpolicy="strict-origin-when-cross-origin"></iframe></div>'
       );
+    }
+    case LINKED_BLOCK: {
+      const databaseId = typeof props.databaseId === "string" ? props.databaseId : "";
+      return databaseId && options.linked ? (options.linked(databaseId, props.config) ?? "") : "";
     }
     case "conflict":
       // Encadré de fusion (lib/sync_merge.ts) : un brouillon à trier dans

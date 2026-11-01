@@ -51,6 +51,21 @@ export function brusselsParts(iso: string): { day: string; time: string } | null
   return { day: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` };
 }
 
+// « 31 oct. 2026 », « 31 oct. 2026, 14:05 », heure de Bruxelles. Écrit à la
+// main plutôt que par Intl : la vue publique (serveur) et l'app (navigateur)
+// rendent alors exactement le même texte.
+const MONTHS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+
+export function dateText(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return `${d} ${MONTHS[m - 1]} ${y}`;
+}
+
+export function dateTimeText(iso: string): string {
+  const parts = brusselsParts(iso);
+  return parts ? `${dateText(parts.day)}, ${parts.time}` : "";
+}
+
 export function isTimestamp(raw: unknown): raw is string {
   return typeof raw === "string" && raw.includes("T") && !Number.isNaN(Date.parse(raw));
 }

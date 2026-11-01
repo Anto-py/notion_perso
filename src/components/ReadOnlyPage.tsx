@@ -3,12 +3,13 @@
 // diffèrent que par leur source de données et leurs liens.
 // Composant serveur : le corps arrive en HTML déjà échappé (lib/blocks.ts).
 import Link from "next/link";
-import { renderHtml, subpageRefs } from "@/lib/blocks";
+import { linkedRefs, renderHtml, subpageRefs } from "@/lib/blocks";
 import { configOf } from "@/lib/databases";
 import { MEDIA_BASE } from "@/lib/icons";
+import { LINKED_PRIVATE_HTML, linkedViewHtml } from "@/lib/linked_html";
 import type { Page } from "@/lib/pages";
 import { matchesFilters, normalizeValues, sortEntries, withTimes, type EntryRow, type Property } from "@/lib/properties";
-import { cardImage, type View } from "@/lib/views";
+import { cardImage, parseLinkedConfig, pickView, type View } from "@/lib/views";
 import { PageCover } from "./PageCover";
 import { PageIcon, PageLabel } from "./PageIcon";
 import { TYPE_ICONS, ValueView } from "./propertyUi";
@@ -35,9 +36,21 @@ export type ReadOnlyPageProps = {
   // JSON : l'écran de sauvegarde réécrit cette base vers la sienne, seule à
   // chercher aussi dans la quarantaine.
   mediaBase?: string;
+  // Vue liée : le public ne la rend que si sa base est elle-même publiée, et
+  // montre sinon l'encart « Contenu privé ». L'écran de sauvegarde, privé, la
+  // rend toujours.
+  linkedPolicy?: "public" | "all";
 };
 
-export function ReadOnlyPage({ page, crumbs, subpages, href, source, mediaBase = MEDIA_BASE }: ReadOnlyPageProps) {
+export async function ReadOnlyPage({
+  page,
+  crumbs,
+  subpages,
+  href,
+  source,
+  mediaBase = MEDIA_BASE,
+  linkedPolicy = "public",
+}: ReadOnlyPageProps) {
   // Un bloc-lien ne mène qu'à une vraie sous-page, hors corbeille : seule
   // celle-là descend de la publication.
   const byId = new Map(subpages.map((child) => [child.id, child]));
@@ -53,7 +66,10 @@ export function ReadOnlyPage({ page, crumbs, subpages, href, source, mediaBase =
       {page.type === "database" ? (
         <PublicDatabase database={page} href={href} source={source} mediaBase={mediaBase} />
       ) : (
-        <div className="public-body" dangerouslySetInnerHTML={{ __html: bodyHtml(page, byId, href, mediaBase) }} />
+        <div
+          className="public-body"
+          dangerouslySetInnerHTML={{ __html: await bodyHtml(page, byId, href, mediaBase, source, linkedPolicy) }}
+        />
       )}
       <Children rows={subpages.filter((child) => !linked.has(child.id))} href={href} mediaBase={mediaBase} />
     </article>
@@ -62,14 +78,74 @@ export function ReadOnlyPage({ page, crumbs, subpages, href, source, mediaBase =
 
 // Le corps JSON porte ses liens de média en dur : la sauvegarde réécrit leur
 // base après le rendu, vers la route qui lit aussi la quarantaine.
-function bodyHtml(page: Page, byId: Map<string, ReadOnlyChild>, href: (id: string) => string, mediaBase: string): string {
+async function bodyHtml(
+  page: Page,
+  byId: Map<string, ReadOnlyChild>,
+  href: (id: string) => string,
+  mediaBase: string,
+  source: ReadOnlySource,
+  linkedPolicy: "public" | "all",
+): Promise<string> {
+  // Les vues liées demandent les entrées d'une autre base : elles sont
+  // rendues à part, puis retrouvées par leur clé au fil du corps.
+  const linkedHtml = new Map<string, string>();
+  for (const ref of linkedRefs(page.body)) {
+    const key = linkedKey(ref.databaseId, ref.config);
+    if (linkedHtml.has(key)) continue;
+    linkedHtml.set(key, await linkedBlockHtml(ref.databaseId, ref.config, source, href, mediaBase, linkedPolicy));
+  }
   const html = renderHtml(page.body, {
     subpage: (id) => {
       const child = byId.get(id);
       return child ? { href: href(child.id), title: child.title, icon: child.icon, type: child.type } : null;
     },
+    linked: (databaseId, config) => linkedHtml.get(linkedKey(databaseId, config)) ?? null,
   });
   return mediaBase === MEDIA_BASE ? html : html.replaceAll(MEDIA_BASE, mediaBase);
+}
+
+// Deux blocs de la même base avec des vues différentes ne partagent pas leur
+// rendu : la clé porte le texte de configuration.
+function linkedKey(databaseId: string, config: unknown): string {
+  return `${databaseId}\u0000${typeof config === "string" ? config : ""}`;
+}
+
+// Une vue liée se lit selon sa propre vue active, filtrée et triée par ses
+// réglages. Publique, elle exige que la base source soit elle-même publiée :
+// sinon l'encart, jamais ses entrées.
+async function linkedBlockHtml(
+  databaseId: string,
+  config: unknown,
+  source: ReadOnlySource,
+  href: (id: string) => string,
+  mediaBase: string,
+  linkedPolicy: "public" | "all",
+): Promise<string> {
+  const base = await source.getPage(databaseId);
+  if (!base || base.trashedAt || base.type !== "database") return LINKED_PRIVATE_HTML;
+  const publicId = base.shareEnabled ? base.publicId : null;
+  if (linkedPolicy === "public" && !publicId) return LINKED_PRIVATE_HTML;
+  const { properties } = configOf(base);
+  const view = pickView(parseLinkedConfig(config, properties).views);
+  const entries = sortEntries(
+    (await source.listEntries(base.id))
+      .filter((entry) => matchesFilters(entry, view.filters, properties))
+      .map((entry) => ({ ...entry, values: withTimes(properties, entry.values, entry) })),
+    view.kind === "board" ? [] : view.sorts,
+    properties,
+  );
+  const own = publicId ? `/p/${publicId}` : null;
+  return linkedViewHtml(
+    { title: base.title, icon: base.icon },
+    entries,
+    properties,
+    view,
+    {
+      href: (entryId) => (own ? `${own}/${entryId}` : href(entryId)),
+      baseHref: own ?? href(base.id),
+      mediaBase,
+    },
+  );
 }
 
 function Crumbs({ crumbs, href, mediaBase }: { crumbs: ReadOnlyCrumb[]; href: (id: string) => string; mediaBase: string }) {

@@ -41,6 +41,7 @@ async function BackupPageData({ params }: { params: PageProps<"/sauvegarde/[id]"
         href={(pageId) => `/sauvegarde/${pageId}`}
         source={{ getPage: backupPage, listEntries: backupEntries }}
         mediaBase="/api/sauvegarde/media/"
+        linkedPolicy="all"
       />
     </div>
   );

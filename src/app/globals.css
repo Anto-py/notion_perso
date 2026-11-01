@@ -2837,6 +2837,68 @@ mark.hit {
   text-underline-offset: 3px;
 }
 
+/* --- Vue liée : une base existante dans une page (bloc « linked ») --------- */
+
+.linked-block {
+  width: 100%;
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-inner);
+  background: var(--bg);
+}
+
+.linked-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.25rem;
+}
+
+.linked-title a {
+  font-weight: 600;
+  text-decoration-color: var(--line);
+  text-underline-offset: 3px;
+}
+
+.linked-title a:hover {
+  background: var(--hover);
+}
+
+/* Le tableau d'une vue liée vit dans un bloc : il respire moins que la base
+   ouverte, sans perdre ses colonnes. */
+.linked-block .db-table {
+  font-size: 0.92em;
+}
+
+/* La base n'est pas encore choisie, ou n'est pas lisible. */
+.linked-panel {
+  width: 100%;
+  margin: 0.5rem 0;
+  padding: 0.75rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-inner);
+  color: var(--ink-soft);
+}
+
+.linked-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.linked-missing {
+  font-style: italic;
+}
+
+.linked-private {
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
 /* --- Icône de page (BRAINSTORMING §1 bis) --------------------------------- */
 
 .page-icon {
