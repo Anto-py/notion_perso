@@ -29,7 +29,10 @@
 # arrêté, donc avant toute migration locale ; 7 quotidiennes et 3 d'avant mise
 # à jour gardées. Pas de migration sans dump : un dump raté reporte la mise à
 # jour. Synchronisation suspendue et version neuve : une fenêtre demande
-# l'accord, la version actuelle étant gardée par défaut.
+# l'accord, la version actuelle étant gardée par défaut. Le serveur recopie de
+# lui-même le dump nocturne du VPS dans le même dossier (serveur_*.dmp, 7
+# gardées, lib/server_dump.ts) quand les trois réglages NOTION_APP_VPS_* sont
+# posés.
 #
 # Superviseur : le lanceur garde le serveur en enfant. Un serveur qui sort en
 # 75 demande une bascule (versions/.demande : « maj <commit> » ou « secours ») ;
@@ -51,7 +54,9 @@
 # (notion_perso_local), NOTION_APP_JETON (notion-perso-sync, service du jeton
 # de synchronisation au trousseau), NOTION_APP_COOLIFY_JETON (coolify-api),
 # NOTION_APP_DEPOT (dépôt public), NOTION_APP_COMMIT (commit imposé, sans
-# Coolify : essais).
+# Coolify : essais). Copie du dump du serveur : NOTION_APP_VPS_HOTE
+# (root@<adresse du VPS>), NOTION_APP_VPS_CLE (clé SSH sans phrase de passe),
+# NOTION_APP_VPS_DUMPS (dossier des dumps Coolify) ; sans eux, pas de copie.
 #
 set -euo pipefail
 
@@ -433,7 +438,8 @@ while :; do
       DATABASE_URL="postgres://$(whoami)@localhost:5432/$base" \
       UPLOAD_DIR="$dossier/uploads" QUARANTINE_DIR="$dossier/quarantaine" \
       BACKUP_DIR="$sauvegardes" BACKUP_ALERT="$alerte_sauvegarde" \
-      MIRROR_DUMP_DIR="${NOTION_APP_MIROIR:-$HOME/notion_perso_miroir}/dumps" \
+      SERVER_DUMP_HOST="${NOTION_APP_VPS_HOTE:-}" SERVER_DUMP_KEY="${NOTION_APP_VPS_CLE:-}" \
+      SERVER_DUMP_DIR="${NOTION_APP_VPS_DUMPS:-}" \
       SYNC_REMOTE_URL="$NOTION_APP_DISTANT" SYNC_TOKEN="$jeton_sync" \
       SOURCE_COMMIT="$version" NOTION_APP_DOSSIER="$dossier" \
       NOTION_APP_LANCEUR="$lanceur" APP_VERSIONS_DIR="$versions" \

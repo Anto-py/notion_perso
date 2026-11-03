@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { getCurrentUser } from "@/lib/auth";
 import { backupTree } from "@/lib/backup_read";
+import { parseBackupName } from "@/lib/backup_rules";
 import { readOpenBackup } from "@/lib/backups";
 import { BackupBanner } from "./BackupBanner";
 import { BackupTree } from "./BackupTree";
@@ -17,7 +18,8 @@ export async function BackupShell({ children }: { children: ReactNode }) {
   const rows = await backupTree();
   return (
     <div className="backup-shell">
-      <BackupBanner at={new Date(open.at)} />
+      {/* La date du contenu, lue dans le nom du dump, pas celle de l'ouverture. */}
+      <BackupBanner at={parseBackupName(open.name)?.at ?? new Date(open.at)} />
       <div className="backup-body">
         <aside className="backup-nav">
           <form action="/sauvegarde" className="backup-search">

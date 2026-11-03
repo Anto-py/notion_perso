@@ -9,6 +9,7 @@ import { pinnedCommit } from "@/lib/app_version";
 import { backupAlert } from "@/lib/backups";
 import { countConflicts } from "@/lib/conflicts";
 import { trialFailed } from "@/lib/backup_rules";
+import { readServerCopyAlert } from "@/lib/server_dump";
 import { getSetting } from "@/lib/settings";
 import { readProgress, readReason, runCycle, SyncError } from "@/lib/sync_client";
 import { syncConfig } from "@/lib/sync_config";
@@ -21,13 +22,14 @@ export async function GET(request: Request) {
   if (!syncConfig()) return fail(404, "Cette instance ne se synchronise pas");
   const page = new URL(request.url).searchParams.get("page");
   if (page) return Response.json({ pagePending: await pagePending(page) });
-  const [state, scan, conflicts, suspended, pinned, trial] = await Promise.all([
+  const [state, scan, conflicts, suspended, pinned, trial, serverCopy] = await Promise.all([
     readState(),
     scanLocal(),
     countConflicts(),
     readSuspension(),
     pinnedCommit(),
     getSetting("backup.trial"),
+    readServerCopyAlert(),
   ]);
   return Response.json({
     syncedAt: state?.syncedAt ?? null,
@@ -44,6 +46,8 @@ export async function GET(request: Request) {
     backupAlert: backupAlert(),
     // Dernière restauration d'essai en échec : le dump ne se relit pas.
     trialFailed: trialFailed(trial),
+    // Copie du dump du serveur illisible ou vieille de 3 jours, null sinon.
+    serverCopy,
     // Version de secours épinglée : le serveur refuse l'échange (commit).
     fallback: pinned !== null,
   });

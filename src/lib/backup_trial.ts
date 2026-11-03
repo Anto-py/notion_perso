@@ -1,11 +1,10 @@
 // Restauration d'essai (palier e de l'étape 12) : une sauvegarde jamais relue
-// n'est qu'un espoir. La dernière du Mac et le dernier dump du miroir sont
-// restaurés tour à tour dans une base jetable, la table pages est relue, la
-// base est effacée. Le résultat s'affiche dans Réglages › Sauvegardes ; un
-// échec alerte dans la ligne d'état jusqu'au prochain essai réussi.
+// n'est qu'un espoir. La dernière du Mac et la dernière copie du serveur
+// (palier f) sont restaurées tour à tour dans une base jetable, la table pages
+// est relue, la base est effacée. Le résultat s'affiche dans Réglages ›
+// Sauvegardes ; un échec alerte dans la ligne d'état jusqu'au prochain essai
+// réussi. La copie du serveur passe par la même relecture avant d'être gardée.
 import { execFile } from "node:child_process";
-import { readdir, stat } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { Pool } from "pg";
@@ -16,27 +15,6 @@ import { getSetting, setSetting } from "./settings";
 
 const run = promisify(execFile);
 const RESTORE_TIMEOUT_MS = 10 * 60 * 1000;
-
-// Écrit par miroir.sh, à défaut le dossier par défaut du LaunchAgent.
-function mirrorDumpDir(): string {
-  const env = process.env.MIRROR_DUMP_DIR;
-  return env ? path.resolve(/*turbopackIgnore: true*/ env) : path.join(/*turbopackIgnore: true*/ os.homedir(), "notion_perso_miroir", "dumps");
-}
-
-// Le .dmp le plus récent du miroir : son nom ne suit pas celui du lanceur.
-async function latestMirrorDump(): Promise<{ file: string; fullPath: string } | null> {
-  const dir = mirrorDumpDir();
-  const names = await readdir(dir).catch(() => [] as string[]);
-  let best: { file: string; fullPath: string; mtimeMs: number } | null = null;
-  for (const name of names) {
-    if (!name.endsWith(".dmp")) continue;
-    const fullPath = path.join(/*turbopackIgnore: true*/ dir, name);
-    const info = await stat(fullPath).catch(() => null);
-    if (!info?.isFile()) continue;
-    if (!best || info.mtimeMs > best.mtimeMs) best = { file: name, fullPath, mtimeMs: info.mtimeMs };
-  }
-  return best ? { file: best.file, fullPath: best.fullPath } : null;
-}
 
 // Restaure un dump dans la base jetable, compte les pages, efface la base.
 // Une base de zéro ligne est un échec : le dump s'est restauré sans rien.
@@ -62,9 +40,34 @@ async function restoreAndCount(dbName: string, fullPath: string): Promise<number
   }
 }
 
-// Ce que pg_restore a dit, plutôt que la ligne de commande : le message
-// complet d'execFile est « Command failed: pg_restore --no-owner … ».
-function failureMessage(error: unknown): string {
+// Une restauration à la fois dans la base jetable : l'essai hebdomadaire et la
+// relecture d'une copie du serveur se la partagent. File sur globalThis, le
+// module étant chargé deux fois (instrumentation.ts et les routes).
+const shared = globalThis as typeof globalThis & { __trialDbQueue?: Promise<unknown> };
+
+function inTrialDb<T>(task: (dbName: string) => Promise<T>): Promise<T> {
+  const dbName = trialDatabaseName(process.env.DATABASE_URL);
+  if (!dbName) return Promise.reject(new Error("Restauration d'essai réservée à l'app Mac : DATABASE_URL manquante"));
+  const next = (shared.__trialDbQueue ?? Promise.resolve()).catch(() => undefined).then(() => task(dbName));
+  shared.__trialDbQueue = next.catch(() => undefined);
+  return next;
+}
+
+export type DumpCheck = { ok: true; pages: number } | { ok: false; error: string };
+
+// Restaure un dump dans la base jetable et compte ses pages.
+export async function checkDump(fullPath: string): Promise<DumpCheck> {
+  try {
+    const pages = await inTrialDb((dbName) => restoreAndCount(dbName, fullPath));
+    return pages > 0 ? { ok: true, pages } : { ok: false, error: "Dump restauré sans aucune page" };
+  } catch (error) {
+    return { ok: false, error: failureMessage(error) };
+  }
+}
+
+// Ce que l'outil a dit, plutôt que la ligne de commande : le message complet
+// d'execFile est « Command failed: pg_restore --no-owner … ».
+export function failureMessage(error: unknown): string {
   if (typeof error === "object" && error !== null && "stderr" in error) {
     const stderr = String((error as { stderr?: unknown }).stderr ?? "");
     const first = stderr.split("\n").find((line) => line.trim() && !line.includes("NOTICE"));
@@ -73,31 +76,25 @@ function failureMessage(error: unknown): string {
   return error instanceof Error ? error.message.split("\n")[0].slice(0, 200) : "Restauration impossible";
 }
 
-async function attempt(source: TrialSource, file: string, fullPath: string, dbName: string): Promise<TrialResult> {
-  try {
-    const pages = await restoreAndCount(dbName, fullPath);
-    if (pages <= 0) return { source, file, ok: false, error: "Dump restauré sans aucune page" };
-    return { source, file, ok: true, pages };
-  } catch (error) {
-    return { source, file, ok: false, error: failureMessage(error) };
-  }
+async function attempt(source: TrialSource, dir: string, file: string): Promise<TrialResult> {
+  const check = await checkDump(path.join(/*turbopackIgnore: true*/ dir, file));
+  return check.ok ? { source, file, ok: true, pages: check.pages } : { source, file, ok: false, error: check.error };
 }
 
-// Les deux sources éprouvées, l'une après l'autre. Une source absente n'est pas
-// un échec : elle n'entre pas dans le résultat, sans quoi l'app alerterait
-// avant la première sauvegarde ou après le retrait du miroir.
+// Les deux sources éprouvées, l'une après l'autre : la dernière sauvegarde du
+// Mac, la dernière copie du serveur. Une source absente n'est pas un échec :
+// elle n'entre pas dans le résultat, sans quoi l'app alerterait avant la
+// première sauvegarde, ou tant que la copie du serveur n'est pas réglée.
 export async function runTrial(): Promise<BackupTrial> {
-  const dbName = trialDatabaseName(process.env.DATABASE_URL);
-  if (!dbName) throw new Error("Restauration d'essai réservée à l'app Mac : DATABASE_URL manquante");
+  if (!trialDatabaseName(process.env.DATABASE_URL)) throw new Error("Restauration d'essai réservée à l'app Mac : DATABASE_URL manquante");
 
   const results: TrialResult[] = [];
   const dir = backupDir();
-  const latest = (await listBackups())[0];
-  if (dir && latest) {
-    results.push(await attempt("mac", latest.name, path.join(/*turbopackIgnore: true*/ dir, latest.name), dbName));
-  }
-  const mirror = await latestMirrorDump();
-  if (mirror) results.push(await attempt("miroir", mirror.file, mirror.fullPath, dbName));
+  const backups = await listBackups();
+  const mac = backups.find((backup) => backup.kind !== "server");
+  const server = backups.find((backup) => backup.kind === "server");
+  if (dir && mac) results.push(await attempt("mac", dir, mac.name));
+  if (dir && server) results.push(await attempt("serveur", dir, server.name));
 
   const trial: BackupTrial = { at: new Date().toISOString(), results };
   await setSetting("backup.trial", trial);

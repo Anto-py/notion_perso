@@ -8,6 +8,8 @@
 //    le Mac, quarantaine vidée de ses fichiers de plus de 30 jours.
 // 4. Sur l'instance du Mac seulement (SYNC_REMOTE_URL posée) : la boucle de
 //    synchronisation, un cycle au lancement puis toutes les 5 minutes.
+// 5 et 6. Sur le Mac (BACKUP_DIR posé) : copie du dump du serveur, restauration
+//    d'essai.
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   if (process.env.MIGRATE_ON_START === "1") {
@@ -22,7 +24,14 @@ export async function register() {
     const { startSyncLoop } = await import("./lib/sync_client");
     startSyncLoop();
   }
-  // 5. Restauration d'essai (palier e), une minute après le démarrage : elle ne
+  // 5. Copie du dump nocturne du serveur (palier f), au démarrage puis toutes
+  //    les 6 h, sans retarder le service. Le module s'arrête seul hors du Mac.
+  if (process.env.BACKUP_DIR && process.env.SERVER_DUMP_HOST) {
+    void import("./lib/server_dump")
+      .then(({ startServerDumpLoop }) => startServerDumpLoop())
+      .catch((error) => console.error("Copie du serveur impossible :", error));
+  }
+  // 6. Restauration d'essai (palier e), une minute après le démarrage : elle ne
   //    retarde pas le service. Le module s'arrête seul hors du Mac.
   if (process.env.BACKUP_DIR) {
     setTimeout(() => {

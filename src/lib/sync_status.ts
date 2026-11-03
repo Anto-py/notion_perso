@@ -20,6 +20,8 @@ export type SyncSnapshot = {
   backupAlert?: BackupAlert | null;
   // Dernière restauration d'essai en échec (backup.trial), Mac seulement.
   trialFailed?: boolean;
+  // Copie du dump du serveur illisible ou en retard (backup.server), Mac seulement.
+  serverCopy?: "unreadable" | "late" | null;
   // Version de secours épinglée (versions/.epingle), sur le Mac seulement.
   fallback?: boolean;
 };
@@ -104,7 +106,19 @@ export function suspensionMotive(suspension: Extract<SyncSuspension, { by: "auto
 // Un écart de version se règle en relançant l'app, qui se met à jour au
 // lancement (SPECS.md, « Versions ») : la ligne le dit plutôt que l'échec ;
 // sauf en version de secours, épinglée, que le relancement ne quitte pas.
-export function syncLine({ syncedAt, error, reason, pending, conflicts, online, suspended, backupAlert, trialFailed, fallback }: SyncSnapshot): SyncLine {
+export function syncLine({
+  syncedAt,
+  error,
+  reason,
+  pending,
+  conflicts,
+  online,
+  suspended,
+  backupAlert,
+  trialFailed,
+  serverCopy,
+  fallback,
+}: SyncSnapshot): SyncLine {
   if (suspended) {
     const title = "Reprendre dans Réglages › Synchronisation";
     if (suspended.by === "auto") return { tone: "suspended", text: `⏸ Suspendue : ${suspensionMotive(suspended)}`, title };
@@ -113,7 +127,8 @@ export function syncLine({ syncedAt, error, reason, pending, conflicts, online, 
   if (backupAlert) return { tone: "backup", text: BACKUP_TEXT[backupAlert], title: "Voir Réglages › Sauvegardes" };
   // Un dump illisible est le même risque qu'un dump raté : il dure jusqu'à un
   // essai réussi, et passe donc avant les erreurs de synchronisation.
-  if (trialFailed) return { tone: "backup", text: "⚠ Sauvegarde illisible", title: "Voir Réglages › Sauvegardes" };
+  if (trialFailed || serverCopy === "unreadable") return { tone: "backup", text: "⚠ Sauvegarde illisible", title: "Voir Réglages › Sauvegardes" };
+  if (serverCopy === "late") return { tone: "backup", text: "⚠ Copie du serveur en retard", title: "Voir Réglages › Sauvegardes" };
   if (error && reason === "version" && fallback) {
     return { tone: "fallback", text: "⚠ Version de secours : synchronisation arrêtée", title: "Mettre à jour dans Réglages › Version" };
   }

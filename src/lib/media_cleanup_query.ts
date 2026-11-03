@@ -73,7 +73,7 @@ export async function tryCleanMedia(): Promise<void> {
 
 // Purge des éléments de plus de 30 jours puis balayage des médias, au
 // démarrage et à l'ouverture de la corbeille. Un échec ne bloque ni l'un ni
-// l'autre : la corbeille reste lisible, le miroir en lecture seule compris.
+// l'autre : la corbeille reste lisible.
 export async function tryPurgeExpired(): Promise<void> {
   try {
     const count = await purgeExpired();

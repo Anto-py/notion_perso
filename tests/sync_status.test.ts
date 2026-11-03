@@ -169,4 +169,12 @@ describe("syncLine, sauvegardes", () => {
     expect(line({ trialFailed: true, error: "Serveur injoignable", reason: "server" }).tone).toBe("backup");
     expect(line({ trialFailed: false })).toMatchObject({ tone: "calm" });
   });
+
+  it("dit une copie du serveur illisible comme un dump illisible, et une copie en retard après", () => {
+    expect(line({ serverCopy: "unreadable" })).toMatchObject({ tone: "backup", text: "⚠ Sauvegarde illisible" });
+    expect(line({ serverCopy: "late" })).toMatchObject({ tone: "backup", text: "⚠ Copie du serveur en retard" });
+    expect(line({ serverCopy: "late", trialFailed: true }).text).toBe("⚠ Sauvegarde illisible");
+    expect(line({ serverCopy: "late", error: "Serveur injoignable", reason: "server" }).text).toBe("⚠ Copie du serveur en retard");
+    expect(line({ serverCopy: null })).toMatchObject({ tone: "calm" });
+  });
 });

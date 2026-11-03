@@ -6,8 +6,13 @@ import {
   parseBackupName,
   parseBackupTrial,
   parseOpenBackup,
+  parseServerCopy,
   QUARANTINE_DAYS,
   quarantineExpired,
+  serverCopyAlert,
+  serverCopyDue,
+  serverCopyName,
+  serverDumpDate,
   sortBackups,
   TRIAL_DAYS,
   trialDatabaseName,
@@ -30,6 +35,11 @@ describe("parseBackupName", () => {
       commit: "abc1234",
       at: new Date(2026, 9, 31, 23, 59),
     });
+  });
+
+  it("lit une copie du serveur", () => {
+    expect(parseBackupName("serveur_20261103_0200.dmp")).toEqual({ kind: "server", commit: null, at: new Date(2026, 10, 3, 2, 0) });
+    expect(parseBackupName("serveur_20261103_0200.dmp.partiel")).toBeNull();
   });
 
   it("refuse un dump interrompu, un autre fichier ou une date impossible", () => {
@@ -62,6 +72,7 @@ describe("backupMotive", () => {
   it("dit le motif de chaque sauvegarde", () => {
     expect(backupMotive({ kind: "daily", commit: null })).toBe("Quotidienne");
     expect(backupMotive({ kind: "update", commit: "abc1234" })).toBe("Avant mise à jour vers abc1234");
+    expect(backupMotive({ kind: "server", commit: null })).toBe("Copie du serveur");
   });
 });
 
@@ -144,6 +155,61 @@ describe("restauration d'essai", () => {
     expect(parseBackupTrial({ ...saved, results: [{ source: "mac", file: "x", ok: "oui" }] })).toBeNull();
     expect(parseBackupTrial({ ...saved, results: [{ source: "mac", file: "x", ok: true, pages: -1 }] })).toBeNull();
     expect(parseBackupTrial("essai")).toBeNull();
+  });
+
+  it("relit un essai d'avant le palier (f) : le dump du miroir devient la copie du serveur", () => {
+    const old = { at: "2026-11-01T12:00:00Z", results: [{ source: "miroir", file: "pg-dump-notion_perso-1793671218-f7ov.dmp", ok: true, pages: 9 }] };
+    expect(parseBackupTrial(old)?.results[0].source).toBe("serveur");
+  });
+});
+
+describe("copie du serveur", () => {
+  const coolify = "pg-dump-notion_perso-1793671218-f7ovc29fuf1wakb70zjulczr.dmp";
+  const hours = (count: number) => count * 60 * 60 * 1000;
+
+  it("date la copie par l'époque du nom Coolify, à la minute, en heure du Mac", () => {
+    expect(serverDumpDate(coolify)?.getTime()).toBe(1793671218 * 1000);
+    expect(serverDumpDate("dump.dmp")).toBeNull();
+    expect(serverDumpDate("pg-dump-notion_perso-12-abc.dmp")).toBeNull();
+    const name = serverCopyName(serverDumpDate(coolify)!);
+    expect(name).toMatch(/^serveur_\d{8}_\d{4}\.dmp$/);
+    const parsed = parseBackupName(name)!;
+    expect(parsed.kind).toBe("server");
+    expect(1793671218 * 1000 - parsed.at.getTime()).toBeGreaterThanOrEqual(0);
+    expect(1793671218 * 1000 - parsed.at.getTime()).toBeLessThan(60_000);
+    expect(serverCopyName(new Date(2026, 0, 5, 7, 3))).toBe("serveur_20260105_0703.dmp");
+  });
+
+  it("copie 20 h après la date de la dernière copie, ou s'il n'y en a aucune", () => {
+    const dumpedAt = new Date(2026, 10, 3, 2, 0);
+    expect(serverCopyDue(null, dumpedAt.getTime())).toBe(true);
+    expect(serverCopyDue(dumpedAt, dumpedAt.getTime() + hours(6))).toBe(false);
+    expect(serverCopyDue(dumpedAt, dumpedAt.getTime() + hours(19))).toBe(false);
+    expect(serverCopyDue(dumpedAt, dumpedAt.getTime() + hours(20))).toBe(true);
+  });
+
+  it("relit la dernière tentative, et refuse une forme inattendue", () => {
+    const copied = { at: "2026-11-03T08:00:00.000Z", remote: coolify, result: "copied" };
+    expect(parseServerCopy(copied)).toEqual(copied);
+    const failed = { at: "2026-11-03T08:00:00.000Z", remote: null, result: "failed", error: "Serveur injoignable" };
+    expect(parseServerCopy(failed)).toEqual(failed);
+    expect(parseServerCopy({ ...copied, result: "peut-être" })).toBeNull();
+    expect(parseServerCopy({ ...copied, at: "hier" })).toBeNull();
+    expect(parseServerCopy({ ...copied, remote: 3 })).toBeNull();
+    expect(parseServerCopy({ ...copied, error: 12 })).toBeNull();
+    expect(parseServerCopy(null)).toBeNull();
+  });
+
+  it("alerte sur une copie illisible, ou trois jours sans copie récente, jamais avant la première tentative", () => {
+    const newest = new Date(2026, 10, 3, 2, 0);
+    const now = newest.getTime() + hours(30);
+    const attempt = (result: "copied" | "unreadable" | "failed") => ({ at: new Date(now).toISOString(), remote: null, result });
+    expect(serverCopyAlert(null, null, now)).toBeNull();
+    expect(serverCopyAlert(attempt("copied"), newest, now)).toBeNull();
+    expect(serverCopyAlert(attempt("failed"), newest, now)).toBeNull();
+    expect(serverCopyAlert(attempt("unreadable"), newest, now)).toBe("unreadable");
+    expect(serverCopyAlert(attempt("failed"), newest, newest.getTime() + hours(72))).toBe("late");
+    expect(serverCopyAlert(attempt("failed"), null, now)).toBe("late");
   });
 });
 

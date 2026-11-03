@@ -22,6 +22,7 @@ type Status = {
   suspended: SyncSuspension | null;
   backupAlert: BackupAlert | null;
   trialFailed: boolean;
+  serverCopy: "unreadable" | "late" | null;
   fallback: boolean;
 };
 
@@ -44,6 +45,7 @@ const EMPTY: Status = {
   suspended: null,
   backupAlert: null,
   trialFailed: false,
+  serverCopy: null,
   fallback: false,
 };
 const REFRESH_MS = 10_000;
@@ -152,7 +154,7 @@ export function usePagePending(pageId: string, savedTick: number): boolean | nul
 // La ligne d'état telle que la calcule syncLine, pour la barre latérale et
 // Réglages › Synchronisation.
 export function useSyncLine() {
-  const { syncedAt, error, reason, pending, conflicts, online, suspended, backupAlert, trialFailed, fallback } = useSyncStatus();
+  const { syncedAt, error, reason, pending, conflicts, online, suspended, backupAlert, trialFailed, serverCopy, fallback } = useSyncStatus();
   return syncLine({
     syncedAt: syncedAt ? new Date(syncedAt) : null,
     error,
@@ -163,6 +165,7 @@ export function useSyncLine() {
     suspended,
     backupAlert,
     trialFailed,
+    serverCopy,
     fallback,
   });
 }

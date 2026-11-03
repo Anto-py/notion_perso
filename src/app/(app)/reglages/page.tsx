@@ -8,6 +8,7 @@ import { VersionSection } from "@/components/settings/VersionSection";
 import { canSwitchVersion } from "@/lib/app_version";
 import { getCurrentUser } from "@/lib/auth";
 import { backupDir, listBackups, readOpenBackup } from "@/lib/backups";
+import { serverDumpConfigured } from "@/lib/server_dump";
 import { currentInstance, getSetting } from "@/lib/settings";
 import { sectionsFor, SYNC_THRESHOLD_DEFAULT, type SettingsSection } from "@/lib/settings_rules";
 import { listClients } from "@/lib/sync_clients";
@@ -77,8 +78,21 @@ async function Section({ section, username }: { section: SettingsSection; userna
       return <SyncSection remote={remote} threshold={await readThreshold()} thresholdDefault={SYNC_THRESHOLD_DEFAULT} />;
     }
     case "sauvegardes": {
-      const [backups, open, trial] = await Promise.all([listBackups(), readOpenBackup(), getSetting("backup.trial")]);
-      return <BackupsSection dir={backupDir()} backups={backups} open={open} trial={trial} />;
+      const [backups, open, trial, serverCopy] = await Promise.all([
+        listBackups(),
+        readOpenBackup(),
+        getSetting("backup.trial"),
+        getSetting("backup.server"),
+      ]);
+      return (
+        <BackupsSection
+          dir={backupDir()}
+          backups={backups}
+          open={open}
+          trial={trial}
+          server={{ configured: serverDumpConfigured(), copy: serverCopy }}
+        />
+      );
     }
   }
 }
