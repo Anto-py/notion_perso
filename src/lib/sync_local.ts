@@ -237,6 +237,7 @@ async function writePage(tx: Tx, row: SyncPage, properties: Map<string, Property
     shareEnabled: row.shareEnabled,
     publicId: row.publicId,
     shareIncludeSubpages: row.shareIncludeSubpages,
+    shareClosed: row.shareClosed,
     createdAt: new Date(row.createdAt),
     updatedAt: new Date(row.updatedAt),
     trashedAt: row.trashedAt ? new Date(row.trashedAt) : null,

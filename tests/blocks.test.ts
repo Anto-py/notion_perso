@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { appendOrphans, bodyHasContent, columnHasContent, columnStructure, flattenToText, isForeignLink, linkedRefs, ownerRefs, refChanges, renderHtml, safeHref, subpageRefs } from "@/lib/blocks";
+import {
+  appendOrphans,
+  bodyHasContent,
+  columnHasContent,
+  columnStructure,
+  flattenToText,
+  internalLinkId,
+  isForeignLink,
+  linkedRefs,
+  ownerRefs,
+  refChanges,
+  renderHtml,
+  safeHref,
+  subpageRefs,
+} from "@/lib/blocks";
 
 describe("flattenToText", () => {
   it("aplatit titres, paragraphes et liens, un bloc par ligne", () => {
@@ -100,6 +114,39 @@ describe("safeHref", () => {
     expect(safeHref("//evil.example")).toBeNull();
     expect(safeHref("/\\evil.example")).toBeNull();
     expect(safeHref(42)).toBeNull();
+  });
+});
+
+describe("internalLinkId et liens internes en ligne", () => {
+  const sentence = (href: string) => [
+    {
+      type: "paragraph",
+      content: [
+        { type: "text", text: "Voir la ", styles: {} },
+        { type: "link", href, content: [{ type: "text", text: "taxonomie", styles: {} }] },
+      ],
+      children: [],
+    },
+  ];
+
+  it("lit l'id d'une page ou d'une base du site, rien d'autre", () => {
+    expect(internalLinkId("/page/pg_a")).toBe("pg_a");
+    expect(internalLinkId("/db/pg_b/")).toBe("pg_b");
+    expect(internalLinkId("/page/pg_c#titre")).toBe("pg_c");
+    expect(internalLinkId("/api/media/up_x.png")).toBeNull();
+    expect(internalLinkId("/page/pg_a/autre")).toBeNull();
+    expect(internalLinkId("https://ex.be/page/pg_a")).toBeNull();
+  });
+
+  it("réécrit l'adresse d'un lien dans la portée, ne garde que le texte sinon", () => {
+    const internal = (id: string) => (id === "pg_a" ? "/p/pub/pg_a" : null);
+    expect(renderHtml(sentence("/page/pg_a"), { internal })).toBe('<p>Voir la <a href="/p/pub/pg_a">taxonomie</a></p>');
+    expect(renderHtml(sentence("/page/pg_x"), { internal })).toBe("<p>Voir la taxonomie</p>");
+    expect(renderHtml(sentence("https://ex.be"), { internal })).toContain('href="https://ex.be/"');
+  });
+
+  it("laisse l'adresse telle qu'écrite sans résolveur", () => {
+    expect(renderHtml(sentence("/page/pg_a"))).toBe('<p>Voir la <a href="/page/pg_a">taxonomie</a></p>');
   });
 });
 
@@ -281,6 +328,10 @@ describe("renderHtml, sous-pages", () => {
 
   it("ne rend rien sans résolveur", () => {
     expect(renderHtml([sub("pg_a")])).toBe("");
+  });
+
+  it("dit « Contenu privé » sans titre ni lien pour une cible fermée", () => {
+    expect(renderHtml([sub("pg_a")], { subpage: () => "private" })).toBe('<p class="subpage-link subpage-private">Contenu privé</p>');
   });
 
   it("rend un lien posé par « Lien vers une page » comme un bloc de sous-page", () => {

@@ -129,6 +129,7 @@ async function writePage(tx: Tx, input: SyncPage, previous: typeof pages.$inferS
     shareEnabled: row.shareEnabled,
     publicId: row.publicId,
     shareIncludeSubpages: row.shareIncludeSubpages,
+    shareClosed: row.shareClosed,
     createdAt: new Date(row.createdAt),
     // Explicite : sans lui, $onUpdate de Drizzle mettrait l'heure du serveur,
     // et la fusion suivante ne saurait plus quelle version est la plus récente.

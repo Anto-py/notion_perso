@@ -41,7 +41,7 @@ export function useSubpages(
       return null;
     }
     const id = result.data.id;
-    addToDirectory({ id, parentId: pageId, type: kind, title: "", icon: null });
+    addToDirectory({ id, parentId: pageId, type: kind, title: "", icon: null, closed: false });
     router.refresh();
     return id;
   }

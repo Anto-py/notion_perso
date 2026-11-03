@@ -111,6 +111,10 @@ export const pages = pgTable(
     shareIncludeSubpages: boolean("share_include_subpages")
       .notNull()
       .default(true),
+    // Exclusion posée à la main (SPECS, « Liens et partage étendu ») : la page
+    // et ce qui descend d'elle sortent du partage de leurs ancêtres publiés.
+    // Exclusif de share_enabled, la page comme ses descendantes.
+    shareClosed: boolean("share_closed").notNull().default(false),
     createdAt: createdAt(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()

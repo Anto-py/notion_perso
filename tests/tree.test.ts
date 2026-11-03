@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ancestorsOf, buildTree, linkChoices, wouldCreateCycle, type TreeRow } from "@/lib/tree";
 
-const row = (id: string, parentId: string | null): TreeRow => ({ id, parentId, type: "page", title: id, icon: null });
+const row = (id: string, parentId: string | null): TreeRow => ({ id, parentId, type: "page", title: id, icon: null, closed: false });
 
 // a ─ b ─ c, et d à la racine
 const parentOf = new Map<string, string | null>([
@@ -59,6 +59,7 @@ describe("linkChoices", () => {
     type,
     title,
     icon: null,
+    closed: false,
   });
   // Accueil ─ Bases ─ Veille (base), Accueil ─ Évaluation, Notes ─ Veille (page homonyme)
   const rows = [

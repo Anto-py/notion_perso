@@ -45,6 +45,7 @@ type Props = {
     coverPosition: number | null;
     body: unknown[];
     publicId: string | null;
+    shareClosed: boolean;
     // Révision lue, pour le contrôle de version de l'enregistrement.
     rev: number;
   };
@@ -120,7 +121,7 @@ export function PageView({ page, entry, directory, absent }: Props) {
         <SaveIndicator status={status} pending={pagePending} />
         <UploadIndicator state={upload} onDismiss={() => setUpload(null)} />
         {trashError && <span className="status status-error">{trashError}</span>}
-        <SharePanel pageId={page.id} initialPublicId={page.publicId} />
+        <SharePanel pageId={page.id} initialPublicId={page.publicId} initialClosed={page.shareClosed} />
         <button type="button" className="ghost" onClick={moveToTrash}>
           Supprimer
         </button>

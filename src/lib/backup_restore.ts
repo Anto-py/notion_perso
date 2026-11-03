@@ -101,6 +101,7 @@ export async function recoverFromBackup(id: string, subtree: boolean): Promise<R
         shareEnabled: row.shareEnabled,
         publicId: row.publicId,
         shareIncludeSubpages: row.shareIncludeSubpages,
+        shareClosed: row.shareClosed,
         trashedAt: now,
       });
     }

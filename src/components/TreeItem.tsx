@@ -53,6 +53,11 @@ export function TreeItem({ node, depth, activeId, expanded, onToggle }: Props) {
         </button>
         <Link href={href} className="tree-link">
           <PageLabel row={node} />
+          {node.closed && (
+            <span className="tree-lock" title="Exclue du partage" aria-label="Exclue du partage">
+              🔒
+            </span>
+          )}
         </Link>
       </div>
       {open && hasChildren && (

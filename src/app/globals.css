@@ -506,6 +506,13 @@ a {
   padding: 0.2rem 0;
 }
 
+/* Cadenas d'une page fermée à la main, discret. */
+.tree-lock {
+  margin-left: 0.3rem;
+  font-size: 0.7rem;
+  opacity: 0.6;
+}
+
 .root-drop {
   margin: 0.5rem 0.25rem;
   padding: 0.6rem;
@@ -2450,6 +2457,58 @@ mark.hit {
   width: 100%;
 }
 
+/* « Ce partage ouvre aussi » : les pages qu'un lien ouvre, chacune fermable. */
+.share-opens {
+  width: 100%;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--line);
+}
+
+.share-opens-title {
+  margin: 0 0 0.3rem;
+  font-family: var(--font-label);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.share-opens ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
+.share-opens li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.2rem 0;
+}
+
+.share-opens-label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.share-opens-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.share-opens-path {
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .share-link input {
   flex: 1;
   min-width: 0;
@@ -2872,6 +2931,12 @@ mark.hit {
   font-weight: 500;
   text-decoration-color: var(--line);
   text-underline-offset: 3px;
+}
+
+/* Cible non publiée ou exclue du partage : ni titre ni lien. */
+.public-body .subpage-private {
+  color: var(--ink-soft);
+  font-style: italic;
 }
 
 /* --- Vue liée : une base existante dans une page (bloc « linked ») --------- */

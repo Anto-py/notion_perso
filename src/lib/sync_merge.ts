@@ -33,6 +33,7 @@ export type SyncPage = {
   shareEnabled: boolean;
   publicId: string | null;
   shareIncludeSubpages: boolean;
+  shareClosed: boolean;
   createdAt: string;
   updatedAt: string;
   trashedAt: string | null;
@@ -61,7 +62,8 @@ const FIELD_GROUPS: (keyof SyncPage)[][] = [
   ["cover", "coverPosition"],
   ["trashedAt"],
   ["isInbox"],
-  ["shareEnabled", "publicId", "shareIncludeSubpages"],
+  // Publier et fermer s'excluent : ils voyagent ensemble.
+  ["shareEnabled", "publicId", "shareIncludeSubpages", "shareClosed"],
 ];
 // moveEntry réécrit ces quatre champs d'un seul geste : quand les deux côtés
 // ne désignent plus la même base, ils suivent ensemble le côté qui a déplacé.

@@ -1,51 +1,49 @@
-// Partage public : publier, dépublier, et résoudre ce qu'un lien rend lisible.
-// La règle (descendre d'une page publiée, sans maillon en corbeille) est dans
-// publication.ts ; ce module ne fait que ramener les lignes.
+// Partage public : publier, dépublier, exclure, et résoudre ce qu'un lien rend
+// lisible. La règle (la portée d'une publication) est dans publication.ts ; ce
+// module ne fait que ramener les lignes.
 import { and, asc, eq, isNull, ne, or, sql } from "drizzle-orm";
+import { cache } from "react";
 import { db } from "@/db";
 import { pages } from "@/db/schema";
 import { imageIcon } from "./icons";
 import { newToken } from "./ids";
 import { getPage, type Page } from "./pages";
-import { publicChain, type PublicNode } from "./publication";
+import { closedBy, linkTargets, privateTargets, publicationOf, publishedBelow, reachPath, shareReach, treePath, type ShareGraph, type ShareNode } from "./publication";
+import type { TreeRow } from "./tree";
 
 // newToken : 32 octets en base64url. Une adresse d'une autre forme n'atteint
 // même pas la base.
 const PUBLIC_ID = /^[A-Za-z0-9_-]{43}$/;
 
-// Profondeur maximale remontée : bien au-delà d'un arbre réel, elle arrête une
-// boucle éventuelle (UNION ALL ne dédoublonne pas, la profondeur variant).
-const MAX_DEPTH = 64;
+// Blocs subpage et vues liées dont la cible est choisie, liens écrits dans une
+// phrase vers un chemin du site. En mode strict, un champ absent rend le
+// filtre inconnu, donc faux : aucune garde de forme n'est nécessaire.
+const LINK_PATH =
+  'strict $.** ? ((@.type == "subpage" && @.props.pageId != "") || (@.type == "linked" && @.props.databaseId != "") || (@.type == "link" && @.href starts with "/"))';
 
-// Les pages demandées et tous leurs ascendants, en une requête : une entrée
-// remonte par sa base, une page par son parent.
-async function withAncestors(ids: readonly string[]): Promise<Map<string, PublicNode>> {
-  if (!ids.length) return new Map();
-  const list = sql.join(
-    ids.map((id) => sql`${id}`),
-    sql`, `,
-  );
+// Toutes les pages hors corbeille avec les cibles de leurs liens, en une
+// requête, dans l'ordre de la sidebar. Le corps ne quitte pas la base : seul
+// un tableau d'ids et d'adresses en sort, dans l'ordre du texte (WITH
+// ORDINALITY). cache() : une seule lecture par rendu, métadonnées comprises.
+export const loadShareGraph = cache(async (): Promise<ShareGraph> => {
   const result = await db.execute<{
     id: string;
-    type: PublicNode["type"];
+    type: ShareNode["type"];
     parent_id: string | null;
     db_id: string | null;
-    trashed: boolean;
+    share_closed: boolean;
     public_id: string | null;
     title: string;
     icon: string | null;
+    links: string[] | null;
   }>(sql`
-    WITH RECURSIVE up AS (
-      SELECT id, type, parent_id, db_id, trashed_at, share_enabled, public_id, title, icon, 0 AS depth
-      FROM pages WHERE id IN (${list})
-      UNION ALL
-      SELECT p.id, p.type, p.parent_id, p.db_id, p.trashed_at, p.share_enabled, p.public_id, p.title, p.icon, up.depth + 1
-      FROM pages p JOIN up ON p.id = CASE WHEN up.type = 'entry' THEN up.db_id ELSE up.parent_id END
-      WHERE up.depth < ${MAX_DEPTH}
-    )
-    SELECT DISTINCT id, type, parent_id, db_id, trashed_at IS NOT NULL AS trashed,
-      CASE WHEN share_enabled THEN public_id END AS public_id, title, icon
-    FROM up`);
+    SELECT p.id, p.type, p.parent_id, p.db_id, p.share_closed,
+      CASE WHEN p.share_enabled THEN p.public_id END AS public_id, p.title, p.icon,
+      (SELECT array_agg(coalesce(x -> 'props' ->> 'pageId', x -> 'props' ->> 'databaseId', x ->> 'href') ORDER BY ord)
+        FROM jsonb_path_query(p.body, ${LINK_PATH}::jsonpath) WITH ORDINALITY AS t(x, ord)) AS links
+    FROM pages p
+    WHERE p.trashed_at IS NULL
+    ORDER BY p.manual_order, p.created_at`);
   return new Map(
     result.rows.map((row) => [
       row.id,
@@ -54,19 +52,27 @@ async function withAncestors(ids: readonly string[]): Promise<Map<string, Public
         type: row.type,
         parentId: row.parent_id,
         dbId: row.db_id,
-        trashed: row.trashed,
+        closed: row.share_closed,
         publicId: row.public_id,
         title: row.title,
         icon: row.icon,
+        links: linkTargets(row.links ?? []),
       },
     ]),
   );
-}
+});
 
-export type Publication = { root: Page; page: Page; chain: PublicNode[] };
+export type Publication = {
+  root: Page;
+  page: Page;
+  // De la racine à la page demandée, par le chemin du visiteur.
+  chain: ShareNode[];
+  graph: ShareGraph;
+  reach: ReadonlyMap<string, string | null>;
+};
 
 // Ce que sert /p/[publicId] (pageId absent) ou /p/[publicId]/[pageId] ; null
-// pour un lien dépublié, une page en corbeille ou hors du sous-arbre publié.
+// pour un lien dépublié ou une page hors de la portée.
 export async function resolvePublication(publicId: string, pageId?: string): Promise<Publication | null> {
   if (!PUBLIC_ID.test(publicId)) return null;
   const [root] = await db
@@ -76,11 +82,11 @@ export async function resolvePublication(publicId: string, pageId?: string): Pro
     .limit(1);
   if (!root) return null;
   const targetId = pageId ?? root.id;
-  const nodes = await withAncestors([targetId]);
-  const chain = publicChain(nodes, targetId, (node) => node.id === root.id);
-  if (!chain) return null;
+  const graph = await loadShareGraph();
+  const reach = shareReach(graph, root.id);
+  if (!reach.has(targetId)) return null;
   const page = targetId === root.id ? root : await getPage(targetId);
-  return page ? { root, page, chain } : null;
+  return page ? { root, page, chain: reachPath(graph, reach, targetId), graph, reach } : null;
 }
 
 // Sous-pages et bases d'une page, dans l'ordre de la sidebar.
@@ -90,6 +96,40 @@ export async function listChildren(pageId: string) {
     .from(pages)
     .where(and(eq(pages.parentId, pageId), isNull(pages.trashedAt), ne(pages.type, "entry"), eq(pages.isInbox, false)))
     .orderBy(asc(pages.manualOrder), asc(pages.createdAt));
+}
+
+// Réunion des portées de toutes les publications, gardée 30 secondes : chaque
+// média public la consulte. Sur globalThis, Next chargeant parfois deux fois
+// un même module (instrumentation et route) ; publier, dépublier ou exclure
+// l'efface, pour qu'un média se ferme aussitôt.
+const REACH_TTL_MS = 30_000;
+type ReachMemo = { at: number; ids: Promise<Set<string>> };
+const store = globalThis as typeof globalThis & { __notionPublicReach?: ReachMemo | null };
+
+export function forgetPublicReach(): void {
+  store.__notionPublicReach = null;
+}
+
+async function computePublicReach(): Promise<Set<string>> {
+  const graph = await loadShareGraph();
+  const ids = new Set<string>();
+  for (const node of graph.values()) {
+    if (!node.publicId) continue;
+    for (const id of shareReach(graph, node.id).keys()) ids.add(id);
+  }
+  return ids;
+}
+
+function publicReachAll(): Promise<Set<string>> {
+  const memo = store.__notionPublicReach;
+  if (memo && Date.now() - memo.at < REACH_TTL_MS) return memo.ids;
+  const ids = computePublicReach();
+  store.__notionPublicReach = { at: Date.now(), ids };
+  // Une lecture en échec ne reste pas en mémoire.
+  ids.catch(() => {
+    if (store.__notionPublicReach?.ids === ids) forgetPublicReach();
+  });
+  return ids;
 }
 
 // Un média est public s'il figure dans le corps d'une page lisible par un
@@ -112,22 +152,29 @@ export async function isMediaPublic(filename: string): Promise<boolean> {
       ),
     );
   if (!rows.length) return false;
-  const nodes = await withAncestors(rows.map((row) => row.id));
-  return rows.some((row) => publicChain(nodes, row.id, (node) => node.publicId !== null) !== null);
+  const reach = await publicReachAll();
+  return rows.some((row) => reach.has(row.id));
 }
+
+export type ShareRefusal = { ok: false; status: 409; error: string };
 
 // Publier tire un identifiant neuf ; republier après une dépublication en
 // tire un autre, l'ancien lien restant mort (choix d'Antonin du 2026-10-30).
-// Une page déjà publiée garde le sien. updated_at inchangé : publier n'est
-// pas modifier.
-export async function publishPage(page: Page): Promise<string> {
-  if (page.shareEnabled && page.publicId) return page.publicId;
+// Une page déjà publiée garde le sien. Une page exclue, ou rangée sous une
+// page exclue, ne se publie pas. updated_at inchangé : publier n'est pas
+// modifier.
+export async function publishPage(page: Page): Promise<{ ok: true; publicId: string } | ShareRefusal> {
+  if (page.shareEnabled && page.publicId) return { ok: true, publicId: page.publicId };
+  if (closedBy(await loadShareGraph(), page.id)) {
+    return { ok: false, status: 409, error: "Cette page est exclue du partage : retirez l'exclusion d'abord." };
+  }
   const publicId = newToken();
   await db
     .update(pages)
     .set({ shareEnabled: true, publicId, updatedAt: sql`${pages.updatedAt}` })
     .where(eq(pages.id, page.id));
-  return publicId;
+  forgetPublicReach();
+  return { ok: true, publicId };
 }
 
 export async function unpublishPage(page: Page): Promise<void> {
@@ -135,4 +182,67 @@ export async function unpublishPage(page: Page): Promise<void> {
     .update(pages)
     .set({ shareEnabled: false, publicId: null, updatedAt: sql`${pages.updatedAt}` })
     .where(eq(pages.id, page.id));
+  forgetPublicReach();
+}
+
+// Exclusion du partage des ancêtres : exclusive de la publication, d'où le
+// refus sur une page publiée ou qui porte une page publiée dessous.
+// updated_at inchangé, comme publier.
+export async function setShareClosed(page: Page, closed: boolean): Promise<{ ok: true } | ShareRefusal> {
+  if (closed && page.shareEnabled) {
+    return { ok: false, status: 409, error: "Cette page est publiée : dépubliez-la avant de l'exclure." };
+  }
+  if (closed) {
+    const [below] = publishedBelow(await loadShareGraph(), page.id);
+    if (below) {
+      return { ok: false, status: 409, error: `« ${below.title || "Sans titre"} », rangée dessous, est publiée : dépubliez-la d'abord.` };
+    }
+  }
+  await db
+    .update(pages)
+    .set({ shareClosed: closed, updatedAt: sql`${pages.updatedAt}` })
+    .where(eq(pages.id, page.id));
+  forgetPublicReach();
+  return { ok: true };
+}
+
+export type PrivateLink = { row: TreeRow; path: string[]; excluded: boolean };
+
+export type ShareState = {
+  publicId: string | null;
+  // Exclusion posée sur la page elle-même.
+  closed: boolean;
+  // L'ancêtre qui exclut la page, quand ce n'est pas elle.
+  closedBy: { id: string; title: string } | null;
+  // La publication d'un ancêtre qui rendrait la page lisible : l'exclusion
+  // n'a de sens que là.
+  sharedBy: { id: string; title: string } | null;
+  // Page publiée : les cibles de ses liens, dans toute sa portée, où le
+  // visiteur lit « Contenu privé ». excluded : la cible ne se publie pas.
+  privateLinks: PrivateLink[];
+};
+
+// État du panneau « Partager ».
+export async function shareState(page: Page): Promise<ShareState> {
+  const graph = await loadShareGraph();
+  const closer = closedBy(graph, page.id);
+  const ancestor = closer && closer !== page.id ? graph.get(closer) : undefined;
+  const up = page.type === "entry" ? page.dbId : page.parentId;
+  const above = up ? publicationOf(graph, up) : null;
+  const sharer = above ? graph.get(above.rootId) : undefined;
+  const publicId = page.shareEnabled ? page.publicId : null;
+  const privateLinks = publicId
+    ? privateTargets(graph, shareReach(graph, page.id)).map((node) => ({
+        row: { id: node.id, parentId: node.parentId, type: node.type, title: node.title, icon: node.icon, closed: node.closed },
+        path: treePath(graph, node.id),
+        excluded: closedBy(graph, node.id) !== null,
+      }))
+    : [];
+  return {
+    publicId,
+    closed: page.shareClosed,
+    closedBy: ancestor ? { id: ancestor.id, title: ancestor.title } : null,
+    sharedBy: sharer && !ancestor ? { id: sharer.id, title: sharer.title } : null,
+    privateLinks,
+  };
 }

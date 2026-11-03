@@ -1,0 +1,1 @@
+ALTER TABLE "pages" ADD COLUMN "share_closed" boolean DEFAULT false NOT NULL;

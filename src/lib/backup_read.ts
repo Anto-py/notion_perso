@@ -27,7 +27,7 @@ export async function backupTree(): Promise<TreeRow[]> {
   const db = backupDb();
   if (!db) return [];
   return db
-    .select({ id: pages.id, parentId: pages.parentId, type: pages.type, title: pages.title, icon: pages.icon })
+    .select({ id: pages.id, parentId: pages.parentId, type: pages.type, title: pages.title, icon: pages.icon, closed: pages.shareClosed })
     .from(pages)
     .where(and(isNull(pages.trashedAt), ne(pages.type, "entry"), eq(pages.isInbox, false)))
     .orderBy(asc(pages.manualOrder), asc(pages.createdAt));

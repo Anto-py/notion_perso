@@ -9,6 +9,8 @@ export type TreeRow = {
   type: "page" | "database" | "entry";
   title: string;
   icon: string | null;
+  // Exclusion du partage posée sur la page elle-même : cadenas dans la sidebar.
+  closed: boolean;
 };
 
 export type TreeNode = TreeRow & { children: TreeNode[] };

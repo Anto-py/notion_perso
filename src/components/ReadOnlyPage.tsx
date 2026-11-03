@@ -30,6 +30,16 @@ export type ReadOnlySource = {
 export type ReadOnlyChild = { id: string; type: Page["type"]; title: string; icon: string | null };
 export type ReadOnlyCrumb = { id: string; title: string; icon: string | null };
 
+// Ce qu'une publication rend lisible (lib/publication.ts, shareReach).
+export type ReadOnlyReach = {
+  // Une page de la portée, avec de quoi la nommer ; null hors portée.
+  node: (id: string) => ReadOnlyChild | null;
+  // Page vivante hors portée (non publiée, ou exclue) : « Contenu privé ».
+  hidden: (id: string) => boolean;
+  // Adresse d'une page lisible par sa propre publication, hors de celle-ci.
+  elsewhere: (id: string) => string | null;
+};
+
 export type ReadOnlyPageProps = {
   page: Page;
   // Ancêtres, la page elle-même exclue.
@@ -42,10 +52,10 @@ export type ReadOnlyPageProps = {
   // JSON : l'écran de sauvegarde réécrit cette base vers la sienne, seule à
   // chercher aussi dans la quarantaine.
   mediaBase?: string;
-  // Vue liée : le public ne la rend que si sa base est elle-même publiée, et
-  // montre sinon l'encart « Contenu privé ». L'écran de sauvegarde, privé, la
-  // rend toujours.
-  linkedPolicy?: "public" | "all";
+  // Portée de la publication : un lien, une vue liée ou une puce ne mènent
+  // qu'à une page qui en fait partie. Absente : l'écran de sauvegarde, privé,
+  // où tout se lit et où un bloc-lien ne mène qu'aux vraies sous-pages.
+  reach?: ReadOnlyReach;
 };
 
 export async function ReadOnlyPage({
@@ -55,16 +65,14 @@ export async function ReadOnlyPage({
   href,
   source,
   mediaBase = MEDIA_BASE,
-  linkedPolicy = "public",
+  reach,
 }: ReadOnlyPageProps) {
-  // Un bloc-lien ne mène qu'à une vraie sous-page, hors corbeille : seule
-  // celle-là descend de la publication.
   const byId = new Map(subpages.map((child) => [child.id, child]));
   const linked = subpageRefs(page.body);
-  // Une puce ne mène qu'à une entrée atteignable : dans la vue publique, la
-  // base de l'entrée doit être publiée ; dans une sauvegarde, tout est lisible.
-  const linkFor = (ref: LinkRef): string | null =>
-    linkedPolicy === "public" ? (ref.publicBaseId ? `/p/${ref.publicBaseId}/${ref.id}` : null) : href(ref.id);
+  // Une puce suit la règle d'un lien sans prolonger la portée : elle mène à
+  // une entrée de la portée sous l'adresse courante, ou à une entrée publiée
+  // par sa propre publication. Dans une sauvegarde, tout est lisible.
+  const linkFor = (ref: LinkRef): string | null => (!reach || reach.node(ref.id) ? href(ref.id) : reach.elsewhere(ref.id));
   return (
     <article>
       <PageCover cover={page.cover} position={page.coverPosition} className="page-cover public-cover" mediaBase={mediaBase} />
@@ -78,7 +86,7 @@ export async function ReadOnlyPage({
       ) : (
         <div
           className="public-body"
-          dangerouslySetInnerHTML={{ __html: await bodyHtml(page, byId, href, mediaBase, source, linkedPolicy, linkFor) }}
+          dangerouslySetInnerHTML={{ __html: await bodyHtml(page, byId, href, mediaBase, source, reach, linkFor) }}
         />
       )}
       <Children rows={subpages.filter((child) => !linked.has(child.id))} href={href} mediaBase={mediaBase} />
@@ -94,7 +102,7 @@ async function bodyHtml(
   href: (id: string) => string,
   mediaBase: string,
   source: ReadOnlySource,
-  linkedPolicy: "public" | "all",
+  reach: ReadOnlyReach | undefined,
   linkFor: (ref: LinkRef) => string | null,
 ): Promise<string> {
   // Les vues liées demandent les entrées d'une autre base : elles sont
@@ -103,13 +111,17 @@ async function bodyHtml(
   for (const ref of linkedRefs(page.body)) {
     const key = linkedKey(ref.databaseId, ref.config);
     if (linkedHtml.has(key)) continue;
-    linkedHtml.set(key, await linkedBlockHtml(ref.databaseId, ref.config, source, href, mediaBase, linkedPolicy, linkFor));
+    linkedHtml.set(key, await linkedBlockHtml(ref.databaseId, ref.config, source, href, mediaBase, reach, linkFor));
   }
   const html = renderHtml(page.body, {
+    // Publique : la cible doit être dans la portée, une cible fermée dit
+    // « Contenu privé ». Sauvegarde : seules les vraies sous-pages.
     subpage: (id) => {
-      const child = byId.get(id);
-      return child ? { href: href(child.id), title: child.title, icon: child.icon, type: child.type } : null;
+      const target = reach ? reach.node(id) : (byId.get(id) ?? null);
+      if (target) return { href: href(target.id), title: target.title, icon: target.icon, type: target.type };
+      return reach?.hidden(id) ? "private" : null;
     },
+    internal: (id) => (!reach || reach.node(id) ? href(id) : null),
     linked: (databaseId, config) => linkedHtml.get(linkedKey(databaseId, config)) ?? null,
   });
   return mediaBase === MEDIA_BASE ? html : html.replaceAll(MEDIA_BASE, mediaBase);
@@ -122,21 +134,21 @@ function linkedKey(databaseId: string, config: unknown): string {
 }
 
 // Une vue liée se lit selon sa propre vue active, filtrée et triée par ses
-// réglages. Publique, elle exige que la base source soit elle-même publiée :
-// sinon l'encart, jamais ses entrées.
+// réglages. Publique, elle exige que la base source soit dans la portée (son
+// bloc l'y fait entrer, sauf fermeture) : sinon l'encart, jamais ses entrées.
+// Les entrées s'ouvrent sous la publication courante.
 async function linkedBlockHtml(
   databaseId: string,
   config: unknown,
   source: ReadOnlySource,
   href: (id: string) => string,
   mediaBase: string,
-  linkedPolicy: "public" | "all",
+  reach: ReadOnlyReach | undefined,
   linkFor: (ref: LinkRef) => string | null,
 ): Promise<string> {
   const base = await source.getPage(databaseId);
   if (!base || base.trashedAt || base.type !== "database") return LINKED_PRIVATE_HTML;
-  const publicId = base.shareEnabled ? base.publicId : null;
-  if (linkedPolicy === "public" && !publicId) return LINKED_PRIVATE_HTML;
+  if (reach && !reach.node(base.id)) return LINKED_PRIVATE_HTML;
   const { properties } = configOf(base);
   const view = pickView(parseLinkedConfig(config, properties).views);
   const entries = sortEntries(
@@ -146,15 +158,14 @@ async function linkedBlockHtml(
     view.kind === "board" ? [] : view.sorts,
     properties,
   );
-  const own = publicId ? `/p/${publicId}` : null;
   return linkedViewHtml(
     { title: base.title, icon: base.icon },
     entries,
     properties,
     view,
     {
-      href: (entryId) => (own ? `${own}/${entryId}` : href(entryId)),
-      baseHref: own ?? href(base.id),
+      href,
+      baseHref: href(base.id),
       mediaBase,
       entryLink: linkFor,
     },

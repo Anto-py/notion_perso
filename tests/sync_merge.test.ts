@@ -28,6 +28,7 @@ function page(over: Partial<SyncPage> = {}): SyncPage {
     shareEnabled: false,
     publicId: null,
     shareIncludeSubpages: true,
+    shareClosed: false,
     createdAt: T0,
     updatedAt: T0,
     trashedAt: null,
@@ -80,6 +81,14 @@ describe("mergePage : champs", () => {
     const web = page({ shareEnabled: true, publicId: "lien_web", shareIncludeSubpages: false, updatedAt: T_WEB });
     const merged = mergePage(base, mac, web).page;
     expect([merged.publicId, merged.shareIncludeSubpages]).toEqual(["lien_mac", true]);
+  });
+
+  it("fermer et publier ne se mêlent pas : le côté le plus récent emporte les deux", () => {
+    const base = page();
+    const mac = page({ shareClosed: true, updatedAt: T_MAC });
+    const web = page({ shareEnabled: true, publicId: "lien_web", updatedAt: T_WEB });
+    const merged = mergePage(base, mac, web).page;
+    expect([merged.shareEnabled, merged.publicId, merged.shareClosed]).toEqual([true, "lien_web", false]);
   });
 
   it("sans base commune, tout écart compte comme un conflit", () => {

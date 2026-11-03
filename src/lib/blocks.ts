@@ -260,6 +260,14 @@ export function safeHref(raw: unknown): string | null {
   }
 }
 
+// Lien vers une page du site écrit dans une phrase (l'import Notion en pose) :
+// l'id de sa cible, null pour toute autre adresse.
+const INTERNAL_LINK = /^\/(?:page|db)\/([A-Za-z0-9_-]{1,64})\/?(?:[?#].*)?$/;
+
+export function internalLinkId(href: string): string | null {
+  return INTERNAL_LINK.exec(href.trim())?.[1] ?? null;
+}
+
 // Source d'une image ou d'un fichier : un média déposé, ou une adresse web.
 function safeSrc(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
@@ -292,7 +300,7 @@ function styledText(text: string, styles: Record<string, Json>): string {
   return classes.length ? `<span class="${classes.join(" ")}">${html}</span>` : html;
 }
 
-function inlineHtml(content: Json): string {
+function inlineHtml(content: Json, options: RenderOptions): string {
   if (typeof content === "string") return styledText(content, {});
   if (!Array.isArray(content)) return "";
   return content
@@ -303,8 +311,10 @@ function inlineHtml(content: Json): string {
         return styledText(item.text, isObject(item.styles) ? item.styles : {});
       }
       if (item.type === "link") {
-        const inner = inlineHtml(item.content);
-        const href = safeHref(item.href);
+        const inner = inlineHtml(item.content, options);
+        let href = safeHref(item.href);
+        const target = href && options.internal ? internalLinkId(href) : null;
+        if (target && options.internal) href = options.internal(target);
         return href ? `<a ${linkAttrs(href)}>${inner}</a>` : inner;
       }
       return "";
@@ -322,12 +332,16 @@ function blockAttrs(props: Record<string, Json>, extra: string[] = []): string {
   return classes.length ? ` class="${classes.join(" ")}"` : "";
 }
 
-// Lien d'un bloc de sous-page dans la vue publique ; null : la sous-page n'est
-// pas lisible par ce lien (corbeille, déplacée hors du sous-arbre), le bloc
+// Lien d'un bloc de sous-page dans la vue publique ; "private" : la cible vit
+// mais n'est pas lisible (non publiée, ou exclue), le bloc dit « Contenu
+// privé » sans la nommer ; null : la cible n'est pas lisible (corbeille, purge), le bloc
 // disparaît.
 export type SubpageLink = { href: string; title: string; icon: string | null; type?: string };
 export type RenderOptions = {
-  subpage?: (pageId: string) => SubpageLink | null;
+  subpage?: (pageId: string) => SubpageLink | "private" | null;
+  // Lien vers une page écrit dans une phrase : adresse à servir, ou null pour
+  // n'en garder que le texte. Absent : l'adresse reste telle qu'écrite.
+  internal?: (pageId: string) => string | null;
   // HTML d'une vue liée, calculé à part : il demande les entrées de la base
   // source. Absent : le bloc ne rend rien (écran de sauvegarde, par exemple).
   linked?: (databaseId: string, config: unknown) => string | null;
@@ -362,9 +376,9 @@ function listItemHtml(block: Record<string, Json>, options: RenderOptions): stri
   if (block.type === "checkListItem") {
     const checked = props.checked === true;
     const box = `<input type="checkbox" disabled${checked ? " checked" : ""} aria-label="${checked ? "Cochée" : "Non cochée"}">`;
-    return `<li${blockAttrs(props, checked ? ["checked"] : [])}>${box} ${inlineHtml(block.content)}${nested}</li>`;
+    return `<li${blockAttrs(props, checked ? ["checked"] : [])}>${box} ${inlineHtml(block.content, options)}${nested}</li>`;
   }
-  return `<li${blockAttrs(props)}>${inlineHtml(block.content)}${nested}</li>`;
+  return `<li${blockAttrs(props)}>${inlineHtml(block.content, options)}${nested}</li>`;
 }
 
 function captionHtml(props: Record<string, Json>): string {
@@ -378,17 +392,17 @@ function blockHtml(block: Json, options: RenderOptions): string {
   const nested = children.length ? `<div class="block-children">${blocksHtml(children, options)}</div>` : "";
   switch (block.type) {
     case "paragraph":
-      return `<p${blockAttrs(props)}>${inlineHtml(block.content)}</p>${nested}`;
+      return `<p${blockAttrs(props)}>${inlineHtml(block.content, options)}</p>${nested}`;
     case "heading": {
       // Le titre de la page est le h1 : un titre de niveau 1 du corps est un h2.
       const level = typeof props.level === "number" && props.level >= 1 ? Math.min(Math.floor(props.level) + 1, 6) : 2;
-      const heading = `<h${level}${blockAttrs(props)}>${inlineHtml(block.content)}</h${level}>`;
+      const heading = `<h${level}${blockAttrs(props)}>${inlineHtml(block.content, options)}</h${level}>`;
       return props.isToggleable === true ? `<details><summary>${heading}</summary>${blocksHtml(children, options)}</details>` : heading + nested;
     }
     case "quote":
-      return `<blockquote${blockAttrs(props)}>${inlineHtml(block.content)}</blockquote>${nested}`;
+      return `<blockquote${blockAttrs(props)}>${inlineHtml(block.content, options)}</blockquote>${nested}`;
     case "toggleListItem":
-      return `<details${blockAttrs(props)}><summary>${inlineHtml(block.content)}</summary>${blocksHtml(children, options)}</details>`;
+      return `<details${blockAttrs(props)}><summary>${inlineHtml(block.content, options)}</summary>${blocksHtml(children, options)}</details>`;
     case "codeBlock":
       // Le code s'affiche tel qu'écrit : ni style ni lien.
       return `<pre><code>${escapeHtml(inlineText(block.content))}</code></pre>${nested}`;
@@ -411,6 +425,7 @@ function blockHtml(block: Json, options: RenderOptions): string {
       const pageId = typeof props.pageId === "string" ? props.pageId : "";
       const link = pageId && options.subpage ? options.subpage(pageId) : null;
       if (!link) return "";
+      if (link === "private") return '<p class="subpage-link subpage-private">Contenu privé</p>';
       const label = `${iconHtml(link.icon, link.type)} ${escapeHtml(link.title || "Sans titre")}`;
       return `<p class="subpage-link"><a href="${escapeHtml(link.href)}">${label}</a></p>`;
     }
@@ -443,12 +458,12 @@ function blockHtml(block: Json, options: RenderOptions): string {
         const body = rows
           .map((row) => {
             const cells = isObject(row) && Array.isArray(row.cells) ? row.cells : [];
-            return `<tr>${cells.map((cell) => `<td>${inlineHtml(isObject(cell) ? cell.content : cell)}</td>`).join("")}</tr>`;
+            return `<tr>${cells.map((cell) => `<td>${inlineHtml(isObject(cell) ? cell.content : cell, options)}</td>`).join("")}</tr>`;
           })
           .join("");
         return `<table class="body-table"><tbody>${body}</tbody></table>`;
       }
-      const inner = inlineHtml(content);
+      const inner = inlineHtml(content, options);
       return inner ? `<p>${inner}</p>${nested}` : nested;
     }
   }

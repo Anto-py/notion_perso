@@ -48,6 +48,7 @@ type Props = {
     cover: string | null;
     coverPosition: number | null;
     publicId: string | null;
+    shareClosed: boolean;
     rev: number;
   };
   config: DbConfig;
@@ -335,7 +336,7 @@ export function DatabaseView({ database, config, entries, databases, initialView
     <main className="page page-wide">
       <div className="page-bar">
         <SaveIndicator status={status} pending={pagePending} />
-        <SharePanel pageId={database.id} initialPublicId={database.publicId} />
+        <SharePanel pageId={database.id} initialPublicId={database.publicId} initialClosed={database.shareClosed} />
         <button type="button" className="ghost" onClick={moveToTrash}>
           Supprimer la base
         </button>

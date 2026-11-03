@@ -24,7 +24,7 @@ const NOT_FOUND: Outcome = { ok: false, status: 404, error: "Page introuvable" }
 // l'arbre.
 export async function listTreeRows(): Promise<TreeRow[]> {
   return db
-    .select({ id: pages.id, parentId: pages.parentId, type: pages.type, title: pages.title, icon: pages.icon })
+    .select({ id: pages.id, parentId: pages.parentId, type: pages.type, title: pages.title, icon: pages.icon, closed: pages.shareClosed })
     .from(pages)
     .where(and(isNull(pages.trashedAt), ne(pages.type, "entry"), eq(pages.isInbox, false)))
     .orderBy(asc(pages.manualOrder), asc(pages.createdAt));
@@ -37,7 +37,15 @@ export async function linkTargets(ids: readonly string[]): Promise<{ rows: TreeR
   const absent: Record<string, AbsentTarget> = {};
   if (!ids.length) return { rows: [], absent };
   const found = await db
-    .select({ id: pages.id, parentId: pages.parentId, type: pages.type, title: pages.title, icon: pages.icon, trashedAt: pages.trashedAt })
+    .select({
+      id: pages.id,
+      parentId: pages.parentId,
+      type: pages.type,
+      title: pages.title,
+      icon: pages.icon,
+      closed: pages.shareClosed,
+      trashedAt: pages.trashedAt,
+    })
     .from(pages)
     .where(inArray(pages.id, [...ids]));
   const rows: TreeRow[] = [];

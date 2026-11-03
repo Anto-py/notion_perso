@@ -10,10 +10,10 @@ import { linksForValues, listEntries } from "@/lib/databases";
 import { faviconHref } from "@/lib/icons";
 import { fillRollups, fillTwins } from "@/lib/relation_query";
 import { getPage } from "@/lib/pages";
-import { publicHref } from "@/lib/publication";
+import { publicationOf, publicHref } from "@/lib/publication";
 import { listChildren, resolvePublication, type Publication } from "@/lib/publication_query";
 import { getSetting } from "@/lib/settings";
-import { ReadOnlyPage } from "./ReadOnlyPage";
+import { ReadOnlyPage, type ReadOnlyReach } from "./ReadOnlyPage";
 
 export type PublicParams = Promise<{ publicId: string; pageId?: string }>;
 
@@ -68,17 +68,31 @@ export async function PublicPage({ params }: { params: PublicParams }) {
 }
 
 async function PublicContent({ publicId, found }: { publicId: string; found: Publication }) {
-  const { root, page, chain } = found;
-  const children = page.type === "page" ? await listChildren(page.id) : [];
+  const { root, page, chain, graph, reach } = found;
+  // Une sous-page ou une entrée exclue du partage n'est ni listée ni montrée
+  // dans un tableau.
+  const children = page.type === "page" ? (await listChildren(page.id)).filter((child) => reach.has(child.id)) : [];
+  const readable: ReadOnlyReach = {
+    node: (id) => {
+      const node = reach.has(id) ? graph.get(id) : undefined;
+      return node ? { id: node.id, type: node.type, title: node.title, icon: node.icon } : null;
+    },
+    hidden: (id) => graph.has(id) && !reach.has(id),
+    elsewhere: (id) => {
+      const own = publicationOf(graph, id);
+      return own ? publicHref(own.publicId, own.rootId, id) : null;
+    },
+  };
   return (
     <ReadOnlyPage
       page={page}
       crumbs={chain.slice(0, -1)}
       subpages={children}
       href={(id) => publicHref(publicId, root.id, id)}
+      reach={readable}
       source={{
         getPage,
-        listEntries,
+        listEntries: async (dbId) => (await listEntries(dbId)).filter((entry) => reach.has(entry.id)),
         links: linksForValues,
         computedValues: async (properties, entry) => (await fillRollups(properties, await fillTwins(properties, [entry])))[0],
       }}

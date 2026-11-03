@@ -39,6 +39,7 @@ function page(over: Partial<SyncPage> = {}): SyncPage {
     shareEnabled: false,
     publicId: null,
     shareIncludeSubpages: true,
+    shareClosed: false,
     createdAt: T0,
     updatedAt: T0,
     trashedAt: null,

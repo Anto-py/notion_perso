@@ -1,13 +1,34 @@
 "use client";
 // Bouton « Partager » de l'en-tête d'une page, d'une entrée ou d'une base :
-// publier sur le web, copier le lien, dépublier (BRAINSTORMING §7).
+// publier sur le web, copier le lien, dépublier ; sous une page publiée,
+// exclure la page de ce partage. Publier et exclure s'excluent. Une page
+// publiée liste les liens où le visiteur lit « Contenu privé », chacun avec
+// « Publier » (BRAINSTORMING §7).
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import type { TreeRow } from "@/lib/tree";
+import { PageLabel } from "./PageIcon";
 import { send } from "./request";
 
-type Props = { pageId: string; initialPublicId: string | null };
+type Props = { pageId: string; initialPublicId: string | null; initialClosed: boolean };
 
-export function SharePanel({ pageId, initialPublicId }: Props) {
+type Named = { id: string; title: string } | null;
+type PrivateLink = { row: TreeRow; path: string[]; excluded: boolean };
+type State = { closedBy: Named; sharedBy: Named; privateLinks: PrivateLink[] };
+
+function parseState(data: Record<string, unknown>): State {
+  return {
+    closedBy: (data.closedBy as Named) ?? null,
+    sharedBy: (data.sharedBy as Named) ?? null,
+    privateLinks: Array.isArray(data.privateLinks) ? (data.privateLinks as PrivateLink[]) : [],
+  };
+}
+
+export function SharePanel({ pageId, initialPublicId, initialClosed }: Props) {
+  const router = useRouter();
   const [publicId, setPublicId] = useState(initialPublicId);
+  const [closed, setClosed] = useState(initialClosed);
+  const [state, setState] = useState<State | null>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -30,22 +51,43 @@ export function SharePanel({ pageId, initialPublicId }: Props) {
     };
   }, [open]);
 
-  async function publish() {
-    setBusy(true);
-    setMessage(null);
-    const result = await send(`/api/share/${pageId}`, "POST");
-    setBusy(false);
-    if (result.ok && typeof result.data.publicId === "string") setPublicId(result.data.publicId);
-    else setMessage(result.ok ? "Réponse inattendue : réessayez." : result.error);
+  // L'état se relit à chaque ouverture et après chaque geste : ce que les
+  // liens ouvrent change avec le corps des pages, qui vit ailleurs.
+  async function load() {
+    const response = await fetch(`/api/share/${pageId}`, { cache: "no-store" }).catch(() => null);
+    const data = response?.ok ? ((await response.json().catch(() => null)) as Record<string, unknown> | null) : null;
+    if (!data) {
+      setMessage("Lecture du partage impossible : réessayez.");
+      return;
+    }
+    setPublicId(typeof data.publicId === "string" ? data.publicId : null);
+    setClosed(data.closed === true);
+    setState(parseState(data));
   }
 
-  async function unpublish() {
+  function toggle() {
+    if (!open) {
+      setMessage(null);
+      void load();
+    }
+    setOpen(!open);
+  }
+
+  async function act(url: string, method: "POST" | "PATCH" | "DELETE", body?: unknown): Promise<boolean> {
     setBusy(true);
     setMessage(null);
-    const result = await send(`/api/share/${pageId}`, "DELETE");
+    const result = await send(url, method, body);
+    if (!result.ok) setMessage(result.error);
+    else await load();
     setBusy(false);
-    if (result.ok) setPublicId(null);
-    else setMessage(result.error);
+    return result.ok;
+  }
+
+  const publish = () => act(`/api/share/${pageId}`, "POST");
+  const unpublish = () => act(`/api/share/${pageId}`, "DELETE");
+  // Le cadenas de la sidebar suit : rechargement des données du serveur.
+  async function setClosedOn(value: boolean) {
+    if (await act(`/api/share/${pageId}`, "PATCH", { closed: value })) router.refresh();
   }
 
   // L'adresse complète se compose dans le navigateur : le serveur ne connaît
@@ -65,38 +107,99 @@ export function SharePanel({ pageId, initialPublicId }: Props) {
     }
   }
 
+  const closedBy = state?.closedBy ?? null;
+  const sharedBy = state?.sharedBy ?? null;
+  const privateLinks = state?.privateLinks ?? [];
+  const sharer = `« ${sharedBy?.title || "Sans titre"} »`;
+
   return (
     <div className="share-bar" ref={rootRef}>
-      <button type="button" className="ghost" aria-expanded={open} onClick={() => setOpen(!open)}>
-        Partager{publicId ? " · publié" : ""}
+      <button type="button" className="ghost" aria-expanded={open} onClick={toggle}>
+        Partager{publicId ? " · publié" : closed ? " · exclue" : ""}
       </button>
       {open && (
         <div className="share-panel" role="dialog" aria-label="Partage public">
-          <label className="share-switch">
-            <input
-              type="checkbox"
-              role="switch"
-              checked={publicId !== null}
-              disabled={busy}
-              onChange={(event) => (event.target.checked ? publish() : unpublish())}
-            />
-            Publier sur le web
-          </label>
-          {publicId ? (
-            <>
-              <p className="hint">Quiconque a le lien lit cette page et tout ce qu&apos;elle contient, sans compte.</p>
-              <div className="share-link">
-                <input ref={linkRef} readOnly value={url} aria-label="Lien public" onFocus={(event) => event.target.select()} />
-                <button type="button" onClick={copy}>
-                  Copier le lien
-                </button>
-              </div>
-              <button type="button" className="danger" disabled={busy} onClick={unpublish}>
-                Dépublier
-              </button>
-            </>
+          {closedBy ? (
+            <p className="hint">
+              Rangée sous « {closedBy.title || "Sans titre"} », exclue du partage : cette page ne se publie pas.
+            </p>
           ) : (
-            <p className="hint">Page privée. Publier crée un lien lisible sans compte ; dépublier le coupe aussitôt.</p>
+            <>
+              {!closed && (
+                <label className="share-switch">
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    checked={publicId !== null}
+                    disabled={busy}
+                    onChange={(event) => (event.target.checked ? publish() : unpublish())}
+                  />
+                  Publier sur le web
+                </label>
+              )}
+              {publicId ? (
+                <>
+                  <p className="hint">Quiconque a le lien lit cette page et tout ce qu&apos;elle contient, sans compte.</p>
+                  <div className="share-link">
+                    <input ref={linkRef} readOnly value={url} aria-label="Lien public" onFocus={(event) => event.target.select()} />
+                    <button type="button" onClick={copy}>
+                      Copier le lien
+                    </button>
+                  </div>
+                  <button type="button" className="danger" disabled={busy} onClick={unpublish}>
+                    Dépublier
+                  </button>
+                  {privateLinks.length > 0 && (
+                    <div className="share-opens">
+                      <p className="share-opens-title">Le visiteur lit « Contenu privé » à la place de</p>
+                      <ul>
+                        {privateLinks.map((link) => (
+                          <li key={link.row.id}>
+                            <span className="share-opens-label">
+                              <span className="share-opens-name">
+                                <PageLabel row={link.row} />
+                              </span>
+                              {link.path.length > 0 && <span className="share-opens-path">{link.path.join(" / ")}</span>}
+                            </span>
+                            {link.excluded ? (
+                              <span className="hint">Exclue</span>
+                            ) : (
+                              <button type="button" className="ghost" disabled={busy} onClick={() => act(`/api/share/${link.row.id}`, "POST")}>
+                                Publier
+                              </button>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  {(sharedBy || closed) && (
+                    <label className="share-switch">
+                      <input
+                        type="checkbox"
+                        role="switch"
+                        checked={closed}
+                        disabled={busy}
+                        onChange={(event) => setClosedOn(event.target.checked)}
+                      />
+                      {sharedBy ? `Exclure du partage de ${sharer}` : "Exclure du partage"}
+                    </label>
+                  )}
+                  <p className="hint">
+                    {closed
+                      ? sharedBy
+                        ? `Ni cette page ni ses sous-pages ne se lisent par le partage de ${sharer}.`
+                        : "Aucune page publiée au-dessus : l'exclusion est sans effet pour l'instant."
+                      : sharedBy
+                        ? `Lisible par le partage de ${sharer}. L'exclure la retire avec ses sous-pages.`
+                        : "Page privée : seul « Publier » la rend lisible. Un lien depuis une page publiée y affiche « Contenu privé »."}
+                  </p>
+                </>
+              )}
+            </>
           )}
           {message && (
             <p className="status" role="status">
