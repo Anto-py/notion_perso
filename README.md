@@ -60,41 +60,35 @@ plusieurs exports par branches, ou relever temporairement `NODE_OPTIONS`.
 
 ## Sauvegardes
 
-Deux étages, l'un sur le VPS, l'autre hors de chez l'hébergeur.
+Trois étages, l'un sur le VPS, les deux autres sur le Mac, hors de chez
+l'hébergeur.
 
 1. **Coolify**, sur le VPS : dump de la base chaque nuit (`0 2 * * *` UTC,
    14 gardés) et archive du stockage `/data/uploads` chaque dimanche
    (2 gardées). Revenir à un jour donné sans restaurer toute la machine.
-2. **Miroir sur un Mac** : `scripts/miroir.sh` copie par SSH le dernier dump
-   et les médias (`rsync`, sans `--delete`), vérifie le dump puis le restaure
-   dans une base locale `notion_perso_miroir`, substituée à l'ancienne
-   seulement si la restauration réussit. Un média absent du VPS **et** de la
-   base restaurée est effacé du Mac 14 jours plus tard ; absent du VPS mais
-   encore en base, il est gardé et signalé. Notification macOS en cas
-   d'échec, de média manquant ou après trois jours sans copie réussie.
+2. **Copie du serveur, par l'app Mac** (section suivante) : app ouverte, au
+   démarrage puis toutes les 6 h, l'app recopie par SSH le dernier dump
+   nocturne du VPS quand sa dernière copie a plus de 20 h
+   (`src/lib/server_dump.ts`). Rien n'est écrit sur le VPS. La copie est
+   restaurée dans une base jetable pour être relue, puis gardée dans
+   `~/notion_perso_app/sauvegardes/` sous `serveur_AAAAMMJJ_HHMM.dmp`, datée du
+   dump (7 gardées). Une copie illisible n'est pas gardée ; trois jours sans
+   copie récente, la ligne d'état de l'app le signale.
+3. **Base du Mac** : un dump de `notion_perso_local` au premier lancement du
+   jour et avant chaque mise à jour (7 et 3 gardés).
+
+Toutes ces sauvegardes du Mac s'ouvrent en lecture seule dans Réglages ›
+Sauvegardes, où une page se récupère ; une restauration d'essai relit chaque
+semaine la dernière du Mac et la dernière copie du serveur. Les médias n'ont
+pas de copie à part : la synchronisation recopie ceux des pages, le Mac garde
+30 jours en quarantaine ceux qu'elle efface, et l'archive hebdomadaire de
+Coolify couvre le VPS.
 
 L'application elle-même efface un média 30 jours après qu'il a cessé de
 servir (aucune page, corbeille comprise, ne le cite, et il n'est pas une
 image visible de la bibliothèque d'icônes). Une purge manuelle de la
 corbeille (un élément, ou « Vider la corbeille ») efface aussitôt les médias
 des pages purgées qui ne servent plus ailleurs.
-
-```bash
-bash scripts/miroir.sh            # copie si la dernière a plus de 20 h
-bash scripts/miroir.sh --force    # copie maintenant
-```
-
-Les réglages (hôte, clé SSH, chemins du dump et du volume) vivent dans
-`~/notion_perso_miroir/miroir.conf`, hors dépôt ; l'en-tête du script en donne
-la liste. Un LaunchAgent le lance à l'ouverture de session puis toutes les
-6 h (`RunAtLoad`, `StartInterval` à 21600).
-
-Le miroir ne sert plus qu'aux fichiers : les dumps y sont restaurés pour la
-restauration d'essai hebdomadaire et les médias y sont recopiés. Le consulter
-comme une application n'a plus lieu d'être depuis que l'app Mac synchronisée
-existe (`SPECS.md`, « Instance Mac »). Le rôle Postgres `notion_miroir_lecteur`
-(`scripts/miroir_droits.sql`) reste posé à chaque restauration : il lit tout et
-n'écrit que ses sessions.
 
 ## App Mac synchronisée
 
@@ -110,6 +104,12 @@ Elle se prépare une fois :
    NOTION_APP_DISTANT=https://<app web>
    NOTION_APP_COOLIFY=https://<instance Coolify>/api/v1
    NOTION_APP_COOLIFY_APP=<uuid de l'application Coolify>
+   ```
+   Facultatifs, pour la copie du dump nocturne du serveur :
+   ```bash
+   NOTION_APP_VPS_HOTE=root@<adresse du VPS>
+   NOTION_APP_VPS_CLE=$HOME/.ssh/<clé sans phrase de passe>
+   NOTION_APP_VPS_DUMPS=/data/coolify/backups/databases/<équipe>/<base>
    ```
    Le jeton de l'API Coolify est lu au trousseau (service `coolify-api`).
 3. Lancer une première fois dans un terminal, qui demande le compte local :

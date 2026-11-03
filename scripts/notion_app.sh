@@ -23,7 +23,7 @@ port_chrome="${NOTION_APP_CHROME_PORT:-3201}"
 travail="$(mktemp -d)"
 trap 'rm -rf "$travail"' EXIT
 
-# Reprend scripts/miroir_app.sh : PATH minimal de do shell script, cd puis
+# Reprend l'ancien miroir_app.sh : PATH minimal de do shell script, cd puis
 # nohup séparés pour que « on run » rende la main. En plus, « on idle » suit
 # la fenêtre : Chrome ne s'arrête pas avec sa dernière fenêtre sur macOS, d'où
 # le compte des pages sur le port de débogage du profil dédié ; une fois une
