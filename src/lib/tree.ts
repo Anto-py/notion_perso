@@ -1,6 +1,7 @@
 // Arbre de la sidebar, calculé depuis la liste plate des pages. Module pur :
 // importé par le serveur (contrôle du déplacement) comme par le navigateur
 // (refus immédiat pendant le glisser-déposer).
+import { fold } from "./property_schema";
 
 export type TreeRow = {
   id: string;
@@ -41,6 +42,30 @@ export function wouldCreateCycle(
     current = parentOf.get(current) ?? null;
   }
   return current !== null;
+}
+
+// Cible d'un bloc-lien absente de l'arbre : la page serveur dit pourquoi.
+export type AbsentTarget = "trashed" | "deleted";
+
+export type LinkChoice = { row: TreeRow; path: string[] };
+
+// Pages et bases qu'un « Lien vers une page » peut viser : tout l'arbre sauf la
+// page hôte et les entrées, dans l'ordre de la sidebar, filtré par le titre
+// sans casse ni accents. Le chemin (titres des ancêtres, de la racine au
+// parent) départage deux homonymes ; la recherche ne le lit pas.
+export function linkChoices(rows: readonly TreeRow[], hostId: string, query: string): LinkChoice[] {
+  const wanted = fold(query.trim());
+  const choices: LinkChoice[] = [];
+  const visit = (nodes: TreeNode[], path: string[]) => {
+    for (const node of nodes) {
+      const { children, ...row } = node;
+      const title = row.title || "Sans titre";
+      if (row.id !== hostId && row.type !== "entry" && fold(title).includes(wanted)) choices.push({ row, path });
+      visit(children, [...path, title]);
+    }
+  };
+  visit(buildTree([...rows]), []);
+  return choices;
 }
 
 // Ids des ancêtres d'une page, du parent direct à la racine : la sidebar les

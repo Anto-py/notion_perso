@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendOrphans, bodyHasContent, columnHasContent, columnStructure, flattenToText, linkedRefs, refChanges, renderHtml, safeHref, subpageRefs } from "@/lib/blocks";
+import { appendOrphans, bodyHasContent, columnHasContent, columnStructure, flattenToText, isForeignLink, linkedRefs, ownerRefs, refChanges, renderHtml, safeHref, subpageRefs } from "@/lib/blocks";
 
 describe("flattenToText", () => {
   it("aplatit titres, paragraphes et liens, un bloc par ligne", () => {
@@ -218,6 +218,31 @@ describe("subpageRefs", () => {
   });
 });
 
+const link = (pageId: string) => block("subpage", undefined, { pageId, kind: "page", link: true });
+
+describe("ownerRefs", () => {
+  it("ne compte que les blocs nés avec leur cible, jamais un lien, même vers un vrai enfant", () => {
+    const body = [sub("pg_a"), link("pg_a"), block("paragraph", [text("x")], {}, [link("pg_b"), sub("pg_c")]), link("")];
+    expect(ownerRefs(body)).toEqual(new Map([["pg_a", 1], ["pg_c", 1]]));
+    expect(subpageRefs(body)).toEqual(new Map([["pg_a", 2], ["pg_b", 1], ["pg_c", 1]]));
+  });
+
+  it("efface le lien sans perdre la cible : seul le dernier bloc propriétaire la jette", () => {
+    const before = ownerRefs([sub("pg_a"), link("pg_b")]);
+    expect(refChanges(before, ownerRefs([sub("pg_a")]))).toEqual({ gone: [], back: [] });
+    expect(refChanges(before, ownerRefs([link("pg_a"), link("pg_b")]))).toEqual({ gone: ["pg_a"], back: [] });
+  });
+});
+
+describe("isForeignLink", () => {
+  it("marque un lien, ou un bloc dont la cible habite ailleurs, pas une vraie sous-page", () => {
+    expect(isForeignLink(true, "hote", "hote")).toBe(true);
+    expect(isForeignLink(false, "ailleurs", "hote")).toBe(true);
+    expect(isForeignLink(false, null, "hote")).toBe(true);
+    expect(isForeignLink(false, "hote", "hote")).toBe(false);
+  });
+});
+
 describe("refChanges", () => {
   const map = (entries: [string, number][]) => new Map(entries);
 
@@ -256,6 +281,12 @@ describe("renderHtml, sous-pages", () => {
 
   it("ne rend rien sans résolveur", () => {
     expect(renderHtml([sub("pg_a")])).toBe("");
+  });
+
+  it("rend un lien posé par « Lien vers une page » comme un bloc de sous-page", () => {
+    const resolve = (id: string) => (id === "pg_a" ? { href: "/p/pub/pg_a", title: "Veille", icon: null, type: "database" } : null);
+    expect(renderHtml([link("pg_a")], { subpage: resolve })).toBe(renderHtml([sub("pg_a")], { subpage: resolve }));
+    expect(renderHtml([link("pg_x"), link("")], { subpage: resolve })).toBe("");
   });
 });
 

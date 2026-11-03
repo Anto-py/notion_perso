@@ -8,7 +8,7 @@ import { useCallback, useRef, useState } from "react";
 import type { EditorHandle, UploadState } from "./Editor";
 import type { LinkRef, Property, Values } from "@/lib/properties";
 import type { SaveStatus } from "@/lib/saver";
-import type { TreeRow } from "@/lib/tree";
+import type { AbsentTarget, TreeRow } from "@/lib/tree";
 import { rebaseTyping } from "@/lib/web_save";
 import { IconPicker } from "./IconPicker";
 import { CoverPicker } from "./CoverPicker";
@@ -51,9 +51,11 @@ type Props = {
   entry?: EntryContext;
   // Pages et bases de l'arbre : titres des blocs-liens de sous-page.
   directory: TreeRow[];
+  // Cibles de blocs-liens absentes de l'arbre : en corbeille ou purgées.
+  absent: Readonly<Record<string, AbsentTarget>>;
 };
 
-export function PageView({ page, entry, directory }: Props) {
+export function PageView({ page, entry, directory, absent }: Props) {
   const router = useRouter();
   const [upload, setUpload] = useState<UploadState>(null);
   const [trashError, setTrashError] = useState<string | null>(null);
@@ -94,7 +96,7 @@ export function PageView({ page, entry, directory }: Props) {
   // Sur le Mac : « Enregistré sur le Mac » tant que la page attend son envoi,
   // « Synchronisé » une fois arrivée sur le VPS (BRAINSTORMING §11).
   const pagePending = usePagePending(page.id, savedCount);
-  const subpages = useSubpages(page.id, page.body, directory, setTrashError);
+  const subpages = useSubpages(page.id, page.body, directory, absent, setTrashError);
 
   async function moveToTrash() {
     cancel();

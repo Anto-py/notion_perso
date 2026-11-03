@@ -2836,6 +2836,37 @@ mark.hit {
   font-style: italic;
 }
 
+/* Lien vers une page rangée ailleurs : la marque n'hérite pas du soulignement
+   (inline-block). */
+.subpage-arrow {
+  display: inline-block;
+  margin-left: 0.3rem;
+  color: var(--ink-soft);
+  font-size: 0.85em;
+}
+
+.subpage-choose {
+  padding: 0.15rem 0.5rem;
+  color: var(--ink-soft);
+  border: 1px dashed var(--line);
+  background: transparent;
+}
+
+.page-picker-option {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.05rem;
+}
+
+.page-picker-option.is-active {
+  background: var(--hover);
+}
+
+.page-picker-path {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
 .public-body .subpage-link a {
   color: var(--ink);
   font-weight: 500;

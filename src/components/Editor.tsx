@@ -16,7 +16,7 @@ import { columnBlock, columnListBlock } from "./columnsBlock";
 import { conflictBlock } from "./conflictBlock";
 import { linkedBlock } from "./linkedBlock";
 import { youtubeBlock } from "./mediaBlocks";
-import { subpageBlock } from "./subpageBlock";
+import { markFreshLink, subpageBlock } from "./subpageBlock";
 
 // Blocs proposés : ceux de BRAINSTORMING §2. Ni audio ni vidéo déposée (la
 // vidéo passe par YouTube), d'où une liste explicite plutôt que tout le défaut.
@@ -146,6 +146,21 @@ function childItems(editor: EditorInstance, onCreateChild: (kind: ChildKind) => 
   ];
 }
 
+// Un lien vers une page ou une base rangée ailleurs : le bloc de sous-page avec
+// link: true, dont le sélecteur s'ouvre aussitôt (PagePicker). Proposé sur une
+// page comme sur une entrée : il ne crée rien.
+const pageLinkItem = (editor: EditorInstance) => ({
+  title: "Lien vers une page",
+  subtext: "Citer une page ou une base rangée ailleurs",
+  aliases: ["lien", "link", "page", "base", "renvoi", "mention"],
+  group: "Pages",
+  icon: <span aria-hidden>↗</span>,
+  onItemClick: () => {
+    const inserted = insertOrUpdateBlockForSlashMenu(editor, { type: "subpage", props: { link: true } });
+    markFreshLink(inserted.id);
+  },
+});
+
 // Une base existante, montrée avec ses propres vues (bloc « linked »).
 const linkedItem = (editor: EditorInstance) => ({
   title: "Vue liée",
@@ -160,8 +175,13 @@ function slashItems(editor: EditorInstance, onCreateChild?: (kind: ChildKind) =>
   const items = getDefaultReactSlashMenuItems(editor).map((item) =>
     item.group === "Média" ? { ...item, group: MEDIA_GROUP } : item,
   );
-  // Pages, puis la vue liée, puis colonnes, puis les blocs courants.
-  items.unshift(...(onCreateChild ? childItems(editor, onCreateChild) : []), linkedItem(editor), ...columnItems(editor));
+  // Pages, le lien, la vue liée, puis colonnes, puis les blocs courants.
+  items.unshift(
+    ...(onCreateChild ? childItems(editor, onCreateChild) : []),
+    pageLinkItem(editor),
+    linkedItem(editor),
+    ...columnItems(editor),
+  );
   const youtube = {
     title: "Vidéo YouTube",
     subtext: "Intégrer une vidéo par son lien",

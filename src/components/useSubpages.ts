@@ -2,18 +2,25 @@
 // Sous-pages nées du menu « / » d'une page : création de l'enfant, et
 // corbeille quand son dernier bloc-lien disparaît du corps ; restauration s'il
 // revient (Ctrl + Z, collage). Seules les vraies sous-pages de cette page sont
-// concernées : effacer un bloc collé d'ailleurs ne jette rien.
+// concernées, et seulement par leurs blocs propriétaires (ownerRefs) : effacer
+// un bloc collé d'ailleurs ou un « Lien vers une page » ne jette rien.
 import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
-import { refChanges, subpageRefs } from "@/lib/blocks";
-import type { TreeRow } from "@/lib/tree";
+import { ownerRefs, refChanges } from "@/lib/blocks";
+import type { AbsentTarget, TreeRow } from "@/lib/tree";
 import type { ChildKind } from "./Editor";
 import { send } from "./request";
 import { addToDirectory, getPageDirectory, setPageDirectory } from "./subpageBlock";
 
-export function useSubpages(pageId: string, initialBody: unknown[], directory: TreeRow[], onError: (message: string) => void) {
+export function useSubpages(
+  pageId: string,
+  initialBody: unknown[],
+  directory: TreeRow[],
+  absent: Readonly<Record<string, AbsentTarget>>,
+  onError: (message: string) => void,
+) {
   const router = useRouter();
-  const refs = useRef(subpageRefs(initialBody));
+  const refs = useRef(ownerRefs(initialBody));
   // Jetées par cette page depuis son ouverture : les seules qu'un retour du
   // bloc restaure (une sous-page supprimée depuis sa propre page reste jetée).
   const trashed = useRef(new Set<string>());
@@ -21,10 +28,11 @@ export function useSubpages(pageId: string, initialBody: unknown[], directory: T
   // aussitôt doit jeter puis restaurer, jamais l'inverse.
   const chain = useRef<Promise<void>>(Promise.resolve());
 
-  // L'annuaire suit chaque rendu serveur (titre changé, page déplacée).
+  // L'annuaire suit chaque rendu serveur (titre changé, page déplacée, cible
+  // partie en corbeille ou restaurée).
   useEffect(() => {
-    setPageDirectory(directory);
-  }, [directory]);
+    setPageDirectory(directory, { hostId: pageId, absent });
+  }, [directory, pageId, absent]);
 
   async function createChild(kind: ChildKind): Promise<string | null> {
     const result = await send("/api/pages", "POST", { parentId: pageId, type: kind });
@@ -39,7 +47,7 @@ export function useSubpages(pageId: string, initialBody: unknown[], directory: T
   }
 
   function bodyChanged(body: unknown[]) {
-    const next = subpageRefs(body);
+    const next = ownerRefs(body);
     const { gone, back } = refChanges(refs.current, next);
     refs.current = next;
     const pages = getPageDirectory();

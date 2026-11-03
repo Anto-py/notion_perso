@@ -150,26 +150,45 @@ export function bodyHasContent(body: Json): boolean {
 // Une sous-page créée par le menu « / » laisse dans le corps de sa mère un bloc
 // « subpage » qui ne garde que son id. Effacer le dernier bloc d'une sous-page
 // l'envoie en corbeille ; le voir revenir (Ctrl + Z, collage) la restaure.
+// « Lien vers une page » pose le même bloc avec `link: true` : il mène à une
+// page rangée n'importe où et n'a aucun pouvoir sur elle.
 
 export const SUBPAGE_BLOCK = "subpage";
 
-// Nombre de blocs-liens par sous-page, enfants compris. Un bloc en attente
-// (id vide, création en cours) ne compte pas.
+// Nombre de blocs-liens par cible, enfants compris, liens compris. Un bloc en
+// attente (id vide, création ou choix en cours) ne compte pas.
 export function subpageRefs(body: Json): Map<string, number> {
+  return countSubpageBlocks(body, () => true);
+}
+
+// Blocs nés avec leur cible (« Page », « Base », import Notion) : les seuls
+// dont l'effacement jette la sous-page. Un lien ne compte pas, même s'il vise
+// un vrai enfant de la page.
+export function ownerRefs(body: Json): Map<string, number> {
+  return countSubpageBlocks(body, (props) => props.link !== true);
+}
+
+function countSubpageBlocks(body: Json, keep: (props: Record<string, Json>) => boolean): Map<string, number> {
   const counts = new Map<string, number>();
   const visit = (blocks: Json) => {
     if (!Array.isArray(blocks)) return;
     for (const block of blocks) {
       if (!isObject(block)) continue;
-      const pageId = isObject(block.props) ? block.props.pageId : undefined;
-      if (block.type === SUBPAGE_BLOCK && typeof pageId === "string" && pageId) {
-        counts.set(pageId, (counts.get(pageId) ?? 0) + 1);
+      const props = propsOf(block);
+      if (block.type === SUBPAGE_BLOCK && typeof props.pageId === "string" && props.pageId && keep(props)) {
+        counts.set(props.pageId, (counts.get(props.pageId) ?? 0) + 1);
       }
       visit(block.children);
     }
   };
   visit(body);
   return counts;
+}
+
+// Marque ↗ dans l'éditeur : un lien posé par « Lien vers une page », ou un bloc
+// dont la cible habite ailleurs que sous la page hôte (lien de l'import Notion).
+export function isForeignLink(link: boolean, targetParentId: string | null, hostId: string): boolean {
+  return link || targetParentId !== hostId;
 }
 
 // Sous-pages dont le dernier bloc vient de disparaître, et celles qui

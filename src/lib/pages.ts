@@ -1,14 +1,14 @@
 // Accès aux pages : arbre, création, modification, déplacement, corbeille.
 // Ce module ne décide d'aucun droit : chaque appelant passe d'abord par
 // canAccess (lib/access.ts), point unique des décisions d'accès.
-import { and, asc, desc, eq, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { media, pages } from "@/db/schema";
 import { flattenToText } from "./blocks";
 import { newId } from "./ids";
 import { removeCitedEntries } from "./relation_query";
 import { emptyConfig } from "./views";
-import { wouldCreateCycle, type TreeRow } from "./tree";
+import { wouldCreateCycle, type AbsentTarget, type TreeRow } from "./tree";
 import { mergeWebSave, type WebFields } from "./web_save";
 
 export const TRASH_RETENTION_DAYS = 30;
@@ -28,6 +28,27 @@ export async function listTreeRows(): Promise<TreeRow[]> {
     .from(pages)
     .where(and(isNull(pages.trashedAt), ne(pages.type, "entry"), eq(pages.isInbox, false)))
     .orderBy(asc(pages.manualOrder), asc(pages.createdAt));
+}
+
+// Cibles de blocs-liens absentes de l'arbre, en une requête : une page vivante
+// hors sidebar (entrée de base, Vide-cerveau) se rend encore en lien ; les
+// autres sont en corbeille, ou purgées quand la ligne n'existe plus.
+export async function linkTargets(ids: readonly string[]): Promise<{ rows: TreeRow[]; absent: Record<string, AbsentTarget> }> {
+  const absent: Record<string, AbsentTarget> = {};
+  if (!ids.length) return { rows: [], absent };
+  const found = await db
+    .select({ id: pages.id, parentId: pages.parentId, type: pages.type, title: pages.title, icon: pages.icon, trashedAt: pages.trashedAt })
+    .from(pages)
+    .where(inArray(pages.id, [...ids]));
+  const rows: TreeRow[] = [];
+  for (const { trashedAt, ...row } of found) {
+    if (trashedAt) absent[row.id] = "trashed";
+    else rows.push(row);
+  }
+  for (const id of ids) {
+    if (!found.some((row) => row.id === id)) absent[id] = "deleted";
+  }
+  return { rows, absent };
 }
 
 // Bases hors corbeille, pour le menu « Déplacer vers » d'une entrée.

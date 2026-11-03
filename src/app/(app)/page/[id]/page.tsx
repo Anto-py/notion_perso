@@ -2,9 +2,10 @@ import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { PageView, type EntryContext } from "@/components/PageView";
 import { canAccess } from "@/lib/access";
+import { subpageRefs } from "@/lib/blocks";
 import { getCurrentUser } from "@/lib/auth";
 import { configOf, linksForValues } from "@/lib/databases";
-import { getPage, listDatabases, listTreeRows } from "@/lib/pages";
+import { getPage, linkTargets, listDatabases, listTreeRows } from "@/lib/pages";
 import { normalizeValues, withTimes } from "@/lib/properties";
 import { fillRollups, fillTwins } from "@/lib/relation_query";
 
@@ -48,7 +49,12 @@ async function PageLoader({ params }: Pick<PageProps<"/page/[id]">, "params">) {
   }
   // key : changer de page recrée l'éditeur au lieu de recycler le précédent.
   const publicId = page.shareEnabled ? page.publicId : null;
-  const directory = (await listTreeRows()).filter((row) => canAccess(user, row, "read"));
+  const tree = (await listTreeRows()).filter((row) => canAccess(user, row, "read"));
+  // Cibles des blocs-liens que l'arbre ne connaît pas : entrée de base, page
+  // en corbeille ou purgée.
+  const known = new Set(tree.map((row) => row.id));
+  const targets = await linkTargets([...subpageRefs(page.body).keys()].filter((target) => !known.has(target)));
+  const directory = [...tree, ...targets.rows.filter((row) => canAccess(user, row, "read"))];
   return (
     <PageView
       key={page.id}
@@ -65,6 +71,7 @@ async function PageLoader({ params }: Pick<PageProps<"/page/[id]">, "params">) {
       }}
       entry={entry}
       directory={directory}
+      absent={targets.absent}
     />
   );
 }
