@@ -181,6 +181,26 @@ const READERS = {
   icon_image: (raw: unknown) => readRow<SyncIconImage>(raw, ICON_IMAGE_FIELDS),
 };
 
+// Champs ajoutés au protocole après coup, avec la valeur que leur migration a
+// posée sur les lignes existantes. Un instantané gardé par le Mac peut dater
+// d'avant : le champ absent prend cette valeur, sans quoi la base serait
+// refusée, ou passerait pour un changement du Mac à la fusion (sameJson tient
+// une clé absente pour différente de false). La ligne envoyée, elle, reste
+// exigée complète.
+const BASE_DEFAULTS: Partial<Record<SyncKind, Record<string, unknown>>> = {
+  page: { shareClosed: false }, // migration 0011_ne_pas_partager
+};
+
+function withBaseDefaults(kind: SyncKind, base: unknown): unknown {
+  const defaults = BASE_DEFAULTS[kind];
+  if (!defaults || !isObj(base)) return base;
+  const filled: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(defaults)) {
+    if (filled[key] === undefined) filled[key] = value;
+  }
+  return filled;
+}
+
 function readItem(raw: unknown): PushItem | string {
   if (!isObj(raw)) return "élément illisible";
   const { kind, id } = raw;
@@ -201,7 +221,7 @@ function readItem(raw: unknown): PushItem | string {
   if (baseRev !== null && !isRev(baseRev)) return `${where} : baseRev illisible`;
   let base: SyncPage | SyncIconImage | null = null;
   if (raw.base != null) {
-    const read = READERS[kind as "page" | "icon_image"](raw.base);
+    const read = READERS[kind as "page" | "icon_image"](withBaseDefaults(kind as SyncKind, raw.base));
     if (typeof read === "string") return `${where} : base, ${read}`;
     base = read;
   }

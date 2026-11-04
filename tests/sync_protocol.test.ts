@@ -101,6 +101,32 @@ describe("parsePush", () => {
     expect(Array.isArray(items) && items.map((item) => item.kind)).toEqual(["page", "page", "media", "icon_image"]);
   });
 
+  // Le Mac garde l'instantané de la dernière version commune : ceux d'avant la
+  // migration 0011 n'ont pas shareClosed (mesuré le 2026-11-04, 46 pages sur
+  // 46), et le refuser bloquait toute la synchronisation montante.
+  it("lit un instantané antérieur à shareClosed comme une page non exclue", () => {
+    const { shareClosed: _dropped, ...old } = page();
+    void _dropped;
+    const items = parsePush({ items: [pushPage(page({ title: "Mac" }), 3, old as SyncPage)] });
+    expect(Array.isArray(items) && items[0].kind === "page" && "base" in items[0] && items[0].base).toEqual(page());
+  });
+
+  it("exige shareClosed sur la ligne envoyée", () => {
+    const { shareClosed: _dropped, ...row } = page();
+    void _dropped;
+    expect(parsePush({ items: [pushPage(row as SyncPage, 3, page())] })).toBe("page pg_1 : champ shareClosed");
+  });
+
+  it("garde la publication faite sur le site face à un instantané antérieur à shareClosed", () => {
+    const { shareClosed: _dropped, ...old } = page();
+    void _dropped;
+    const items = parsePush({ items: [pushPage(page({ title: "Titre du Mac", updatedAt: T_MAC }), 3, old as SyncPage)] });
+    if (typeof items === "string" || items[0].kind !== "page" || "deleted" in items[0]) throw new Error(String(items));
+    const web = page({ shareEnabled: true, publicId: "pub_abc", updatedAt: T_WEB });
+    const decision = decidePage(items[0], { rev: 8, row: web }, false, NOW);
+    expect(decision.row).toMatchObject({ title: "Titre du Mac", shareEnabled: true, publicId: "pub_abc", shareClosed: false });
+  });
+
   it("ne garde que les champs connus d'une ligne", () => {
     const items = parsePush({ items: [pushPage({ ...page(), bodyText: "injecté" } as SyncPage)] });
     expect(Array.isArray(items) && items[0]).not.toHaveProperty("row.bodyText");
