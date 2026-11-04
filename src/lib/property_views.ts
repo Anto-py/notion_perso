@@ -200,6 +200,17 @@ export function sortEntries(entries: readonly EntryRow[], sorts: readonly Sort[]
   });
 }
 
+// Un clic sur l'en-tête d'une colonne : sans tri, il ajoute une clé croissante
+// en dernier ; croissante devient décroissante ; décroissante retire la clé.
+// Une colonne non triée au-delà de la limite reste sans effet : ajouter une
+// clé que la lecture tolérante effacerait ferait un clic menteur.
+export function cycleSort(sorts: readonly Sort[], prop: string): Sort[] {
+  const index = sorts.findIndex((sort) => sort.prop === prop);
+  if (index === -1) return sorts.length >= LIMITS.sorts ? [...sorts] : [...sorts, { prop, dir: "asc" }];
+  if (sorts[index].dir === "asc") return sorts.map((sort, i) => (i === index ? { ...sort, dir: "desc" } : sort));
+  return sorts.filter((_, i) => i !== index);
+}
+
 // value : ce qu'un dépôt dans cette colonne écrit dans l'entrée (id d'option,
 // liste d'ids, true), null pour la colonne « Sans … » et « Non coché ».
 export type Column = { key: string | null; name: string; color: OptionColor | null; value: Value | null; entries: EntryRow[] };

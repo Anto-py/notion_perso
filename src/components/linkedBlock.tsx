@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createReactBlockSpec } from "@blocknote/react";
 import {
+  cycleSort,
   groupEntries,
   isGroupableType,
   matchesFilters,
@@ -307,6 +308,8 @@ function LinkedDatabase({ databaseId, config, onPick, onConfig }: Props) {
           properties={shown}
           entries={visible}
           filtered={view.filters.length > 0}
+          sorts={view.sorts}
+          onCycleSort={(propId) => changeView({ ...view, sorts: cycleSort(view.sorts, propId) })}
           canReorderEntries={view.sorts.length === 0}
           onReorderProperty={reorderProperty}
           onMoveEntry={moveEntry}

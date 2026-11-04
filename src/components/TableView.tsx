@@ -28,17 +28,21 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { useState, type KeyboardEvent } from "react";
-import { TITLE_PROP, type EntryRow, type OrderPlace, type Property, type Value } from "@/lib/properties";
+import { TITLE_PROP, type EntryRow, type OrderPlace, type Property, type Sort, type Value } from "@/lib/properties";
 import { CALC_LABELS, calcOpsFor, calcText, computeCalc, type CalcOp } from "@/lib/views";
 import { ExpandableCell } from "./ExpandableCell";
 import { PageLabel } from "./PageIcon";
 import { PropertyInput } from "./PropertyInput";
 import { propIcon } from "./propertyUi";
+import { SortButton, ariaSort, sortDir } from "./SortHeader";
 
 type Props = {
   properties: Property[];
   entries: EntryRow[];
   filtered: boolean;
+  // Tri de la vue, et le geste qui le fait avancer au clic sur un en-tête.
+  sorts: Sort[];
+  onCycleSort: (propId: string) => void;
   // Une vue triée n'a pas d'ordre manuel visible : la poignée des lignes
   // s'efface et une mention invite à retirer le tri.
   canReorderEntries: boolean;
@@ -69,6 +73,8 @@ export function TableView({
   properties,
   entries,
   filtered,
+  sorts,
+  onCycleSort,
   canReorderEntries,
   onReorderProperty,
   onMoveEntry,
@@ -157,14 +163,18 @@ export function TableView({
           <table className="db-table">
             <thead>
               <tr>
-                <th scope="col">
-                  <span className="prop-icon" aria-hidden="true">
-                    Aa
-                  </span>
-                  Titre
+                <th scope="col" aria-sort={ariaSort(sortDir(sorts, TITLE_PROP.id))}>
+                  <SortButton label="Titre" icon="Aa" dir={sortDir(sorts, TITLE_PROP.id)} onCycle={() => onCycleSort(TITLE_PROP.id)} />
                 </th>
                 {properties.map((prop) => (
-                  <ColumnHead key={prop.id} prop={prop} broken={broken.includes(prop.id)} hint={hint} />
+                  <ColumnHead
+                    key={prop.id}
+                    prop={prop}
+                    broken={broken.includes(prop.id)}
+                    dir={sortDir(sorts, prop.id)}
+                    hint={hint}
+                    onCycle={() => onCycleSort(prop.id)}
+                  />
                 ))}
               </tr>
             </thead>
@@ -222,13 +232,26 @@ export function TableView({
 }
 
 // En-tête d'une propriété : cible de dépôt pour une colonne, poignée de
-// glisser pour la déplacer. La colonne Titre, fixe, n'en a pas.
-function ColumnHead({ prop, broken, hint }: { prop: Property; broken: boolean; hint: Hint | null }) {
+// glisser pour la déplacer, et bouton de tri (la colonne Titre, fixe, n'a que
+// le tri).
+function ColumnHead({
+  prop,
+  broken,
+  dir,
+  hint,
+  onCycle,
+}: {
+  prop: Property;
+  broken: boolean;
+  dir: Sort["dir"] | null;
+  hint: Hint | null;
+  onCycle: () => void;
+}) {
   const drag = useDraggable({ id: COL + prop.id });
   const drop = useDroppable({ id: COL + prop.id });
   const side = hint?.id === COL + prop.id ? (hint.before ? "drop-before" : "drop-after") : null;
   return (
-    <th ref={(element) => drop.setNodeRef(element)} scope="col" className={side ?? undefined}>
+    <th ref={(element) => drop.setNodeRef(element)} scope="col" className={side ?? undefined} aria-sort={ariaSort(dir)}>
       <button
         ref={(element) => drag.setNodeRef(element)}
         type="button"
@@ -239,10 +262,7 @@ function ColumnHead({ prop, broken, hint }: { prop: Property; broken: boolean; h
       >
         ⠿
       </button>
-      <span className="prop-icon" aria-hidden="true">
-        {propIcon(prop)}
-      </span>
-      {prop.name}
+      <SortButton label={prop.name} icon={propIcon(prop)} dir={dir} onCycle={onCycle} />
       {broken && (
         <span className="hint" title="La propriété visée a disparu ou changé de type : réparez le cumul dans les propriétés">
           {" "}

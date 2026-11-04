@@ -6,6 +6,7 @@ import {
   checkValue,
   convertValue,
   countLosses,
+  cycleSort,
   formatNumber,
   matchesFilters,
   normalizeValues,
@@ -137,6 +138,42 @@ describe("nombres", () => {
     expect(sanitizeFilter({ prop: duree.id, op: "gt", value: "1," }, all)).toEqual({ prop: duree.id, op: "gt", value: "1," });
     expect(sanitizeFilter({ prop: duree.id, op: "gt", value: "10" }, all)).toEqual({ prop: duree.id, op: "gt", value: "10" });
     expect(sanitizeFilter({ prop: duree.id, op: "contains", value: "1" }, all)).toBeNull();
+  });
+});
+
+describe("Tri au clic sur un en-tête", () => {
+  it("ajoute une clé croissante, puis décroissante, puis la retire", () => {
+    const asc = cycleSort([], duree.id);
+    expect(asc).toEqual([{ prop: duree.id, dir: "asc" }]);
+    const desc = cycleSort(asc, duree.id);
+    expect(desc).toEqual([{ prop: duree.id, dir: "desc" }]);
+    expect(cycleSort(desc, duree.id)).toEqual([]);
+  });
+
+  it("garde les autres clés et ajoute la nouvelle en dernier", () => {
+    expect(cycleSort([{ prop: "title", dir: "asc" }], duree.id)).toEqual([
+      { prop: "title", dir: "asc" },
+      { prop: duree.id, dir: "asc" },
+    ]);
+    expect(
+      cycleSort(
+        [
+          { prop: "title", dir: "asc" },
+          { prop: duree.id, dir: "asc" },
+        ],
+        duree.id,
+      ),
+    ).toEqual([
+      { prop: "title", dir: "asc" },
+      { prop: duree.id, dir: "desc" },
+    ]);
+  });
+
+  it("n'ajoute pas une sixième clé, que la lecture tolérante effacerait", () => {
+    const five = ["a", "b", "c", "d", "e"].map((prop) => ({ prop, dir: "asc" as const }));
+    expect(cycleSort(five, "f")).toEqual(five);
+    // Une colonne déjà triée reste cyclable au-delà de la limite.
+    expect(cycleSort(five, "a")[0]).toEqual({ prop: "a", dir: "desc" });
   });
 });
 

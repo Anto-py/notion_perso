@@ -6,7 +6,7 @@
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { MEDIA_BASE } from "@/lib/icons";
-import { OP_LABELS, TITLE_PROP, filterOpsFor, opNeedsValue, type Filter, type FilterOp, type LinkRef, type Sort } from "@/lib/properties";
+import { OP_LABELS, TITLE_PROP, cycleSort, filterOpsFor, opNeedsValue, type Filter, type FilterOp, type LinkRef, type Sort } from "@/lib/properties";
 import {
   EMPTY_VISITOR,
   applyVisitor,
@@ -19,8 +19,9 @@ import {
 } from "@/lib/public_view";
 import { cardImage } from "@/lib/views";
 import { PageIcon, PageLabel } from "./PageIcon";
-import { ValueView } from "./propertyUi";
+import { ValueView, propIcon } from "./propertyUi";
 import { FilterValue } from "./ViewControls";
+import { SortButton, ariaSort, sortDir } from "./SortHeader";
 
 export function PublicDatabaseView({ data }: { data: PublicDatabaseData }) {
   const [state, setState] = useState<VisitorState>(EMPTY_VISITOR);
@@ -53,7 +54,7 @@ export function PublicDatabaseView({ data }: { data: PublicDatabaseData }) {
       ) : data.view.kind === "gallery" ? (
         <PublicGallery data={data} entries={shown} />
       ) : (
-        <PublicTable data={data} entries={shown} />
+        <PublicTable data={data} entries={shown} sorts={state.sorts} onCycleSort={(propId) => setState({ ...state, sorts: cycleSort(state.sorts, propId) })} />
       )}
     </div>
   );
@@ -219,7 +220,17 @@ function PublicGallery({ data, entries }: { data: PublicDatabaseData; entries: P
   );
 }
 
-function PublicTable({ data, entries }: { data: PublicDatabaseData; entries: PublicDatabaseData["entries"] }) {
+function PublicTable({
+  data,
+  entries,
+  sorts,
+  onCycleSort,
+}: {
+  data: PublicDatabaseData;
+  entries: PublicDatabaseData["entries"];
+  sorts: Sort[];
+  onCycleSort: (propId: string) => void;
+}) {
   const { columns, mediaBase, view } = data;
   const link = (ref: LinkRef) => data.chipHref[ref.id] ?? null;
   const frozen = [view.frozenFirstColumn ? "frozen-col" : "", view.frozenHeader ? "frozen-head" : ""].filter(Boolean).join(" ");
@@ -228,10 +239,12 @@ function PublicTable({ data, entries }: { data: PublicDatabaseData; entries: Pub
       <table className="db-table public-table">
         <thead>
           <tr>
-            <th scope="col">Titre</th>
+            <th scope="col" aria-sort={ariaSort(sortDir(sorts, TITLE_PROP.id))}>
+              <SortButton label="Titre" icon="Aa" dir={sortDir(sorts, TITLE_PROP.id)} onCycle={() => onCycleSort(TITLE_PROP.id)} />
+            </th>
             {columns.map((prop) => (
-              <th scope="col" key={prop.id}>
-                {prop.name}
+              <th scope="col" key={prop.id} aria-sort={ariaSort(sortDir(sorts, prop.id))}>
+                <SortButton label={prop.name} icon={propIcon(prop)} dir={sortDir(sorts, prop.id)} onCycle={() => onCycleSort(prop.id)} />
               </th>
             ))}
           </tr>

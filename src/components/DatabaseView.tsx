@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   countLosses,
+  cycleSort,
   defaultSelectOptions,
   groupEntries,
   isGroupableType,
@@ -431,6 +432,8 @@ export function DatabaseView({ database, config, entries, databases, initialView
           properties={properties.filter((prop) => !view.hidden.includes(prop.id))}
           entries={visible}
           filtered={view.filters.length > 0}
+          sorts={view.sorts}
+          onCycleSort={(propId) => changeView({ ...view, sorts: cycleSort(view.sorts, propId) })}
           canReorderEntries={view.sorts.length === 0}
           onReorderProperty={reorderProperty}
           onMoveEntry={moveEntry}

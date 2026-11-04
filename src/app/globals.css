@@ -1224,6 +1224,29 @@ a {
   vertical-align: middle;
 }
 
+/* En-tête triable : le nom de la colonne est un bouton, la flèche dit le sens.
+   Le bouton prend le style de l'en-tête, sans cadre ni fond. */
+.sort-handle {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sort-handle:hover,
+.sort-handle:focus-visible {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.sort-arrow {
+  margin-left: 0.3rem;
+  color: var(--ink);
+}
+
 .db-table tbody tr {
   cursor: pointer;
 }
