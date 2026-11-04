@@ -3,6 +3,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { SyncStatusProvider } from "@/components/SyncStatus";
 import { canAccess } from "@/lib/access";
 import { getCurrentUser } from "@/lib/auth";
+import { AUTHOR_NAME } from "@/lib/branding";
 import { countInbox } from "@/lib/inbox";
 import { listTreeRows } from "@/lib/pages";
 import { lastClientSeen } from "@/lib/sync_clients";
@@ -42,7 +43,7 @@ async function SidebarData() {
 function SidebarSkeleton() {
   return (
     <aside className="sidebar" aria-busy="true">
-      <span className="sidebar-home">notion_perso</span>
+      <span className="sidebar-home">{AUTHOR_NAME}</span>
       <div className="skeleton" />
       <div className="skeleton" />
       <div className="skeleton short" />

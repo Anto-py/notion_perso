@@ -17,6 +17,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { ancestorsOf, buildTree, wouldCreateCycle, type TreeRow } from "@/lib/tree";
+import { AUTHOR_NAME, CV_URL } from "@/lib/branding";
 import { formatClock } from "@/lib/sync_status";
 import { PageLabel } from "./PageIcon";
 import { SearchBar } from "./SearchBar";
@@ -127,9 +128,9 @@ export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
         {mobileOpen ? "Fermer" : "Menu"}
       </button>
       <aside className={mobileOpen ? "sidebar open" : "sidebar"}>
-        <Link href="/" className="sidebar-home">
-          notion_perso
-        </Link>
+        <a href={CV_URL} className="sidebar-home" target="_blank" rel="noopener noreferrer">
+          {AUTHOR_NAME}
+        </a>
         <SearchBar>
           <div className="new-buttons">
             <button type="button" className="new-page" onClick={() => createPage()}>
