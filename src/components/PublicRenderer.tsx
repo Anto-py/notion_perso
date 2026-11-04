@@ -3,8 +3,8 @@
 // Le rendu du contenu vit dans ReadOnlyPage.tsx, partagé avec l'écran de
 // sauvegarde, qui lui donne seulement une autre source de données.
 import type { Metadata } from "next";
-import Link from "next/link";
 import { cache } from "react";
+import { AUTHOR_NAME, CV_URL } from "@/lib/branding";
 import { safeHref } from "@/lib/blocks";
 import { linksForValues, listEntries } from "@/lib/databases";
 import { faviconHref } from "@/lib/icons";
@@ -20,12 +20,12 @@ export type PublicParams = Promise<{ publicId: string; pageId?: string }>;
 // generateMetadata et la page lisent la même publication : une seule requête.
 const resolve = cache(resolvePublication);
 
-// Réglables sans toucher au code : Réglages › Vue publique d'abord, puis les
-// variables SITE_NAME et LINKEDIN_URL en repli. Lus au rendu, jamais au
-// build : ce composant est toujours rendu à la demande (il lit la base).
-// cache() : métadonnées et page lisent le même réglage, une seule requête.
+// Réglable sans toucher au code : Réglages › Vue publique d'abord, puis le
+// nom d'auteur. Lus au rendu, jamais au build : ce composant est toujours rendu
+// à la demande (il lit la base). cache() : métadonnées et page lisent le même
+// réglage, une seule requête.
 const siteName = cache(async (): Promise<string> => {
-  return (await getSetting("public.site_name")) ?? (process.env.SITE_NAME?.trim() || "notion_perso");
+  return (await getSetting("public.site_name")) ?? AUTHOR_NAME;
 });
 
 async function linkedinUrl(): Promise<string | null> {
@@ -52,9 +52,9 @@ export async function PublicPage({ params }: { params: PublicParams }) {
     <div className="public">
       <header className="public-header">
         {found ? (
-          <Link href={`/p/${publicId}`} className="public-site">
+          <a href={CV_URL} className="public-site" target="_blank" rel="noopener noreferrer">
             {site}
-          </Link>
+          </a>
         ) : (
           <span className="public-site">{site}</span>
         )}
@@ -109,13 +109,17 @@ async function PublicFooter() {
       </span>
       <p>
         Made by{" "}
+        <a href={CV_URL} target="_blank" rel="noopener noreferrer">
+          {AUTHOR_NAME}
+        </a>
         {linkedin ? (
-          <a href={linkedin} target="_blank" rel="noopener noreferrer">
-            Antonin Bareau
-          </a>
-        ) : (
-          "Antonin Bareau"
-        )}{" "}
+          <>
+            {" · "}
+            <a href={linkedin} target="_blank" rel="noopener noreferrer">
+              LinkedIn
+            </a>
+          </>
+        ) : null}{" "}
         avec l&apos;aide essentielle d&apos;un ou plusieurs LLM
       </p>
     </footer>
