@@ -2,6 +2,7 @@
 // d'URL et le parse des métadonnées sont dans unfurl.ts (pur, testé).
 import {
   domainOf,
+  faviconUrl,
   isFetchableUrl,
   parseUnfurl,
   UNFURL_MAX_BYTES,
@@ -24,7 +25,7 @@ const IMAGE_TYPES: Readonly<Record<string, string>> = Object.fromEntries(
 const USER_AGENT = "Mozilla/5.0 (compatible; notion_perso/1.0; +https://github.com/Anto-py/notion_perso)";
 
 function fallback(raw: string): Unfurled {
-  return { title: domainOf(raw), description: "", image: null, site: "" };
+  return { title: domainOf(raw), description: "", image: null, site: "", icon: faviconUrl(raw) };
 }
 
 // YouTube sert un mur de consentement à un serveur sans cookies. oEmbed, lui,
@@ -46,6 +47,7 @@ async function youtubePreview(raw: string): Promise<Unfurled | null> {
       description: "",
       image: typeof data.thumbnail_url === "string" ? data.thumbnail_url : null,
       site: typeof data.author_name === "string" ? data.author_name.slice(0, 100) : "",
+      icon: faviconUrl("https://www.youtube.com"),
     };
   } catch {
     return null;

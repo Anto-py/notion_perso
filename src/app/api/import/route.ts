@@ -1,9 +1,11 @@
-// Import d'un export Notion (zip Markdown & CSV). Cette route est hors du
-// périmètre de proxy.ts (voir son matcher) : le proxy tronque sans erreur tout
-// corps au-delà de 10 Mo. Elle vérifie donc la session elle-même.
+// Import d'un export Notion (zip Markdown & CSV ou HTML). Cette route est hors
+// du périmètre de proxy.ts (voir son matcher) : le proxy tronque sans erreur
+// tout corps au-delà de 10 Mo. Elle vérifie donc la session elle-même.
 import { fail, requireUser } from "@/lib/api";
+import { hydrateRemoteMedia } from "@/lib/import_remote";
 import { applyImportPlan } from "@/lib/import_write";
 import { buildImportPlan, MAX_IMPORT_BYTES, NotionImportError } from "@/lib/notion-import";
+import { fetchRemoteImage } from "@/lib/unfurl_fetch";
 
 // Marge pour l'enveloppe multipart autour du fichier.
 const ENVELOPE_BYTES = 64 * 1024;
@@ -32,11 +34,15 @@ export async function POST(request: Request) {
   try {
     plan = buildImportPlan(new Uint8Array(await file.arrayBuffer()));
   } catch (error) {
-    // Une archive illisible ou un export HTML sont des refus explicables, pas
-    // des pannes : 422 et le message du parseur.
+    // Une archive illisible ou vide est un refus explicable, pas une panne :
+    // 422 et le message du parseur.
     if (error instanceof NotionImportError) return fail(422, error.message);
     throw error;
   }
+
+  // Les images distantes sont rapatriées avant l'écriture : bandeau, image de
+  // corps, icône. Une image injoignable est comptée au rapport sans arrêter.
+  await hydrateRemoteMedia(plan, fetchRemoteImage);
 
   try {
     await applyImportPlan(plan);

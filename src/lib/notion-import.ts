@@ -1,6 +1,8 @@
-// Import d'un export Notion « Markdown & CSV » : de l'archive au plan d'écriture.
-// Module pur (aucune base, aucun disque) : il rend des pages prêtes à insérer,
-// leurs médias et un rapport. L'écriture vit dans lib/import_write.ts.
+// Import d'un export Notion « Markdown & CSV » ou « HTML » : de l'archive au
+// plan d'écriture. Module pur (aucune base, aucun disque) : il rend des pages
+// prêtes à insérer, leurs médias et un rapport. L'écriture vit dans
+// lib/import_write.ts.
+import { createHash } from "node:crypto";
 import { flattenToText } from "./blocks";
 import { newId as defaultNewId } from "./ids";
 import {
@@ -13,6 +15,7 @@ import {
   type NotionItem,
 } from "./notion-archive";
 import { buildCsvDatabase, parseCsv } from "./notion-csv";
+import { htmlToPage, type HtmlPage } from "./notion-html";
 import { markdownToBlocks, type Block } from "./notion-markdown";
 import { fold, valuesToText, type Values } from "./properties";
 import type { DbConfig } from "./views";
@@ -54,8 +57,13 @@ export type PlanMedia = {
   mime: string;
   size: number;
   bytes: Uint8Array;
-  pageId: string;
+  // Page qui porte le média ; null pour une image de la bibliothèque d'icônes.
+  pageId: string | null;
 };
+
+// Une image d'icône rangée en bibliothèque : le média est partagé par toutes
+// les pages qui portent la même image (une seule fois par contenu).
+export type PlanIcon = { id: string; mediaId: string; name: string };
 
 export type PlanPage = {
   id: string;
@@ -63,6 +71,9 @@ export type PlanPage = {
   dbId: string | null;
   type: "page" | "database" | "entry";
   title: string;
+  icon: string | null;
+  cover: string | null;
+  coverPosition: number | null;
   body: Block[];
   bodyText: string;
   dbConfig: DbConfig | null;
@@ -72,7 +83,26 @@ export type PlanPage = {
   manualOrder: number;
 };
 
-export type ImportPlan = { rootId: string; pages: PlanPage[]; media: PlanMedia[]; report: ImportReport };
+// Une image distante laissée à rapatrier par l'hydratation (import_remote.ts) :
+// le plan reste pur, le réseau vient après.
+export type RemoteAsset = {
+  url: string;
+  kind: "cover" | "image" | "icon";
+  pageId: string;
+  blockId?: string;
+  // Prop du bloc à réécrire : « url » pour une image, « favicon » ou « image »
+  // d'un signet.
+  prop?: "url" | "favicon" | "image";
+};
+
+export type ImportPlan = {
+  rootId: string;
+  pages: PlanPage[];
+  media: PlanMedia[];
+  icons: PlanIcon[];
+  remotes: RemoteAsset[];
+  report: ImportReport;
+};
 
 export type ImportOptions = { newId?: (prefix: string) => string; newBlockId?: () => string };
 
@@ -118,13 +148,22 @@ export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}):
   const newBlockId = options.newBlockId ?? (() => globalThis.crypto.randomUUID());
   const { files, warnings } = unpackZip(bytes);
   const archive = indexArchive(files, warnings);
-  if (archive.htmlOnly) {
-    throw new NotionImportError(
-      "Cet export est en HTML. Dans Notion, choisissez « Exporter → Markdown & CSV », puis déposez le zip.",
-    );
-  }
   if (archive.pages.length === 0 && archive.databases.length === 0 && archive.stubs.length === 0) {
     throw new NotionImportError("Aucune page ni base dans l'archive : vérifiez l'export Notion.");
+  }
+
+  // Le format majoritaire décide du lecteur ; les pages de l'autre format sont
+  // comptées au rapport (BRAINSTORMING §8). Les CSV de base sont communs.
+  const format = archive.format;
+  const pageExt = format === "html" ? "html" : "md";
+  const docPages = archive.pages.filter((page) => page.ext === pageExt);
+  const docEntries = archive.entries.filter((entry) => entry.ext === pageExt);
+  if (docPages.length === 0 && docEntries.length === 0 && archive.databases.length === 0) {
+    throw new NotionImportError(
+      format === "html"
+        ? "Aucune page HTML lisible dans l'archive : vérifiez l'export Notion."
+        : "Aucune page Markdown lisible dans l'archive : vérifiez l'export Notion.",
+    );
   }
 
   const contentByPath = new Map(files.map((file) => [file.path, file.bytes]));
@@ -132,12 +171,13 @@ export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}):
   const converted = new Map<string, number>();
   for (const warning of archive.warnings) count(ignored, warning);
   if (archive.others.length > 0) count(ignored, "fichier non pris en charge", archive.others.length);
+  if (archive.otherFormatPages > 0) count(ignored, "page d'un autre format ignorée", archive.otherFormatPages);
 
   // Identifiants tirés avant toute lecture : les médias et les liens ont besoin
   // des adresses finales, et l'écriture ne doit rien décider.
-  const pageIds = new Map(archive.pages.map((page) => [page.path, makeId("pg")]));
+  const pageIds = new Map(docPages.map((page) => [page.path, makeId("pg")]));
   const databaseIds = new Map(archive.databases.map((db) => [db.path, makeId("pg")]));
-  const entryIds = new Map(archive.entries.map((entry) => [entry.path, makeId("pg")]));
+  const entryIds = new Map(docEntries.map((entry) => [entry.path, makeId("pg")]));
 
   const targetByKey = new Map<string, Target>();
   const targetByNotionId = new Map<string, Target>();
@@ -145,7 +185,7 @@ export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}):
     targetByKey.set(key, target);
     if (notionId) targetByNotionId.set(notionId, target);
   };
-  for (const page of archive.pages) {
+  for (const page of docPages) {
     remember(stripExtension(page.path), { id: pageIds.get(page.path)!, kind: "page", title: page.title }, page.notionId);
   }
   // Le CSV complet (_all) et le stub .md de la même base partagent le dossier
@@ -167,11 +207,11 @@ export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}):
   for (const db of archive.databases) {
     const base = { id: databaseIds.get(db.path)!, title: db.title };
     const dirs = new Set(entryDirsOf(db));
-    for (const entry of archive.entries) {
+    for (const entry of docEntries) {
       if (dirs.has(entry.dir)) entryBase.set(entry.path, base);
     }
   }
-  for (const entry of archive.entries) {
+  for (const entry of docEntries) {
     const base = entryBase.get(entry.path);
     remember(
       stripExtension(entry.path),
@@ -181,7 +221,7 @@ export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}):
   }
 
   const mediaByPath = new Map<string, PlanMedia>();
-  function mediaUrl(ownerId: string, fromPath: string, href: string): string | null {
+  function mediaUrl(ownerId: string | null, fromPath: string, href: string): string | null {
     const path = resolveArchivePath(fromPath, href);
     const data = contentByPath.get(path);
     if (!data) return null;
@@ -227,17 +267,131 @@ export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}):
     };
   }
 
-  function blocksOf(entry: NotionItem, ownerId: string, extra = ""): Block[] {
-    const data = contentByPath.get(entry.path);
-    if (!data) return [];
-    const markdown = extra ? `${decode(data)}\n\n${extra}` : decode(data);
+  // Bases rangées par dossier : le tableau de collection d'une page se relie au
+  // CSV de son dossier. Une page peut aussi porter ses enfants dans un dossier
+  // de même titre, où vit le CSV de la base (export HTML).
+  const databasesByDir = new Map<string, NotionItem[]>();
+  for (const db of archive.databases) {
+    databasesByDir.set(db.dir, [...(databasesByDir.get(db.dir) ?? []), db]);
+  }
+  function collectionFor(item: NotionItem, title: string): string | null {
+    const dirs = [item.dir];
+    const childDir = joinPath(item.dir, item.title);
+    if (childDir !== item.dir) dirs.push(childDir);
+    const candidates = dirs.flatMap((dir) => databasesByDir.get(dir) ?? []);
+    if (candidates.length === 0) return null;
+    if (candidates.length === 1) return databaseIds.get(candidates[0].path)!;
+    const key = fold(title);
+    const found = key ? candidates.find((db) => fold(db.title) === key) : undefined;
+    return found ? databaseIds.get(found.path)! : null;
+  }
+
+  // Une image d'icône rejoint la bibliothèque, une seule fois par contenu.
+  const iconMedia = new Map<string, { media: PlanMedia; icon: PlanIcon }>();
+  function iconImage(ownerPath: string, iconPath: string): string | null {
+    const path = resolveArchivePath(ownerPath, iconPath);
+    const data = contentByPath.get(path);
+    if (!data) return null;
+    const ext = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
+    const type = MEDIA_BY_EXT[ext];
+    if (!type) return null;
+    const hash = createHash("sha256").update(data).digest("base64url");
+    const known = iconMedia.get(hash);
+    if (known) return `image:${known.media.storedName}`;
+    const id = makeId("up");
+    const media: PlanMedia = {
+      id,
+      storedName: `${id}.${type.ext}`,
+      originalName: path.slice(path.lastIndexOf("/") + 1),
+      mime: type.mime,
+      size: data.length,
+      bytes: data,
+      pageId: null,
+    };
+    const name = (path.slice(path.lastIndexOf("/") + 1) || "icone").slice(0, 100);
+    const icon: PlanIcon = { id: makeId("ic"), mediaId: id, name };
+    iconMedia.set(hash, { media, icon });
+    return `image:${media.storedName}`;
+  }
+
+  const parsedHtml = new Map<string, HtmlPage>();
+  function readHtml(item: NotionItem, ownerId: string): HtmlPage {
+    const known = parsedHtml.get(item.path);
+    if (known) return known;
+    const data = contentByPath.get(item.path);
+    const page = htmlToPage(data ? decode(data) : "", {
+      newBlockId,
+      pageId: ownerId,
+      resolveLink: (href) => resolveLink(item.path, href),
+      resolveMedia: (src) => mediaUrl(ownerId, item.path, src),
+      resolveCollection: (title) => collectionFor(item, title),
+      onIgnored: (reason) => count(ignored, reason),
+      onConverted: (reason) => count(converted, reason),
+    });
+    parsedHtml.set(item.path, page);
+    return page;
+  }
+
+  function titleOf(item: NotionItem, ownerId: string): string {
+    if (item.ext !== "html") return item.title;
+    return readHtml(item, ownerId).title || item.title;
+  }
+
+  // Icône et bandeau d'une page HTML : l'icône est une image de bibliothèque,
+  // le bandeau appartient à la page et porte son cadrage. Ce qui vient d'une
+  // adresse distante est laissé au rapatriement (import_remote.ts).
+  const remotes: RemoteAsset[] = [];
+  function decorationOf(item: NotionItem, ownerId: string): Pick<PlanPage, "icon" | "cover" | "coverPosition"> {
+    if (item.ext !== "html") return { icon: null, cover: null, coverPosition: null };
+    const page = readHtml(item, ownerId);
+    for (const remote of page.remoteImages) {
+      remotes.push({ kind: "image", url: remote.url, pageId: ownerId, blockId: remote.blockId, prop: remote.prop });
+    }
+    let icon: string | null = null;
+    if (page.icon?.kind === "emoji") {
+      icon = Array.from(page.icon.emoji).length <= 16 ? page.icon.emoji : null;
+      if (!icon) count(ignored, "icône emoji hors limites");
+    } else if (page.icon?.kind === "image") {
+      if (/^https?:\/\//i.test(page.icon.path)) {
+        remotes.push({ kind: "icon", url: page.icon.path, pageId: ownerId });
+      } else {
+        icon = iconImage(item.path, page.icon.path);
+        if (!icon) count(ignored, "icône absente de l'archive");
+      }
+    }
+    let cover: string | null = null;
+    if (page.coverPath) {
+      if (/^https?:\/\//i.test(page.coverPath)) {
+        remotes.push({ kind: "cover", url: page.coverPath, pageId: ownerId });
+      } else {
+        const url = mediaUrl(ownerId, item.path, page.coverPath);
+        if (url) cover = `image:${url.slice(url.lastIndexOf("/") + 1)}`;
+        else count(ignored, "bandeau absent de l'archive");
+      }
+    }
+    return { icon, cover, coverPosition: page.coverPath ? page.coverPosition : null };
+  }
+
+  function markdownBlocks(fromPath: string, ownerId: string, markdown: string): Block[] {
     return markdownToBlocks(markdown, {
       newBlockId,
-      resolveLink: (href) => resolveLink(entry.path, href),
-      resolveMedia: (href) => mediaUrl(ownerId, entry.path, href),
+      resolveLink: (href) => resolveLink(fromPath, href),
+      resolveMedia: (href) => mediaUrl(ownerId, fromPath, href),
       onIgnored: (reason) => count(ignored, reason),
       onConverted: (reason) => count(converted, reason),
     }).blocks;
+  }
+
+  function blocksOf(entry: NotionItem, ownerId: string, extra = ""): Block[] {
+    if (entry.ext === "html") {
+      const blocks = readHtml(entry, ownerId).blocks;
+      if (extra) blocks.push(...markdownBlocks(entry.path, ownerId, extra));
+      return blocks;
+    }
+    const data = contentByPath.get(entry.path);
+    if (!data) return [];
+    const markdown = extra ? `${decode(data)}\n\n${extra}` : decode(data);
+    return markdownBlocks(entry.path, ownerId, markdown);
   }
 
   // Dossier d'une page → la page. Deux formes : « Titre <id> » (exports
@@ -246,9 +400,9 @@ export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}):
   // ce titre : entre deux homonymes, on ne devine pas.
   const pageByFolder = new Map<string, string>();
   const ambiguousFolders = new Set<string>();
-  for (const page of archive.pages) pageByFolder.set(stripExtension(page.path), pageIds.get(page.path)!);
+  for (const page of docPages) pageByFolder.set(stripExtension(page.path), pageIds.get(page.path)!);
   const byTitleFolder = new Map<string, string[]>();
-  for (const page of archive.pages) {
+  for (const page of docPages) {
     const folder = joinPath(page.dir, page.title);
     byTitleFolder.set(folder, [...(byTitleFolder.get(folder) ?? []), pageIds.get(page.path)!]);
   }
@@ -267,13 +421,13 @@ export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}):
   };
 
   const parentOf = new Map<string, string | null>();
-  for (const page of archive.pages) {
+  for (const page of docPages) {
     parentOf.set(page.path, folderPage(page.dir));
     if (ambiguousFolders.has(page.dir)) {
       count(converted, "page rangée dans la page conteneur : son dossier porte le titre de deux pages");
     }
   }
-  const pageRoots = archive.pages.filter((page) => parentOf.get(page.path) === null);
+  const pageRoots = docPages.filter((page) => parentOf.get(page.path) === null);
   const databaseRoots = archive.databases.filter((db) => db.dir === "");
 
   let rootId: string;
@@ -282,7 +436,7 @@ export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}):
   const rootIsPage = pageRoots.length === 1 && databaseRoots.length === 0;
   if (rootIsPage) {
     rootId = pageIds.get(pageRoots[0].path)!;
-    rootTitle = pageRoots[0].title;
+    rootTitle = titleOf(pageRoots[0], rootId);
   } else {
     rootId = makeId("pg");
     rootTitle = CONTAINER_TITLE;
@@ -292,6 +446,9 @@ export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}):
       dbId: null,
       type: "page",
       title: CONTAINER_TITLE,
+      icon: null,
+      cover: null,
+      coverPosition: null,
       body: [],
       bodyText: "",
       dbConfig: null,
@@ -302,27 +459,67 @@ export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}):
     count(converted, "racines de l'export regroupées dans une page conteneur");
   }
 
+  // Ordre des sous-pages : l'export HTML le porte dans le corps de la page
+  // mère ; l'export Markdown ne le porte pas (tri alphabétique).
+  const htmlOrder = new Map<string, number>();
+  if (format === "html") {
+    const childOrder = new Map<string, Map<string, number>>();
+    for (const page of docPages) {
+      const parentId = pageIds.get(page.path)!;
+      const positions = new Map<string, number>();
+      readHtml(page, parentId).subpageIds.forEach((notionId, index) => {
+        const target = targetByNotionId.get(notionId.toLowerCase());
+        if (target && target.kind === "page" && !positions.has(target.id)) positions.set(target.id, index);
+      });
+      if (positions.size > 0) childOrder.set(parentId, positions);
+    }
+    const siblings = new Map<string, NotionItem[]>();
+    for (const page of docPages) {
+      const parent = parentOf.get(page.path) ?? (rootIsPage ? "__root__" : rootId);
+      siblings.set(parent, [...(siblings.get(parent) ?? []), page]);
+    }
+    for (const [parent, list] of siblings) {
+      const positions = childOrder.get(parent);
+      const sorted = [...list].sort((a, b) => {
+        const posA = positions?.get(pageIds.get(a.path)!) ?? Number.MAX_SAFE_INTEGER;
+        const posB = positions?.get(pageIds.get(b.path)!) ?? Number.MAX_SAFE_INTEGER;
+        return posA - posB || a.path.localeCompare(b.path);
+      });
+      sorted.forEach((page, index) => htmlOrder.set(page.path, index));
+    }
+  }
+
   const order = new Map<string, number>();
-  for (const page of [...archive.pages].sort(
+  const sortedDocs = [...docPages].sort(
     (a, b) => a.path.split("/").length - b.path.split("/").length || a.path.localeCompare(b.path),
-  )) {
+  );
+  for (const page of sortedDocs) {
     const effectiveParent = parentOf.get(page.path) ?? (rootIsPage ? null : rootId);
     const key = effectiveParent ?? "__root__";
-    const next = (order.get(key) ?? -1) + 1;
-    order.set(key, next);
-    const body = blocksOf(page, pageIds.get(page.path)!);
+    let manualOrder: number;
+    if (format === "html") {
+      manualOrder = htmlOrder.get(page.path) ?? 0;
+    } else {
+      const next = (order.get(key) ?? -1) + 1;
+      order.set(key, next);
+      manualOrder = next;
+    }
+    const ownerId = pageIds.get(page.path)!;
+    const title = titleOf(page, ownerId);
+    const body = blocksOf(page, ownerId);
     pages.push({
-      id: pageIds.get(page.path)!,
+      id: ownerId,
       parentId: effectiveParent,
       dbId: null,
       type: "page",
-      title: page.title,
+      title,
+      ...decorationOf(page, ownerId),
       body,
       bodyText: flattenToText(body),
       dbConfig: null,
       propertyValues: null,
       valuesText: "",
-      manualOrder: next,
+      manualOrder,
     });
   }
 
@@ -361,6 +558,9 @@ export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}):
       dbId: null,
       type: "database",
       title: db.title,
+      icon: null,
+      cover: null,
+      coverPosition: null,
       body,
       bodyText: flattenToText(body),
       dbConfig: built.config,
@@ -370,10 +570,13 @@ export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}):
     });
 
     const entryDirs = new Set(entryDirsOf(db));
-    const entryFiles = archive.entries.filter((entry) => entryDirs.has(entry.dir));
+    const entryFiles = docEntries.filter((entry) => entryDirs.has(entry.dir));
     const byTitle = new Map<string, NotionItem[]>();
     for (const file of entryFiles) {
-      const key = fold(file.title);
+      // En HTML, le nom de fichier est tronqué à 50 caractères par Notion : le
+      // titre lisible est dans le h1 de la page.
+      const fileId = entryIds.get(file.path)!;
+      const key = fold(titleOf(file, fileId));
       byTitle.set(key, [...(byTitle.get(key) ?? []), file]);
     }
     built.entries.forEach((line, index) => {
@@ -384,15 +587,7 @@ export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}):
       const fileId = file ? entryIds.get(file.path)! : makeId("pg");
       const bodyBlocks = file ? blocksOf(file, fileId, line.extraMarkdown) : [];
       if (!file && line.extraMarkdown) {
-        bodyBlocks.push(
-          ...markdownToBlocks(line.extraMarkdown, {
-            newBlockId,
-            resolveLink: (href) => resolveLink(db.path, href),
-            resolveMedia: () => null,
-            onIgnored: (reason) => count(ignored, reason),
-            onConverted: (reason) => count(converted, reason),
-          }).blocks,
-        );
+        bodyBlocks.push(...markdownBlocks(db.path, fileId, line.extraMarkdown));
       }
       pages.push({
         id: fileId,
@@ -400,6 +595,7 @@ export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}):
         dbId: baseId,
         type: "entry",
         title: line.title,
+        ...(file ? decorationOf(file, fileId) : { icon: null, cover: null, coverPosition: null }),
         body: bodyBlocks,
         bodyText: flattenToText(bodyBlocks),
         dbConfig: null,
@@ -413,14 +609,22 @@ export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}):
     if (orphans > 0) count(ignored, "corps d'entrée sans ligne correspondante", orphans);
   }
 
+  const iconMediaList = [...iconMedia.values()];
   return {
     rootId,
     pages,
-    media: [...mediaByPath.values()],
+    media: [...mediaByPath.values(), ...iconMediaList.map((item) => item.media)],
+    icons: iconMediaList.map((item) => item.icon),
+    remotes,
     report: {
       rootId,
       rootTitle,
-      counts: { pages: archive.pages.length, databases, entries, media: mediaByPath.size },
+      counts: {
+        pages: docPages.length,
+        databases,
+        entries,
+        media: mediaByPath.size + iconMediaList.length,
+      },
       ignored: notes(ignored),
       notes: notes(converted),
     },

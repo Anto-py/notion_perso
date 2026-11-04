@@ -98,8 +98,9 @@ function clean(text: string | undefined, max: number): string {
 }
 
 // site : la source affichée avant le titre (« ARTE », « Le Monde »), tirée de
-// og:site_name. Vide quand la page n'en déclare pas.
-export type Unfurled = { title: string; description: string; image: string | null; site: string };
+// og:site_name. Vide quand la page n'en déclare pas. icon : le favicon déclaré
+// par la page, à défaut « /favicon.ico » du site.
+export type Unfurled = { title: string; description: string; image: string | null; site: string; icon: string | null };
 
 // Titre, description et image d'une page. Priorité à Open Graph, puis à
 // Twitter, puis aux balises classiques ; le titre retombe sur le domaine,
@@ -119,11 +120,22 @@ export function parseUnfurl(html: string, url: string): Unfurled {
   const description = meta["og:description"] ?? meta["twitter:description"] ?? meta["description"] ?? "";
   const image = meta["og:image"] ?? meta["og:image:url"] ?? meta["twitter:image"] ?? "";
 
+  // Favicon : le premier « rel » qui en déclare un, sinon « /favicon.ico ».
+  let icon: string | null = null;
+  for (const match of html.matchAll(/<link\b[^>]*>/gi)) {
+    const attrs = attributes(match[0]);
+    const rel = (attrs.rel ?? "").toLowerCase();
+    if (!rel.includes("icon") || !attrs.href) continue;
+    icon = absolute(attrs.href, url);
+    if (icon) break;
+  }
+
   return {
     title: clean(title, 500) || domainOf(url),
     description: clean(description, 5000),
     image: image ? absolute(image, url) : null,
     site: clean(meta["og:site_name"], 100),
+    icon: icon ?? faviconUrl(url),
   };
 }
 

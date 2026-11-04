@@ -425,3 +425,37 @@ describe("vues liées", () => {
     expect(renderHtml(body)).toBe("");
   });
 });
+
+describe("bloc signet", () => {
+  const bookmark = {
+    type: "bookmark",
+    props: {
+      url: "https://exemple.org/article",
+      title: "Un article",
+      description: "Description simple",
+      favicon: "/api/media/up_0123456789abcdef.png",
+      image: "/api/media/up_fedcba9876543210.png",
+      pageId: "pg_page",
+    },
+  };
+
+  it("entre dans le texte de recherche", () => {
+    expect(flattenToText([bookmark])).toBe("Un article\nDescription simple\nhttps://exemple.org/article");
+  });
+
+  it("rend une carte publique, images comprises", () => {
+    const html = renderHtml([bookmark]);
+    expect(html).toContain('class="bookmark-card"');
+    expect(html).toMatch(/href="https:\/\/exemple\.org\/article\/?"/);
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain('rel="noopener noreferrer"');
+    expect(html).toContain("Un article");
+    expect(html).toContain("Description simple");
+    expect(html).toContain('src="/api/media/up_0123456789abcdef.png"');
+    expect(html).toContain('src="/api/media/up_fedcba9876543210.png"');
+  });
+
+  it("ne rend rien sans adresse web", () => {
+    expect(renderHtml([{ type: "bookmark", props: { url: "javascript:alert(1)" } }])).toBe("");
+  });
+});

@@ -16,16 +16,19 @@ export type NotionItem = {
   all: boolean; // suffixe _all d'un CSV complet
 };
 
+export type PageFormat = "markdown" | "html";
+
 export type NotionArchive = {
-  pages: NotionItem[]; // .md ordinaires, hors dossier de base
+  pages: NotionItem[]; // .md et .html ordinaires, hors dossier de base
   databases: NotionItem[]; // un CSV par base, le _all de préférence
-  entries: NotionItem[]; // .md d'une ligne de base
+  entries: NotionItem[]; // .md et .html d'une ligne de base
   stubs: NotionItem[]; // .md qui décrit une base (même identifiant que le CSV)
   media: NotionItem[]; // images et PDF servables
   others: NotionItem[]; // fichiers laissés de côté
   warnings: string[];
-  htmlOnly: boolean; // export HTML : non pris en charge
-  rootPages: NotionItem[]; // .md sans parent (plusieurs = export complet)
+  format: PageFormat; // format majoritaire des pages de contenu
+  otherFormatPages: number; // pages et entrées du format minoritaire, ignorées
+  rootPages: NotionItem[]; // pages de contenu sans parent (plusieurs = export complet)
 };
 
 export class NotionImportError extends Error {}
@@ -120,6 +123,7 @@ export function indexArchive(files: ArchiveEntry[], warnings: string[] = []): No
   const items = files.map((file) => toItem(file.path));
   const markdown = items.filter((item) => item.ext === "md");
   const html = items.filter((item) => item.ext === "html");
+  const docs = items.filter((item) => item.ext === "md" || item.ext === "html");
   const csvs = items.filter((item) => item.ext === "csv");
   const media = items.filter((item) => MEDIA_EXTENSIONS.has(item.ext));
   const others: NotionItem[] = [];
@@ -157,29 +161,39 @@ export function indexArchive(files: ArchiveEntry[], warnings: string[] = []): No
   const pages: NotionItem[] = [];
   const entries: NotionItem[] = [];
   const stubs: NotionItem[] = [];
-  for (const md of markdown) {
-    if (dbEntryDirs.has(md.dir)) {
-      entries.push(md);
+  for (const doc of docs) {
+    if (dbEntryDirs.has(doc.dir)) {
+      entries.push(doc);
       continue;
     }
-    if (dbDirs.has(stripExtension(md.path))) {
-      stubs.push(md);
+    // Le stub d'une base n'existe qu'en Markdown : c'est le .md de même
+    // identifiant que le CSV, qui décrit la base.
+    if (doc.ext === "md" && dbDirs.has(stripExtension(doc.path))) {
+      stubs.push(doc);
       continue;
     }
-    if ([...dbEntryDirs.keys()].some((dir) => isUnder(md.path, dir))) {
-      others.push(md);
-      warnings.push(`« ${md.path} » ignoré : une sous-page d'entrée de base n'a pas d'équivalent ici.`);
+    if ([...dbEntryDirs.keys()].some((dir) => isUnder(doc.path, dir))) {
+      others.push(doc);
+      warnings.push(`« ${doc.path} » ignoré : une sous-page d'entrée de base n'a pas d'équivalent ici.`);
       continue;
     }
-    pages.push(md);
+    pages.push(doc);
   }
 
   for (const item of items) {
-    if (item.ext === "md" || item.ext === "csv") continue;
-    if (item.ext === "html") continue;
+    if (item.ext === "md" || item.ext === "csv" || item.ext === "html") continue;
     if (MEDIA_EXTENSIONS.has(item.ext)) continue;
     others.push(item);
   }
+
+  // Le format majoritaire décide du lecteur ; l'autre est compté au rapport et
+  // laissé de côté (BRAINSTORMING §8). À égalité, Markdown garde la main,
+  // comportement d'avant l'import HTML.
+  const format: PageFormat = html.length > markdown.length ? "html" : "markdown";
+  const otherFormatPages =
+    format === "html"
+      ? docs.filter((item) => item.ext === "md" && !stubs.includes(item)).length
+      : html.length;
 
   const rootPages = pages.filter((page) => page.dir === "");
   return {
@@ -190,7 +204,8 @@ export function indexArchive(files: ArchiveEntry[], warnings: string[] = []): No
     media,
     others,
     warnings,
-    htmlOnly: markdown.length === 0 && html.length > 0,
+    format,
+    otherFormatPages,
     rootPages,
   };
 }

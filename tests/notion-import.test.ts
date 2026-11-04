@@ -182,8 +182,70 @@ describe("buildImportPlan", () => {
     });
   });
 
-  it("refuse un export HTML", () => {
-    expect(() => buildImportPlan(archive({ [`Note ${ROOT_ID}.html`]: "<p>x</p>" }), ids())).toThrow(NotionImportError);
+  // Export HTML : le format porte icônes, bandeaux, dépliants, colonnes,
+  // tableaux et l'ordre des sous-pages (BRAINSTORMING §8).
+  it("importe un export HTML, bandeau cadré, icône et ordre des sous-pages", () => {
+    const page = (inner: string, header = "") =>
+      `<html><body><article id="x"><header>${header}</header><div class="page-body">${inner}</div></article></body></html>`;
+    const ROOT = `Privé/Clés en main ${ROOT_ID}.html`;
+    const CHILD = `Privé/Clés en main/Enfant ${CHILD_ID}.html`;
+    const DB = `Privé/Clés en main/Base ${DB_ID}.csv`;
+    const ENTRY = `Privé/Clés en main/Base/Entrée ${ENTRY_ID}.html`;
+    const plan = buildImportPlan(
+      archive({
+        [ROOT]: page(
+          `<figure class="link-to-page"><a href="Cl%C3%A9s%20en%20main/Enfant%20${CHILD_ID}.html" data-notion-page-id="${CHILD_ID}">Enfant</a></figure>
+           <table class="collection-content"><tbody><tr><td>Entrée</td></tr></tbody></table>`,
+          `<img class="page-cover-image" src="Clés en main/cover.png" style="object-position:center 20%"/>
+           <div class="page-header-icon page-header-icon-with-cover"><span class="icon" data-emoji="🔑"></span></div>
+           <h1 class="page-title">Clés en main</h1>`,
+        ),
+        [CHILD]: page("<p>Le corps de l'enfant.</p>", `<h1 class="page-title">Enfant</h1>`),
+        [DB]: "Name,Statut\nEntrée,À faire\n",
+        [ENTRY]: page("<p>Le corps de l'entrée.</p>", `<h1 class="page-title">Entrée</h1>`),
+        [`Privé/Clés en main/cover.png`]: "PNG",
+      }),
+      ids(),
+    );
+    const byTitle = (title: string) => plan.pages.find((item) => item.title === title)!;
+    const root = byTitle("Clés en main");
+    const child = byTitle("Enfant");
+    const database = byTitle("Base");
+    const entry = byTitle("Entrée");
+
+    expect(plan.rootId).toBe(root.id);
+    expect(child.parentId).toBe(root.id);
+    expect(child.manualOrder).toBe(0);
+    expect(database.parentId).toBe(root.id);
+    expect(entry.dbId).toBe(database.id);
+    expect(entry.bodyText).toContain("corps de l'entrée");
+
+    expect(root.icon).toBe("🔑");
+    expect(root.cover).toMatch(/^image:up_[A-Za-z0-9_-]{16}\.png$/);
+    expect(root.coverPosition).toBe(20);
+    expect(plan.media.find((item) => item.originalName === "cover.png")?.pageId).toBe(root.id);
+    expect(root.body.some((block) => block.type === "linked" && block.props.databaseId === database.id)).toBe(true);
+    expect(plan.report.counts).toMatchObject({ pages: 2, databases: 1, entries: 1, media: 1 });
+  });
+
+  it("range une image d'icône en bibliothèque, une seule fois par contenu", () => {
+    const html = (title: string) =>
+      `<article><header><div class="page-header-icon undefined"><img class="icon" src="${title}/icon.png"/></div>
+       <h1 class="page-title">${title}</h1></header><div class="page-body"></div></article>`;
+    const plan = buildImportPlan(
+      archive({
+        [`A ${ROOT_ID}.html`]: html("A"),
+        [`B ${CHILD_ID}.html`]: html("B"),
+        [`A/icon.png`]: "PNG",
+        [`B/icon.png`]: "PNG",
+      }),
+      ids(),
+    );
+    expect(plan.icons).toHaveLength(1);
+    expect(plan.media.filter((item) => item.pageId === null)).toHaveLength(1);
+    const icons = plan.pages.filter((page) => ["A", "B"].includes(page.title)).map((page) => page.icon);
+    expect(icons[0]).toBe(icons[1]);
+    expect(icons[0]).toMatch(/^image:up_[A-Za-z0-9_-]{16}\.png$/);
   });
 
   it("refuse une archive sans page ni base", () => {

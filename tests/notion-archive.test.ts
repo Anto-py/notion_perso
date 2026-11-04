@@ -114,9 +114,21 @@ describe("indexArchive", () => {
     expect(archive.pages).toEqual([]);
   });
 
-  it("signale un export HTML", () => {
+  it("lit un export HTML comme un export de pages", () => {
     const archive = indexArchive([entry(`Note ${ID}.html`)]);
-    expect(archive.htmlOnly).toBe(true);
+    expect(archive.format).toBe("html");
+    expect(archive.pages.map((item) => item.title)).toEqual(["Note"]);
+    expect(archive.otherFormatPages).toBe(0);
+  });
+
+  it("choisit le format majoritaire et compte les pages de l'autre", () => {
+    const archive = indexArchive([
+      entry(`Une ${ID}.html`),
+      entry(`Deux ${ID2}.html`),
+      entry(`Trois ${"c".repeat(32)}.md`),
+    ]);
+    expect(archive.format).toBe("html");
+    expect(archive.otherFormatPages).toBe(1);
   });
 
   it("laisse une sous-page d'entrée de base hors de l'arbre", () => {

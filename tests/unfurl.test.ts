@@ -69,6 +69,7 @@ describe("parseUnfurl", () => {
       description: "Aperçu & détail",
       image: "https://exemple.org/image.png",
       site: "Exemple",
+      icon: "https://exemple.org/favicon.ico",
     });
   });
 
@@ -77,7 +78,13 @@ describe("parseUnfurl", () => {
       `<meta name='description' content='Simple'><title>  Titre\n  sur deux lignes </title>`,
       "https://exemple.org",
     );
-    expect(result).toEqual({ title: "Titre sur deux lignes", description: "Simple", image: null, site: "" });
+    expect(result).toEqual({
+      title: "Titre sur deux lignes",
+      description: "Simple",
+      image: null,
+      site: "",
+      icon: "https://exemple.org/favicon.ico",
+    });
   });
 
   it("retombe sur le domaine quand la page ne dit rien", () => {
@@ -86,7 +93,13 @@ describe("parseUnfurl", () => {
       description: "",
       image: null,
       site: "",
+      icon: "https://www.exemple.org/favicon.ico",
     });
+  });
+
+  it("lit le favicon déclaré par la page", () => {
+    const result = parseUnfurl(`<link rel="shortcut icon" href="/icone.png">`, "https://exemple.org/a");
+    expect(result.icon).toBe("https://exemple.org/icone.png");
   });
 
   it("refuse une image qui n'est pas du web", () => {

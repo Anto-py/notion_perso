@@ -13,6 +13,7 @@ import { checkUpload } from "@/lib/upload_rules";
 import { planBlockRuns } from "@/lib/web_save";
 import { youtubeId } from "@/lib/youtube";
 import { columnBlock, columnListBlock } from "./columnsBlock";
+import { bookmarkBlock } from "./bookmarkBlock";
 import { conflictBlock } from "./conflictBlock";
 import { linkedBlock } from "./linkedBlock";
 import { youtubeBlock } from "./mediaBlocks";
@@ -32,6 +33,7 @@ const {
   divider,
   image,
   file,
+  table,
 } = defaultBlockSpecs;
 
 const schema = BlockNoteSchema.create({
@@ -47,7 +49,11 @@ const schema = BlockNoteSchema.create({
     divider,
     image,
     file,
+    // Bloc natif de BlockNote, absent du menu « / » : l'import HTML des
+    // tableaux Notion le pose.
+    table,
     youtube: youtubeBlock(),
+    bookmark: bookmarkBlock(),
     subpage: subpageBlock(),
     linked: linkedBlock(),
     columnList: columnListBlock(),
@@ -171,7 +177,22 @@ const linkedItem = (editor: EditorInstance) => ({
   onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: "linked" }),
 });
 
-function slashItems(editor: EditorInstance, onCreateChild?: (kind: ChildKind) => Promise<string | null>) {
+// Le signet naît vide ; son adresse est lue par /api/bookmark. La page hôte
+// voyage dans le bloc pour que les médias rapatriés suivent ses droits.
+const bookmarkItem = (editor: EditorInstance, pageId: string) => ({
+  title: "Signet",
+  subtext: "Une carte pour un lien, avec son aperçu",
+  aliases: ["signet", "bookmark", "lien", "carte", "aperçu", "apercu"],
+  group: MEDIA_GROUP,
+  icon: <span aria-hidden>🔖</span>,
+  onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: "bookmark", props: { pageId } }),
+});
+
+function slashItems(
+  editor: EditorInstance,
+  pageId: string,
+  onCreateChild?: (kind: ChildKind) => Promise<string | null>,
+) {
   const items = getDefaultReactSlashMenuItems(editor).map((item) =>
     item.group === "Média" ? { ...item, group: MEDIA_GROUP } : item,
   );
@@ -182,6 +203,7 @@ function slashItems(editor: EditorInstance, onCreateChild?: (kind: ChildKind) =>
     linkedItem(editor),
     ...columnItems(editor),
   );
+  items.push(bookmarkItem(editor, pageId));
   const youtube = {
     title: "Vidéo YouTube",
     subtext: "Intégrer une vidéo par son lien",
@@ -239,7 +261,7 @@ export default function Editor({ pageId, initialBody, onCreateChild, onChange, o
     <BlockNoteView editor={editor} theme="light" slashMenu={false} onChange={() => onChange(editor.document)}>
       <SuggestionMenuController
         triggerCharacter="/"
-        getItems={async (query) => filterSuggestionItems(slashItems(editor, onCreateChild), query)}
+        getItems={async (query) => filterSuggestionItems(slashItems(editor, pageId, onCreateChild), query)}
       />
     </BlockNoteView>
   );

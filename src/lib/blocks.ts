@@ -6,6 +6,7 @@
 // chaque champ inattendu est simplement ignoré.
 import { iconSrc, resolveIcon } from "./icons";
 import type { Orphan } from "./properties";
+import { domainOf } from "./unfurl";
 import { isStoredName } from "./upload_rules";
 import { youtubeEmbedUrl, youtubeId } from "./youtube";
 
@@ -50,6 +51,13 @@ function blockLines(block: Json): string[] {
   if (isObject(props)) {
     for (const key of ["name", "caption"] as const) {
       if (typeof props[key] === "string") lines.push(props[key]);
+    }
+    // Signet : la recherche doit retrouver son titre, sa description et son
+    // adresse, qui ne vivent pas dans le contenu inline.
+    if (block.type === "bookmark") {
+      for (const key of ["title", "description", "url"] as const) {
+        if (typeof props[key] === "string") lines.push(props[key]);
+      }
     }
   }
   if (Array.isArray(block.children)) lines.push(...block.children.flatMap(blockLines));
@@ -420,6 +428,27 @@ function blockHtml(block: Json, options: RenderOptions): string {
       if (!src) return "";
       const name = typeof props.name === "string" && props.name ? props.name : "Fichier";
       return `<p class="media-file"><a ${linkAttrs(src)}>${escapeHtml(name)}</a></p>${captionHtml(props)}`;
+    }
+    case "bookmark": {
+      const href = safeHref(typeof props.url === "string" ? props.url : "");
+      if (!href) return "";
+      const title = typeof props.title === "string" && props.title ? props.title : href;
+      const description = typeof props.description === "string" ? props.description : "";
+      const favicon = safeSrc(props.favicon);
+      const image = safeSrc(props.image);
+      const site = domainOf(href);
+      const icon = favicon
+        ? `<img class="bookmark-favicon" src="${escapeHtml(favicon)}" alt="" loading="lazy">`
+        : '<span class="bookmark-favicon-glyph" aria-hidden>🔗</span>';
+      return (
+        `<a class="bookmark-card" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">` +
+        `<span class="bookmark-text"><span class="bookmark-site">${icon}<span>${escapeHtml(site)}</span></span>` +
+        `<span class="bookmark-title">${escapeHtml(title)}</span>` +
+        (description ? `<span class="bookmark-description">${escapeHtml(description)}</span>` : "") +
+        `</span>` +
+        (image ? `<img class="bookmark-image" src="${escapeHtml(image)}" alt="" loading="lazy">` : "") +
+        `</a>`
+      );
     }
     case SUBPAGE_BLOCK: {
       const pageId = typeof props.pageId === "string" ? props.pageId : "";

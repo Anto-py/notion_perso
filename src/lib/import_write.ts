@@ -3,7 +3,7 @@
 // écrits sont retirés : l'import ne laisse rien à moitié.
 import { Readable } from "node:stream";
 import { db } from "@/db";
-import { media, pages } from "@/db/schema";
+import { iconImages, media, pages } from "@/db/schema";
 import type { ImportPlan } from "./notion-import";
 import { keyFromIndex } from "./order_key";
 import { discardFile, saveFile } from "./storage";
@@ -28,6 +28,9 @@ export async function applyImportPlan(plan: ImportPlan): Promise<void> {
       dbId: page.dbId,
       type: page.type,
       title: page.title,
+      icon: page.icon,
+      cover: page.cover,
+      coverPosition: page.coverPosition,
       body: page.body,
       bodyText: page.bodyText,
       dbConfig: page.dbConfig,
@@ -52,6 +55,14 @@ export async function applyImportPlan(plan: ImportPlan): Promise<void> {
             size: item.size,
             pageId: item.pageId,
           })),
+        );
+      }
+      // Les images d'icône de l'archive rejoignent la bibliothèque : leur média
+      // est déjà écrit ci-dessus (pageId nul), la page pointe par
+      // « image:<filename> ».
+      if (plan.icons.length > 0) {
+        await tx.insert(iconImages).values(
+          plan.icons.map((icon) => ({ id: icon.id, mediaId: icon.mediaId, name: icon.name.slice(0, 100) })),
         );
       }
     });
