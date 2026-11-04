@@ -86,7 +86,7 @@ async function PublicContent({ publicId, found }: { publicId: string; found: Pub
   return (
     <ReadOnlyPage
       page={page}
-      crumbs={chain.slice(0, -1)}
+      crumbs={chain.map(({ id, title, icon, type }) => ({ id, title, icon, type }))}
       subpages={children}
       href={(id) => publicHref(publicId, root.id, id)}
       reach={readable}

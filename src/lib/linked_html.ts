@@ -33,6 +33,9 @@ export type LinkedHtmlOptions = {
   baseHref?: string | null;
   // Lien d'une puce de relation ; null : le titre seul, sans lien.
   entryLink?: (ref: LinkRef) => string | null;
+  // Clé de l'îlot qui ajoute les gestes du visiteur (PublicLinkedIslands) :
+  // il remplace la partie .linked-static, le titre restant celui-ci.
+  islandKey?: string;
 };
 
 // Une valeur de propriété, en HTML. Double volontaire de ValueView
@@ -112,6 +115,7 @@ export function linkedViewHtml(
       )}</a></p>`
     : `<p class="linked-head">${iconHtml(base.icon, "database")} ${escapeHtml(base.title || "Sans titre")}</p>`;
   if (entries.length === 0) return `<div class="linked-block">${heading}<p class="hint">Aucune entrée.</p></div>`;
+  const open = options.islandKey ? `<div class="linked-block" data-key="${escapeHtml(options.islandKey)}">` : '<div class="linked-block">';
 
   if (view.kind === "gallery") {
     const cards = entries
@@ -124,7 +128,7 @@ export function linkedViewHtml(
         return `<li><a href="${escapeHtml(options.href(entry.id))}" class="gallery-card"><span class="gallery-image">${picture}</span>${title}</a></li>`;
       })
       .join("");
-    return `<div class="linked-block">${heading}<ul class="gallery-grid public-gallery gallery-${view.card_size}">${cards}</ul></div>`;
+    return `${open}${heading}<div class="linked-static"><ul class="gallery-grid public-gallery gallery-${view.card_size}">${cards}</ul></div></div>`;
   }
 
   const columns = properties.filter((prop) => !view.hidden.includes(prop.id));
@@ -136,7 +140,7 @@ export function linkedViewHtml(
     })
     .join("");
   return (
-    `<div class="linked-block">${heading}<div class="table-wrap"><table class="db-table public-table">` +
-    `<thead><tr><th scope="col">Titre</th>${head}</tr></thead><tbody>${rows}</tbody></table></div></div>`
+    `${open}${heading}<div class="linked-static"><div class="table-wrap"><table class="db-table public-table">` +
+    `<thead><tr><th scope="col">Titre</th>${head}</tr></thead><tbody>${rows}</tbody></table></div></div></div>`
   );
 }

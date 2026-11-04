@@ -36,7 +36,7 @@ async function BackupPageData({ params }: { params: PageProps<"/sauvegarde/[id]"
       <RecoverButton id={page.id} kind={page.type} descendants={Math.max(0, subtree.length - 1)} />
       <ReadOnlyPage
         page={page}
-        crumbs={crumbs}
+        crumbs={[...crumbs, { id: page.id, title: page.title, icon: page.icon, type: page.type }]}
         subpages={children}
         href={(pageId) => `/sauvegarde/${pageId}`}
         source={{ getPage: backupPage, listEntries: backupEntries, links: backupLinks, computedValues: backupComputedValues }}

@@ -14,7 +14,7 @@ import { searchPages } from "./search_query";
 import type { TreeRow } from "./tree";
 
 export type BackupChild = { id: string; type: Page["type"]; title: string; icon: string | null };
-export type BackupCrumb = { id: string; title: string; icon: string | null };
+export type BackupCrumb = { id: string; title: string; icon: string | null; type: Page["type"] };
 
 // La base de la sauvegarde ouverte, null s'il n'y en a pas.
 export function backupSource() {
@@ -97,7 +97,7 @@ export async function backupCrumbs(id: string): Promise<BackupCrumb[]> {
     seen.add(parentId);
     const parent = await getPage(parentId, db);
     if (!parent) break;
-    crumbs.unshift({ id: parent.id, title: parent.title, icon: parent.icon });
+    crumbs.unshift({ id: parent.id, title: parent.title, icon: parent.icon, type: parent.type });
     parentId = parent.parentId;
   }
   return crumbs;

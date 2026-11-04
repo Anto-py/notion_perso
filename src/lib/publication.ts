@@ -148,6 +148,12 @@ export function reachPath(graph: ShareGraph, reach: ReadonlyMap<string, string |
   return path;
 }
 
+// Fil d'Ariane : le chemin entier, page courante comprise ; chaque élément
+// mène à sa page, sauf le dernier, qui est la page lue (BRAINSTORMING §7).
+export function crumbTrail<T extends { id: string }>(path: readonly T[], href: (id: string) => string): (T & { href: string | null })[] {
+  return path.map((item, index) => ({ ...item, href: index === path.length - 1 ? null : href(item.id) }));
+}
+
 // Cibles des liens de la portée que le visiteur ne peut pas lire (non
 // publiées, ou exclues) : il y lit « Contenu privé ». Le panneau « Partager »
 // les liste, chacune une fois, dans l'ordre du parcours.

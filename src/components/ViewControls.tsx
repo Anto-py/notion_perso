@@ -19,6 +19,7 @@ import {
   type Filter,
   type FilterOp,
   type Property,
+  type SelectOption,
   type Sort,
 } from "@/lib/properties";
 import { CALENDAR_SCALES, CALENDAR_SCALE_LABELS, type CalendarScale } from "@/lib/calendar";
@@ -258,18 +259,39 @@ export function ViewControls({ properties, view, columns, onChange }: Props) {
   );
 }
 
-function FilterValue({ prop, filter, onChange }: { prop: Property; filter: Filter; onChange: (value: string, delay?: number) => void }) {
+// Choix fournis par l'appelant : la vue publique propose ce que portent ses
+// entrées, sans lire la base cible d'une relation (sa route demande une
+// session). Absents : les options du schéma, les entrées lues par l'API.
+export type FilterChoices = { options?: readonly SelectOption[]; entries?: readonly { id: string; title: string }[] };
+
+export function FilterValue({
+  prop,
+  filter,
+  onChange,
+  choices,
+}: {
+  prop: Property;
+  filter: Filter;
+  onChange: (value: string, delay?: number) => void;
+  choices?: FilterChoices;
+}) {
   const value = filter.value ?? "";
   // Une relation se filtre sur une entrée de sa base cible : on la choisit
   // dans la liste des entrées, jamais en tapant un identifiant.
-  if (prop.type === "relation") return <RelationFilterValue prop={prop} value={value} onChange={onChange} />;
+  if (prop.type === "relation") {
+    return choices?.entries ? (
+      <EntrySelect entries={choices.entries} value={value} onChange={onChange} />
+    ) : (
+      <RelationFilterValue prop={prop} value={value} onChange={onChange} />
+    );
+  }
   // Le filtre compare des ids d'option : une sélection se choisit dans sa
   // liste, jamais en texte libre.
   if (isOptionType(prop.type)) {
     return (
       <select aria-label="Valeur du filtre" value={value} onChange={(event) => onChange(event.target.value)}>
         <option value="">choisir…</option>
-        {(prop.options ?? []).map((option) => (
+        {(choices?.options ?? prop.options ?? []).map((option) => (
           <option key={option.id} value={option.id}>
             {option.name}
           </option>
@@ -321,6 +343,18 @@ function RelationFilterValue({ prop, value, onChange }: { prop: Property; value:
       alive = false;
     };
   }, [prop.target]);
+  return <EntrySelect entries={entries} value={value} onChange={onChange} />;
+}
+
+function EntrySelect({
+  entries,
+  value,
+  onChange,
+}: {
+  entries: readonly { id: string; title: string }[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
   return (
     <select aria-label="Entrée du filtre" value={value} onChange={(event) => onChange(event.target.value)}>
       <option value="">choisir…</option>

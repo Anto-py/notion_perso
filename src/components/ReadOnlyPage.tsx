@@ -9,8 +9,12 @@ import { MEDIA_BASE } from "@/lib/icons";
 import { LINKED_PRIVATE_HTML, linkedViewHtml } from "@/lib/linked_html";
 import type { Page } from "@/lib/pages";
 import { matchesFilters, normalizeValues, sortEntries, withTimes, type EntryRow, type LinkRef, type Property, type Values } from "@/lib/properties";
-import { cardImage, parseLinkedConfig, pickView, type View } from "@/lib/views";
+import { crumbTrail } from "@/lib/publication";
+import { publicDatabaseData, type PublicDatabaseData } from "@/lib/public_view";
+import { parseLinkedConfig, pickView, type View } from "@/lib/views";
 import { PageCover } from "./PageCover";
+import { PublicDatabaseView } from "./PublicDatabaseView";
+import { PublicLinkedIslands, type LinkedIsland } from "./PublicLinkedIslands";
 import { PageIcon, PageLabel } from "./PageIcon";
 import { propIcon, ValueView } from "./propertyUi";
 
@@ -28,7 +32,7 @@ export type ReadOnlySource = {
 };
 
 export type ReadOnlyChild = { id: string; type: Page["type"]; title: string; icon: string | null };
-export type ReadOnlyCrumb = { id: string; title: string; icon: string | null };
+export type ReadOnlyCrumb = { id: string; title: string; icon: string | null; type?: Page["type"] };
 
 // Ce qu'une publication rend lisible (lib/publication.ts, shareReach).
 export type ReadOnlyReach = {
@@ -42,7 +46,8 @@ export type ReadOnlyReach = {
 
 export type ReadOnlyPageProps = {
   page: Page;
-  // Ancêtres, la page elle-même exclue.
+  // Fil d'Ariane, de la racine à la page elle-même comprise : en public le
+  // chemin du parcours (reachPath), dans une sauvegarde les vrais parents.
   crumbs: ReadOnlyCrumb[];
   // Sous-pages et bases, dans l'ordre de la sidebar.
   subpages: ReadOnlyChild[];
@@ -73,6 +78,7 @@ export async function ReadOnlyPage({
   // une entrée de la portée sous l'adresse courante, ou à une entrée publiée
   // par sa propre publication. Dans une sauvegarde, tout est lisible.
   const linkFor = (ref: LinkRef): string | null => (!reach || reach.node(ref.id) ? href(ref.id) : reach.elsewhere(ref.id));
+  const body = page.type === "database" ? null : await bodyHtml(page, byId, href, mediaBase, source, reach, linkFor);
   return (
     <article>
       <PageCover cover={page.cover} position={page.coverPosition} className="page-cover public-cover" mediaBase={mediaBase} />
@@ -81,13 +87,13 @@ export async function ReadOnlyPage({
         <PageIcon icon={page.icon} type={page.type} mediaBase={mediaBase} /> {page.title || "Sans titre"}
       </h1>
       {page.type === "entry" && <EntryProperties entry={page} source={source} link={linkFor} mediaBase={mediaBase} />}
-      {page.type === "database" ? (
-        <PublicDatabase database={page} href={href} source={source} mediaBase={mediaBase} link={linkFor} />
+      {body ? (
+        <>
+          <div className="public-body" dangerouslySetInnerHTML={{ __html: body.html }} />
+          {body.islands.length > 0 && <PublicLinkedIslands islands={body.islands} />}
+        </>
       ) : (
-        <div
-          className="public-body"
-          dangerouslySetInnerHTML={{ __html: await bodyHtml(page, byId, href, mediaBase, source, reach, linkFor) }}
-        />
+        <PublicDatabase database={page} href={href} source={source} mediaBase={mediaBase} link={linkFor} />
       )}
       <Children rows={subpages.filter((child) => !linked.has(child.id))} href={href} mediaBase={mediaBase} />
     </article>
@@ -95,7 +101,9 @@ export async function ReadOnlyPage({
 }
 
 // Le corps JSON porte ses liens de média en dur : la sauvegarde réécrit leur
-// base après le rendu, vers la route qui lit aussi la quarantaine.
+// base après le rendu, vers la route qui lit aussi la quarantaine. Chaque vue
+// liée lisible rend aussi ses données, pour l'îlot qui lui ajoute les gestes
+// du visiteur.
 async function bodyHtml(
   page: Page,
   byId: Map<string, ReadOnlyChild>,
@@ -104,14 +112,18 @@ async function bodyHtml(
   source: ReadOnlySource,
   reach: ReadOnlyReach | undefined,
   linkFor: (ref: LinkRef) => string | null,
-): Promise<string> {
+): Promise<{ html: string; islands: LinkedIsland[] }> {
   // Les vues liées demandent les entrées d'une autre base : elles sont
   // rendues à part, puis retrouvées par leur clé au fil du corps.
   const linkedHtml = new Map<string, string>();
+  const islands: LinkedIsland[] = [];
   for (const ref of linkedRefs(page.body)) {
     const key = linkedKey(ref.databaseId, ref.config);
     if (linkedHtml.has(key)) continue;
-    linkedHtml.set(key, await linkedBlockHtml(ref.databaseId, ref.config, source, href, mediaBase, reach, linkFor));
+    const islandKey = `linked-${linkedHtml.size}`;
+    const linked = await linkedBlockHtml(ref.databaseId, ref.config, source, href, mediaBase, reach, linkFor, islandKey);
+    linkedHtml.set(key, linked.html);
+    if (linked.data) islands.push({ key: islandKey, data: linked.data });
   }
   const html = renderHtml(page.body, {
     // Publique : la cible doit être dans la portée, une cible fermée dit
@@ -124,7 +136,7 @@ async function bodyHtml(
     internal: (id) => (!reach || reach.node(id) ? href(id) : null),
     linked: (databaseId, config) => linkedHtml.get(linkedKey(databaseId, config)) ?? null,
   });
-  return mediaBase === MEDIA_BASE ? html : html.replaceAll(MEDIA_BASE, mediaBase);
+  return { html: mediaBase === MEDIA_BASE ? html : html.replaceAll(MEDIA_BASE, mediaBase), islands };
 }
 
 // Deux blocs de la même base avec des vues différentes ne partagent pas leur
@@ -145,10 +157,12 @@ async function linkedBlockHtml(
   mediaBase: string,
   reach: ReadOnlyReach | undefined,
   linkFor: (ref: LinkRef) => string | null,
-): Promise<string> {
+  islandKey: string,
+): Promise<{ html: string; data: PublicDatabaseData | null }> {
+  const closed = { html: LINKED_PRIVATE_HTML, data: null };
   const base = await source.getPage(databaseId);
-  if (!base || base.trashedAt || base.type !== "database") return LINKED_PRIVATE_HTML;
-  if (reach && !reach.node(base.id)) return LINKED_PRIVATE_HTML;
+  if (!base || base.trashedAt || base.type !== "database") return closed;
+  if (reach && !reach.node(base.id)) return closed;
   const { properties } = configOf(base);
   const view = pickView(parseLinkedConfig(config, properties).views);
   const entries = sortEntries(
@@ -158,29 +172,35 @@ async function linkedBlockHtml(
     view.kind === "board" ? [] : view.sorts,
     properties,
   );
-  return linkedViewHtml(
-    { title: base.title, icon: base.icon },
-    entries,
-    properties,
-    view,
-    {
+  // Une vue liée vide n'a rien à filtrer : pas d'îlot.
+  const live = entries.length > 0;
+  return {
+    html: linkedViewHtml({ title: base.title, icon: base.icon }, entries, properties, view, {
       href,
       baseHref: href(base.id),
       mediaBase,
       entryLink: linkFor,
-    },
-  );
+      islandKey: live ? islandKey : undefined,
+    }),
+    data: live ? publicDatabaseData(entries, properties, view, { href, chip: linkFor, mediaBase }) : null,
+  };
 }
 
 function Crumbs({ crumbs, href, mediaBase }: { crumbs: ReadOnlyCrumb[]; href: (id: string) => string; mediaBase: string }) {
   return (
     <nav className="public-crumbs" aria-label="Fil d'Ariane">
-      {crumbs.map((crumb, index) => (
+      {crumbTrail(crumbs, href).map((crumb, index) => (
         <span key={crumb.id}>
           {index > 0 && <span aria-hidden="true"> / </span>}
-          <Link href={href(crumb.id)}>
-            <PageLabel row={crumb} mediaBase={mediaBase} />
-          </Link>
+          {crumb.href ? (
+            <Link href={crumb.href}>
+              <PageLabel row={crumb} mediaBase={mediaBase} />
+            </Link>
+          ) : (
+            <span aria-current="page">
+              <PageLabel row={crumb} mediaBase={mediaBase} />
+            </span>
+          )}
         </span>
       ))}
     </nav>
@@ -233,7 +253,7 @@ async function EntryProperties({
 
 // Une base se lit selon sa première vue : tableau pour un Kanban ou une
 // Liste, galerie pour une Galerie. Filtres, tris et propriétés masquées
-// respectés dans les deux cas.
+// respectés dans les deux cas ; le visiteur y ajoute ses propres gestes.
 async function PublicDatabase({
   database,
   href,
@@ -250,37 +270,7 @@ async function PublicDatabase({
   const { properties, views } = configOf(database);
   const view = views[0];
   const entries = await publicEntries(database, view, properties, source);
-  if (!entries.length) return <p className="hint">Cette base ne contient aucune entrée.</p>;
-  return view.kind === "gallery" ? (
-    <ul className={`gallery-grid public-gallery gallery-${view.card_size}`}>
-      {entries.map((entry) => {
-        const image = cardImage(entry);
-        return (
-          <li key={entry.id}>
-            <Link href={href(entry.id)} className="gallery-card">
-              <span className="gallery-image">
-                {image ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={withMediaBase(image, mediaBase)} alt={view.show_title ? "" : entry.title} loading="lazy" />
-                ) : (
-                  <span className="gallery-fallback">
-                    <PageIcon icon={entry.icon} type="entry" big mediaBase={mediaBase} />
-                  </span>
-                )}
-              </span>
-              {view.show_title && (
-                <span className="gallery-title">
-                  <PageLabel row={entry} mediaBase={mediaBase} />
-                </span>
-              )}
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
-  ) : (
-    <PublicTable entries={entries} properties={properties} view={view} href={href} mediaBase={mediaBase} link={link} />
-  );
+  return <PublicDatabaseView data={publicDatabaseData(entries, properties, view, { href, chip: link, mediaBase })} />;
 }
 
 // Entrées d'une vue : filtres appliqués, horodatages ajoutés, tri de la vue.
@@ -296,62 +286,6 @@ async function publicEntries(
       .map((entry) => ({ ...entry, values: withTimes(properties, entry.values, entry) })),
     view.sorts,
     properties,
-  );
-}
-
-// L'image d'une carte peut vivre dans la copie d'une sauvegarde : sa base est
-// réécrite, comme pour les liens du corps.
-function withMediaBase(url: string, mediaBase: string): string {
-  return mediaBase === MEDIA_BASE ? url : url.replaceAll(MEDIA_BASE, mediaBase);
-}
-
-function PublicTable({
-  entries,
-  properties,
-  view,
-  href,
-  mediaBase,
-  link,
-}: {
-  entries: EntryRow[];
-  properties: Property[];
-  view: View;
-  href: (id: string) => string;
-  mediaBase: string;
-  link: (ref: LinkRef) => string | null;
-}) {
-  const columns = properties.filter((prop) => !view.hidden.includes(prop.id));
-  return (
-    <div className="table-wrap">
-      <table className="db-table public-table">
-        <thead>
-          <tr>
-            <th scope="col">Titre</th>
-            {columns.map((prop) => (
-              <th scope="col" key={prop.id}>
-                {prop.name}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {entries.map((entry) => (
-            <tr key={entry.id}>
-              <td className="cell-title">
-                <Link href={href(entry.id)}>
-                  <PageLabel row={entry} mediaBase={mediaBase} />
-                </Link>
-              </td>
-              {columns.map((prop) => (
-                <td key={prop.id}>
-                  <ValueView prop={prop} value={entry.values[prop.id]} links={entry.links?.[prop.id]} link={link} mediaBase={mediaBase} />
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
   );
 }
 

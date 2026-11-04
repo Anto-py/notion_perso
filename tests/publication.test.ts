@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   closedBy,
+  crumbTrail,
   linkTargets,
   privateTargets,
   publicationOf,
@@ -145,5 +146,36 @@ describe("publicHref", () => {
   it("adresse la racine par son seul identifiant, le reste sous lui", () => {
     expect(publicHref("pub", "root", "root")).toBe("/p/pub");
     expect(publicHref("pub", "root", "entry")).toBe("/p/pub/entry");
+  });
+});
+
+describe("crumbTrail, le fil d'Ariane", () => {
+  const reach = shareReach(graph, "root");
+  const href = (id: string) => publicHref("pub", "root", id);
+  const trail = (id: string) => crumbTrail(reachPath(graph, reach, id), href).map(({ title, href }) => [title, href]);
+
+  it("la page publiée montre son propre titre, sans lien", () => {
+    expect(trail("root")).toEqual([["root", null]]);
+  });
+
+  it("une entrée atteinte par un lien suit le parcours, sans nommer « Bases »", () => {
+    expect(trail("v1")).toEqual([
+      ["root", "/p/pub"],
+      ["veille", "/p/pub/veille"],
+      ["v1", null],
+    ]);
+  });
+
+  it("une page rangée dessous suit ses parents, chaque élément sauf le dernier menant à sa page", () => {
+    expect(trail("e2")).toEqual([
+      ["root", "/p/pub"],
+      ["sub", "/p/pub/sub"],
+      ["base", "/p/pub/base"],
+      ["e2", null],
+    ]);
+  });
+
+  it("un chemin vide reste vide", () => {
+    expect(crumbTrail([], href)).toEqual([]);
   });
 });

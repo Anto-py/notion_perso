@@ -2572,6 +2572,11 @@ mark.hit {
   text-decoration: underline;
 }
 
+/* La page lue, dernier élément du fil : en texte, d'un cran plus foncée. */
+.public-crumbs [aria-current="page"] {
+  color: var(--ink);
+}
+
 .public-title {
   font-size: 2.4rem;
   line-height: 1.2;
@@ -2967,6 +2972,24 @@ mark.hit {
 
 .linked-title a:hover {
   background: var(--hover);
+}
+
+/* Vue publique : l'îlot des gestes du visiteur remplace le rendu serveur de
+   la vue liée, gardé pour une lecture sans JavaScript. */
+.linked-live > .linked-static {
+  display: none;
+}
+
+.public-controls {
+  margin: 0.25rem 0 0.75rem;
+}
+
+.public-controls input[type="search"] {
+  min-width: 14rem;
+}
+
+.public-db-count {
+  margin: 0 0 0.5rem;
 }
 
 /* Le tableau d'une vue liée vit dans un bloc : il respire moins que la base
