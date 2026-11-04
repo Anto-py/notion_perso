@@ -76,7 +76,8 @@ const NUMERIC_CALCS: ReadonlySet<CalcOp> = new Set(["sum", "avg", "min", "max"])
 // calcs : calcul en pied de colonne, par propriété (« title » pour le titre).
 // card_size, show_title, calendar_scale et date_prop ne servent qu'aux vues
 // Galerie et Calendrier, mais sont relus pour toute vue : changer de type ne
-// les perd pas.
+// les perd pas. frozen_first_column et frozen_header ne servent qu'au tableau
+// (editable et public), relus de même pour survivre à un changement de type.
 export type View = {
   id: string;
   name: string;
@@ -91,6 +92,8 @@ export type View = {
   show_title: boolean;
   calendar_scale: CalendarScale;
   date_prop: string | null;
+  frozen_first_column: boolean;
+  frozen_header: boolean;
 };
 export type DbConfig = { properties: Property[]; views: View[] };
 
@@ -178,6 +181,8 @@ export function sanitizeView(raw: unknown, properties: readonly Property[], fall
       ? (view.calendar_scale as CalendarScale)
       : CALENDAR_SCALE_DEFAULT,
     date_prop: dateProp,
+    frozen_first_column: typeof view.frozen_first_column === "boolean" ? view.frozen_first_column : false,
+    frozen_header: typeof view.frozen_header === "boolean" ? view.frozen_header : false,
   };
 }
 

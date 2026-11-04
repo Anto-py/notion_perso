@@ -220,10 +220,11 @@ function PublicGallery({ data, entries }: { data: PublicDatabaseData; entries: P
 }
 
 function PublicTable({ data, entries }: { data: PublicDatabaseData; entries: PublicDatabaseData["entries"] }) {
-  const { columns, mediaBase } = data;
+  const { columns, mediaBase, view } = data;
   const link = (ref: LinkRef) => data.chipHref[ref.id] ?? null;
+  const frozen = [view.frozenFirstColumn ? "frozen-col" : "", view.frozenHeader ? "frozen-head" : ""].filter(Boolean).join(" ");
   return (
-    <div className="table-wrap">
+    <div className={frozen ? `table-wrap ${frozen}` : "table-wrap"}>
       <table className="db-table public-table">
         <thead>
           <tr>

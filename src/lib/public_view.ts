@@ -24,7 +24,15 @@ import type { CardSize, View } from "./views";
 // affiché, il ne voyage pas.
 const NO_TIME = "1970-01-01T00:00:00.000Z";
 
-export type PublicViewShape = { kind: "table" | "gallery"; cardSize: CardSize; showTitle: boolean };
+export type PublicViewShape = {
+  kind: "table" | "gallery";
+  cardSize: CardSize;
+  showTitle: boolean;
+  // Figeage de la première colonne et de la ligne d'en-tête : suit la vue
+  // publiée, pour que le visiteur garde les repères d'un long tableau.
+  frozenFirstColumn: boolean;
+  frozenHeader: boolean;
+};
 
 export type PublicDatabaseData = {
   view: PublicViewShape;
@@ -45,7 +53,13 @@ export const EMPTY_VISITOR: VisitorState = { query: "", filters: [], sorts: [] }
 
 // Un Kanban, une Liste ou un Calendrier se lisent en tableau (BRAINSTORMING §4).
 export function publicShape(view: View): PublicViewShape {
-  return { kind: view.kind === "gallery" ? "gallery" : "table", cardSize: view.card_size, showTitle: view.show_title };
+  return {
+    kind: view.kind === "gallery" ? "gallery" : "table",
+    cardSize: view.card_size,
+    showTitle: view.show_title,
+    frozenFirstColumn: view.frozen_first_column,
+    frozenHeader: view.frozen_header,
+  };
 }
 
 export function shownColumns(properties: readonly Property[], view: View): Property[] {

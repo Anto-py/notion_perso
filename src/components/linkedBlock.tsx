@@ -11,10 +11,12 @@ import {
   groupEntries,
   isGroupableType,
   matchesFilters,
+  moveInOrder,
   sortEntries,
   withNewOption,
   withTimes,
   type EntryRow,
+  type OrderPlace,
   type Property,
   type Value,
   type Values,
@@ -223,6 +225,38 @@ function LinkedDatabase({ databaseId, config, onPick, onConfig }: Props) {
     else reload();
   }
 
+  // Le schéma est commun à la base source : réordonner depuis le bloc y écrit
+  // l'ordre, comme depuis la base ouverte.
+  async function reorderProperty(propId: string, place: OrderPlace) {
+    if (!loaded) return;
+    const byId = new Map(properties.map((prop) => [prop.id, prop]));
+    const next = moveInOrder(
+      properties.map((prop) => prop.id),
+      propId,
+      place,
+    ).flatMap((id) => {
+      const prop = byId.get(id);
+      return prop ? [prop] : [];
+    });
+    if (next.length !== properties.length) return;
+    setMessage(null);
+    const result = await send(`/api/databases/${loaded.database.id}`, "PATCH", { properties: next, base: { properties } });
+    if (!result.ok) setMessage(result.error);
+    else reload();
+  }
+
+  // Déplacement manuel d'une ligne : même ordre commun que le Kanban.
+  async function moveEntry(entryId: string, place: OrderPlace) {
+    if (!loaded) return;
+    const ids = loaded.entries.map((entry) => entry.id);
+    const order = moveInOrder(ids, entryId, place);
+    if (order.every((id, index) => id === ids[index])) return;
+    setMessage(null);
+    const result = await send(`/api/entries/${entryId}`, "PATCH", { order });
+    if (!result.ok) setMessage(result.error);
+    else reload();
+  }
+
   if (!databaseId) return <Picker pages={pages} onPick={onPick} />;
   if (error) return <p className="linked-panel linked-missing">{error}</p>;
   if (!loaded) return <p className="linked-panel">Chargement de la base…</p>;
@@ -267,12 +301,17 @@ function LinkedDatabase({ databaseId, config, onPick, onConfig }: Props) {
           selectView(nextActive ?? kept, next);
         }}
       />
-      <ViewControls properties={properties} view={view} columns={boardColumns} onChange={changeView} />
+      <ViewControls properties={properties} view={view} columns={boardColumns} onChange={changeView} onReorderProperty={reorderProperty} />
       {view.kind === "table" && (
         <TableView
           properties={shown}
           entries={visible}
           filtered={view.filters.length > 0}
+          canReorderEntries={view.sorts.length === 0}
+          onReorderProperty={reorderProperty}
+          onMoveEntry={moveEntry}
+          frozenFirstColumn={view.frozen_first_column}
+          frozenHeader={view.frozen_header}
           onCreate={() => void createEntry()}
           onSave={saveValue}
           onCreateOption={createOption}

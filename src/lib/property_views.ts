@@ -332,9 +332,13 @@ export function boardOrder(
   return rest;
 }
 
+// Position d'un dépôt : devant ou derrière une cible. Partagée par les
+// entrées (ordre manuel) et les colonnes du schéma.
+export type OrderPlace = { before: string } | { after: string };
+
 // Ordre manuel après avoir déposé movedId avant ou après une autre entrée.
 // Ancre absente, ou l'entrée elle-même : l'ordre ne change pas.
-export function moveInOrder(ids: readonly string[], movedId: string, place: { before: string } | { after: string }): string[] {
+export function moveInOrder(ids: readonly string[], movedId: string, place: OrderPlace): string[] {
   const anchor = "before" in place ? place.before : place.after;
   const rest = ids.filter((id) => id !== movedId);
   const index = rest.indexOf(anchor);

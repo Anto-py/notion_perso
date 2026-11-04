@@ -18,6 +18,7 @@ import {
   type Column,
   type Filter,
   type FilterOp,
+  type OrderPlace,
   type Property,
   type SelectOption,
   type Sort,
@@ -25,13 +26,23 @@ import {
 import { CALENDAR_SCALES, CALENDAR_SCALE_LABELS, type CalendarScale } from "@/lib/calendar";
 import { CARD_SIZE_LABELS, CARD_SIZES, type CardSize, type View } from "@/lib/views";
 
-type Props = { properties: Property[]; view: View; columns: Column[]; onChange: (view: View, delay?: number) => void };
+type Props = {
+  properties: Property[];
+  view: View;
+  columns: Column[];
+  onChange: (view: View, delay?: number) => void;
+  // Réordonnancement du schéma, commun à la base : équivalent clavier du
+  // glisser de l'en-tête et seul moyen de bouger une colonne masquée.
+  onReorderProperty?: (propId: string, place: OrderPlace) => void;
+};
 
 const TYPING_DELAY = 500;
 
-export function ViewControls({ properties, view, columns, onChange }: Props) {
+export function ViewControls({ properties, view, columns, onChange, onReorderProperty }: Props) {
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [boardColumnsOpen, setBoardColumnsOpen] = useState(false);
+  const [frozenOpen, setFrozenOpen] = useState(false);
+  const frozenCount = [view.frozen_first_column, view.frozen_header].filter(Boolean).length;
   const filterable = [TITLE_PROP, ...properties];
   const groupables = properties.filter((prop) => isGroupableType(prop.type));
   const dateProps = properties.filter((prop) => prop.type === "date");
@@ -196,14 +207,62 @@ export function ViewControls({ properties, view, columns, onChange }: Props) {
           </div>
         ))}
 
+      {view.kind === "table" && frozenOpen && (
+        <div className="control-row" role="group" aria-label="Figer">
+          <span className="control-label">Figer</span>
+          <label className="column-toggle">
+            <input
+              type="checkbox"
+              checked={view.frozen_first_column}
+              onChange={(event) => onChange({ ...view, frozen_first_column: event.target.checked })}
+            />
+            Première colonne
+          </label>
+          <label className="column-toggle">
+            <input type="checkbox" checked={view.frozen_header} onChange={(event) => onChange({ ...view, frozen_header: event.target.checked })} />
+            Ligne d’en-tête
+          </label>
+        </div>
+      )}
+
       {columnsOpen && properties.length > 0 && (
         <div className="control-row" role="group" aria-label={fieldsLabel}>
           <span className="control-label">{view.kind === "table" ? "Colonnes" : "Champs"}</span>
-          {properties.map((prop) => (
-            <label key={prop.id} className="column-toggle">
-              <input type="checkbox" checked={!view.hidden.includes(prop.id)} onChange={(event) => setShown(prop.id, event.target.checked)} />
-              {prop.name}
-            </label>
+          {properties.map((prop, index) => (
+            <span key={prop.id} className="column-item">
+              <label className="column-toggle">
+                <input type="checkbox" checked={!view.hidden.includes(prop.id)} onChange={(event) => setShown(prop.id, event.target.checked)} />
+                {prop.name}
+              </label>
+              {onReorderProperty && (
+                <>
+                  <button
+                    type="button"
+                    className="ghost mini"
+                    aria-label={`Déplacer ${prop.name} vers la gauche`}
+                    disabled={index === 0}
+                    onClick={() => {
+                      const target = properties[index - 1];
+                      if (target) onReorderProperty(prop.id, { before: target.id });
+                    }}
+                  >
+                    ←
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost mini"
+                    aria-label={`Déplacer ${prop.name} vers la droite`}
+                    disabled={index === properties.length - 1}
+                    onClick={() => {
+                      const target = properties[index + 1];
+                      if (target) onReorderProperty(prop.id, { after: target.id });
+                    }}
+                  >
+                    →
+                  </button>
+                </>
+              )}
+            </span>
           ))}
           {view.kind === "board" && groupProp && (
             <span className="hint">La propriété de regroupement fait les colonnes et reste absente des cartes.</span>
@@ -243,6 +302,12 @@ export function ViewControls({ properties, view, columns, onChange }: Props) {
           <button type="button" className="ghost" aria-expanded={boardColumnsOpen} onClick={() => setBoardColumnsOpen(!boardColumnsOpen)}>
             Colonnes du Kanban
             {hiddenColumnCount > 0 && ` (${hiddenColumnCount} ${hiddenColumnCount > 1 ? "masquées" : "masquée"})`}
+          </button>
+        )}
+        {view.kind === "table" && (
+          <button type="button" className="ghost" aria-expanded={frozenOpen} onClick={() => setFrozenOpen(!frozenOpen)}>
+            Figer
+            {frozenCount > 0 && ` (${frozenCount})`}
           </button>
         )}
         {properties.length > 0 && (

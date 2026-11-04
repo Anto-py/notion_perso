@@ -65,7 +65,13 @@ describe("publicDatabaseData", () => {
     const payload = JSON.stringify(data);
     expect(payload).not.toContain("secret");
     expect(payload).not.toContain(note.id);
-    expect(data.view).toEqual({ kind: "table", cardSize: "medium", showTitle: true });
+    expect(data.view).toEqual({
+      kind: "table",
+      cardSize: "medium",
+      showTitle: true,
+      frozenFirstColumn: false,
+      frozenHeader: false,
+    });
   });
 
   it("calcule les liens côté serveur : entrées, puces publiques, puces privées sans lien", () => {
@@ -85,6 +91,13 @@ describe("publicDatabaseData", () => {
     expect(shaped.columns).toEqual([]);
     expect(shaped.entries[0].values).toEqual({});
     expect(shaped.entries[0].bodyImage).toBe("/api/media/up_x.png");
+  });
+
+  it("transmet le figeage réglé sur la vue publiée", () => {
+    const frozen = sanitizeView({ id: "view_f", kind: "table", frozen_first_column: true, frozen_header: true }, [statut, note]);
+    const shaped = publicDatabaseData(rows, [statut, note], frozen, links);
+    expect(shaped.view.frozenFirstColumn).toBe(true);
+    expect(shaped.view.frozenHeader).toBe(true);
   });
 });
 

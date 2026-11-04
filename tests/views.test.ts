@@ -275,6 +275,19 @@ describe("galerie", () => {
   });
 });
 
+describe("figeage", () => {
+  it("lit le figeage, faux par défaut, et le garde au changement de type", () => {
+    expect(sanitizeView({ id: "v_f" }, all)).toMatchObject({ frozen_first_column: false, frozen_header: false });
+    const frozen = sanitizeView({ id: "v_f", kind: "table", frozen_first_column: true, frozen_header: true }, all);
+    expect(frozen).toMatchObject({ frozen_first_column: true, frozen_header: true });
+    expect(sanitizeView({ ...frozen, kind: "gallery" }, all, frozen.id)).toMatchObject({
+      frozen_first_column: true,
+      frozen_header: true,
+    });
+    expect(duplicateView([frozen], frozen).frozen_header).toBe(true);
+  });
+});
+
 describe("calendrier", () => {
   const dates = [note, echeance, depart];
 

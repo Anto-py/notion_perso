@@ -14,11 +14,13 @@ import {
   isGroupableType,
   localId,
   matchesFilters,
+  moveInOrder,
   sortEntries,
   uniqueName,
   withNewOption,
   withTimes,
   type EntryRow,
+  type OrderPlace,
   type Property,
   type Value,
   type Values,
@@ -248,6 +250,37 @@ export function DatabaseView({ database, config, entries, databases, initialView
     router.refresh();
   }
 
+  // Réordonner une colonne réordonne le schéma, commun à toutes les vues ; la
+  // colonne Titre reste première, hors de cette liste. Aucune valeur ne se
+  // perd, saveProperties le vérifie comme pour tout changement de schéma.
+  function reorderProperty(propId: string, place: OrderPlace) {
+    const byId = new Map(properties.map((prop) => [prop.id, prop]));
+    const next = moveInOrder(
+      properties.map((prop) => prop.id),
+      propId,
+      place,
+    ).flatMap((id) => {
+      const prop = byId.get(id);
+      return prop ? [prop] : [];
+    });
+    if (next.length === properties.length) void saveProperties(next);
+  }
+
+  // Déplacement manuel d'une ligne dans le tableau : même ordre commun que le
+  // Kanban, écrit par la route d'entrée. La vue ne le propose que sans tri.
+  async function moveEntry(entryId: string, place: OrderPlace) {
+    const ids = entries.map((entry) => entry.id);
+    const order = moveInOrder(ids, entryId, place);
+    if (order.every((id, index) => id === ids[index])) return;
+    setMessage(null);
+    const result = await send(`/api/entries/${entryId}`, "PATCH", { order });
+    if (!result.ok) {
+      setMessage(result.error);
+      return;
+    }
+    router.refresh();
+  }
+
   // Une base sans propriété de regroupement ne peut pas se grouper : on en
   // propose une, avec trois options de départ, que l'éditeur de propriétés
   // permet ensuite de renommer, colorer ou compléter.
@@ -392,12 +425,17 @@ export function DatabaseView({ database, config, entries, databases, initialView
       )}
       {schemaOpen && <PropertySchemaEditor properties={properties} valuesList={valuesList} databases={databases} onChange={(next) => saveProperties(next)} />}
 
-      <ViewControls properties={properties} view={view} columns={boardColumns} onChange={changeView} />
+      <ViewControls properties={properties} view={view} columns={boardColumns} onChange={changeView} onReorderProperty={reorderProperty} />
       {view.kind === "table" && (
         <TableView
           properties={properties.filter((prop) => !view.hidden.includes(prop.id))}
           entries={visible}
           filtered={view.filters.length > 0}
+          canReorderEntries={view.sorts.length === 0}
+          onReorderProperty={reorderProperty}
+          onMoveEntry={moveEntry}
+          frozenFirstColumn={view.frozen_first_column}
+          frozenHeader={view.frozen_header}
           onCreate={() => createEntry()}
           onSave={saveValue}
           onCreateOption={createOption}
