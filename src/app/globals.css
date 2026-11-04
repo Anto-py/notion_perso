@@ -2938,6 +2938,19 @@ mark.hit {
   text-underline-offset: 3px;
 }
 
+/* L'icône d'un lien de sous-page reste sur la ligne du titre. La règle
+   générale « .public-body img » (display: block) l'emportait par sa
+   spécificité et passait l'icône à la ligne. */
+.public-body .page-icon-img {
+  display: inline-block;
+  width: 1.15em;
+  height: 1.15em;
+  max-width: none;
+  border-radius: 3px;
+  object-fit: cover;
+  vertical-align: -0.2em;
+}
+
 /* Cible non publiée ou exclue du partage : ni titre ni lien. */
 .public-body .subpage-private {
   color: var(--ink-soft);
