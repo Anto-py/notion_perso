@@ -240,10 +240,38 @@ export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}):
     }).blocks;
   }
 
+  // Dossier d'une page → la page. Deux formes : « Titre <id> » (exports
+  // anciens) et « Titre » seul (exports de 2026, mesuré sur deux archives
+  // réelles). La seconde n'est retenue que si une seule page du dossier porte
+  // ce titre : entre deux homonymes, on ne devine pas.
+  const pageByFolder = new Map<string, string>();
+  const ambiguousFolders = new Set<string>();
+  for (const page of archive.pages) pageByFolder.set(stripExtension(page.path), pageIds.get(page.path)!);
+  const byTitleFolder = new Map<string, string[]>();
+  for (const page of archive.pages) {
+    const folder = joinPath(page.dir, page.title);
+    byTitleFolder.set(folder, [...(byTitleFolder.get(folder) ?? []), pageIds.get(page.path)!]);
+  }
+  for (const [folder, owners] of byTitleFolder) {
+    if (pageByFolder.has(folder)) continue;
+    if (owners.length === 1) pageByFolder.set(folder, owners[0]);
+    else ambiguousFolders.add(folder);
+  }
+  // Repli sur targetByKey : il couvre aussi le dossier « Titre <id> » d'une entrée.
+  const folderPage = (dir: string): string | null => {
+    if (dir === "") return null;
+    const known = pageByFolder.get(dir);
+    if (known) return known;
+    const target = targetByKey.get(dir);
+    return target && target.kind === "page" ? target.id : null;
+  };
+
   const parentOf = new Map<string, string | null>();
   for (const page of archive.pages) {
-    const target = page.dir === "" ? null : targetByKey.get(page.dir);
-    parentOf.set(page.path, target && target.kind === "page" ? target.id : null);
+    parentOf.set(page.path, folderPage(page.dir));
+    if (ambiguousFolders.has(page.dir)) {
+      count(converted, "page rangée dans la page conteneur : son dossier porte le titre de deux pages");
+    }
   }
   const pageRoots = archive.pages.filter((page) => parentOf.get(page.path) === null);
   const databaseRoots = archive.databases.filter((db) => db.dir === "");
@@ -302,8 +330,7 @@ export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}):
   let entries = 0;
   for (const db of archive.databases) {
     const baseId = databaseIds.get(db.path)!;
-    const parentTarget = db.dir === "" ? null : targetByKey.get(db.dir);
-    const parentId = parentTarget && parentTarget.kind === "page" ? parentTarget.id : rootId;
+    const parentId = folderPage(db.dir) ?? rootId;
     const stub = archive.stubs.find((item) => stripExtension(item.path) === dbFolder(db));
     const body = stub ? blocksOf(stub, baseId) : [];
     const csv = contentByPath.get(db.path);

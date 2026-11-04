@@ -139,6 +139,49 @@ describe("buildImportPlan", () => {
     expect(plan.report.notes).toContainEqual({ reason: "relation « Ressources » importée vers « Veille »", count: 1 });
   });
 
+  // Format des exports de 2026 (mesuré sur deux archives réelles, octobre et
+  // novembre) : le dossier d'une page ne porte que son titre, sans identifiant.
+  it("range sous leur page les sous-pages d'un dossier qui ne porte que le titre", () => {
+    const KEYS_ID = "3".repeat(32);
+    const PDF_ID = "4".repeat(32);
+    const TIP_ID = "5".repeat(32);
+    const TOOLS_ID = "6".repeat(32);
+    const plan = buildImportPlan(
+      archive({
+        [`Privé/Clés en main ${KEYS_ID}.md`]: "# Clés en main",
+        [`Privé/Clés en main/Retravailler un pdf ${PDF_ID}.md`]: "Le pdf.",
+        [`Privé/Clés en main/Retravailler un pdf/Astuce ${TIP_ID}.md`]: "L'astuce.",
+        [`Privé/Clés en main/Outils ${TOOLS_ID}_all.csv`]: "Name\nCanva\n",
+        [`Privé/Autre ${CHILD_ID}.md`]: "Autre racine.",
+      }),
+      ids(),
+    );
+    const byTitle = (title: string) => plan.pages.find((page) => page.title === title)!;
+    expect(byTitle("Clés en main").parentId).toBe(plan.rootId);
+    expect(byTitle("Retravailler un pdf").parentId).toBe(byTitle("Clés en main").id);
+    expect(byTitle("Astuce").parentId).toBe(byTitle("Retravailler un pdf").id);
+    expect(byTitle("Outils").parentId).toBe(byTitle("Clés en main").id);
+  });
+
+  it("ne devine pas le parent quand deux pages du même titre partagent un dossier", () => {
+    const TWIN_ID = "7".repeat(32);
+    const NOTE_ID = "8".repeat(32);
+    const plan = buildImportPlan(
+      archive({
+        [`Sans titre ${ROOT_ID}.md`]: "Un.",
+        [`Sans titre ${TWIN_ID}.md`]: "Deux.",
+        [`Sans titre/Note ${NOTE_ID}.md`]: "À qui ?",
+      }),
+      ids(),
+    );
+    const note = plan.pages.find((page) => page.title === "Note")!;
+    expect(note.parentId).toBe(plan.rootId);
+    expect(plan.report.notes).toContainEqual({
+      reason: "page rangée dans la page conteneur : son dossier porte le titre de deux pages",
+      count: 1,
+    });
+  });
+
   it("refuse un export HTML", () => {
     expect(() => buildImportPlan(archive({ [`Note ${ROOT_ID}.html`]: "<p>x</p>" }), ids())).toThrow(NotionImportError);
   });
