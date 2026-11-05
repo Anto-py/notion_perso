@@ -2,10 +2,12 @@
 // lignes media en une seule transaction. En cas d'échec, les fichiers déjà
 // écrits sont retirés : l'import ne laisse rien à moitié.
 import { Readable } from "node:stream";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { iconImages, media, pages } from "@/db/schema";
+import { BASES_ROOT_ID } from "./bases";
 import type { ImportPlan } from "./notion-import";
-import { keyFromIndex } from "./order_key";
+import { compareKeys, keyBetween, keyFromIndex } from "./order_key";
 import { discardFile, saveFile } from "./storage";
 
 // PostgreSQL limite le nombre de paramètres d'une instruction ; cent lignes
@@ -40,6 +42,13 @@ export async function applyImportPlan(plan: ImportPlan): Promise<void> {
     }));
 
     await db.transaction(async (tx) => {
+      // Le dossier d'import arrive après ce que « Bases » range déjà.
+      const inBases = rows.filter((row) => row.parentId === BASES_ROOT_ID);
+      if (inBases.length > 0) {
+        const siblings = await tx.select({ key: pages.manualOrder }).from(pages).where(eq(pages.parentId, BASES_ROOT_ID));
+        let last = siblings.map((row) => row.key).sort(compareKeys).at(-1) ?? null;
+        for (const row of inBases) row.manualOrder = last = keyBetween(last, null);
+      }
       // L'ordre du plan place conteneur, pages (parents avant enfants), bases
       // puis entrées : chaque clé étrangère trouve sa ligne déjà écrite.
       for (let index = 0; index < rows.length; index += BATCH) {

@@ -28,7 +28,7 @@ function page(overrides: Partial<SourcePage> & { id: string }): SourcePage {
 }
 
 function liveRef(overrides: Partial<LiveRef> = {}): LiveRef {
-  return { parentId: null, dbId: null, trashed: false, ...overrides };
+  return { type: "page", parentId: null, dbId: null, trashed: false, ...overrides };
 }
 
 describe("planRecovery", () => {
@@ -142,5 +142,48 @@ describe("planRecovery", () => {
       "up_bbbbbbbbbbbbbbbb.jpg",
       "up_cccccccccccccccc.png",
     ]);
+  });
+
+  describe("bases d'une sauvegarde antérieure à l'étape 16", () => {
+    it("range la base reprise dans « Bases » et pose une vue liée de même id dans sa page", () => {
+      const source = [
+        page({ id: "pg_veille", body: [{ id: "b1", type: "subpage", props: { pageId: "pg_base" }, children: [] }] }),
+        page({ id: "pg_base", parentId: "pg_veille", type: "database" }),
+      ];
+      const plan = planRecovery(source, new Map(), newId);
+      const [host, base] = plan.pages;
+      expect(base.parentId).toBe("pg_basesracine00000");
+      expect(host.body).toEqual([{ id: "b1", type: "linked", props: { databaseId: base.id, config: "" }, children: [] }]);
+    });
+
+    it("reporte l'id neuf d'une base dans la vue liée qui la montre", () => {
+      const source = [
+        page({ id: "pg_veille", body: [{ id: "v1", type: "linked", props: { databaseId: "pg_base", config: "" }, children: [] }] }),
+        page({ id: "pg_base", parentId: "pg_basesracine00000", type: "database" }),
+      ];
+      const plan = planRecovery(source, new Map([["pg_basesracine00000", liveRef({ type: "folder" })]]), newId);
+      const base = plan.pages.find((p) => p.source.id === "pg_base")!;
+      expect(base.id).not.toBe("pg_base");
+      expect(base.parentId).toBe("pg_basesracine00000");
+      expect(plan.pages.find((p) => p.source.id === "pg_veille")!.body).toEqual([
+        { id: "v1", type: "linked", props: { databaseId: base.id, config: "" }, children: [] },
+      ]);
+    });
+
+    it("écrit une base avant ses entrées, même rangée sous une page reprise", () => {
+      const source = [
+        page({ id: "pg_veille" }),
+        page({ id: "pg_base", parentId: "pg_veille", type: "database" }),
+        page({ id: "pg_a_entree", type: "entry", dbId: "pg_base" }),
+      ];
+      const plan = planRecovery(source, new Map(), newId);
+      expect(plan.pages.map((p) => p.source.id)).toEqual(["pg_veille", "pg_base", "pg_a_entree"]);
+    });
+
+    it("laisse sous son dossier vif une base déjà rangée", () => {
+      const live = new Map([["pg_dossier", liveRef({ type: "folder", parentId: "pg_basesracine00000" })]]);
+      const plan = planRecovery([page({ id: "pg_base", parentId: "pg_dossier", type: "database" })], live, newId);
+      expect(plan.pages[0].parentId).toBe("pg_dossier");
+    });
   });
 });

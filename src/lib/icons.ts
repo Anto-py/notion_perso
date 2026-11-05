@@ -5,8 +5,8 @@
 // une image de la bibliothèque (table icon_images). Nulle, l'icône par défaut
 // est décidée à l'affichage : rien n'est écrit en base, l'information « pas
 // d'icône choisie » reste lisible.
-import { fold } from "./properties";
-import { ALLOWED_TYPES, formatSize, isStoredName } from "./upload_rules";
+import { fold } from "./properties.ts";
+import { ALLOWED_TYPES, formatSize, isStoredName } from "./upload_rules.ts";
 
 export const ICON_MAX_BYTES = 5 * 1024 * 1024;
 export const ICON_NAME_MAX = 100;

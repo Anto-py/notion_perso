@@ -28,13 +28,15 @@ export type RecoveryOutcome =
   | { ok: true; result: RecoveryResult }
   | { ok: false; status: 404 | 409; error: string };
 
-// Les lignes de la base vive qui décident du plan : présence, rangement,
+// Les lignes de la base vive qui décident du plan : présence, type, rangement,
 // corbeille. Le corps n'est pas lu ici, la transaction le relira pour les
 // copies.
 async function liveRefs(): Promise<Map<string, LiveRef>> {
-  const rows = await db.select({ id: pages.id, parentId: pages.parentId, dbId: pages.dbId, trashedAt: pages.trashedAt }).from(pages);
+  const rows = await db
+    .select({ id: pages.id, type: pages.type, parentId: pages.parentId, dbId: pages.dbId, trashedAt: pages.trashedAt })
+    .from(pages);
   return new Map(
-    rows.map((row) => [row.id, { parentId: row.parentId, dbId: row.dbId, trashed: row.trashedAt !== null }]),
+    rows.map((row) => [row.id, { type: row.type, parentId: row.parentId, dbId: row.dbId, trashed: row.trashedAt !== null }]),
   );
 }
 

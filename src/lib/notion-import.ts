@@ -2,7 +2,8 @@
 // plan d'écriture. Module pur (aucune base, aucun disque) : il rend des pages
 // prêtes à insérer, leurs médias et un rapport. L'écriture vit dans
 // lib/import_write.ts.
-import type { PageKind } from "./bases";
+import { BASES_ROOT_ID, FOLDER_ICON, type PageKind } from "./bases";
+import { planBasesMove } from "./bases_move";
 import { createHash } from "node:crypto";
 import { flattenToText } from "./blocks";
 import { newId as defaultNewId } from "./ids";
@@ -18,7 +19,7 @@ import {
 import { buildCsvDatabase, parseCsv } from "./notion-csv";
 import { htmlToPage, type HtmlPage } from "./notion-html";
 import { markdownToBlocks, type Block } from "./notion-markdown";
-import { fold, valuesToText, type Values } from "./properties";
+import { brusselsParts, fold, valuesToText, type Values } from "./properties";
 import type { DbConfig } from "./views";
 import { ALLOWED_TYPES } from "./upload_rules";
 
@@ -105,7 +106,8 @@ export type ImportPlan = {
   report: ImportReport;
 };
 
-export type ImportOptions = { newId?: (prefix: string) => string; newBlockId?: () => string };
+// now : date du dossier « Import Notion du … » (lue à Bruxelles).
+export type ImportOptions = { newId?: (prefix: string) => string; newBlockId?: () => string; now?: Date };
 
 // dbId et dbTitle ne sont posés que pour une entrée : un lien de CSV s'en sert
 // pour reconnaître une relation vers des entrées d'une même base.
@@ -608,6 +610,48 @@ export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}):
     });
     const orphans = [...byTitle.values()].flat().length;
     if (orphans > 0) count(ignored, "corps d'entrée sans ligne correspondante", orphans);
+  }
+
+  // Étape 16 : les bases de l'archive rejoignent un dossier d'import sous
+  // « Bases », et la page qui les montrait garde une vue liée à leur place
+  // (bloc de sous-page converti, ou vue liée en fin de page faute de bloc).
+  if (databases > 0) {
+    const day = brusselsParts((options.now ?? new Date()).toISOString())!.day;
+    const folderTitle = `${CONTAINER_TITLE} du ${day}`;
+    const folderId = makeId("pg");
+    const move = planBasesMove(
+      pages.map((page) => ({ id: page.id, type: page.type, parentId: page.parentId, body: page.body, trashed: false, title: page.title })),
+      { target: folderId },
+    );
+    const byId = new Map(pages.map((page) => [page.id, page]));
+    move.moved.forEach((moved, index) => {
+      const base = byId.get(moved.id)!;
+      base.parentId = folderId;
+      base.manualOrder = index;
+    });
+    for (const [id, body] of move.bodies) {
+      const host = byId.get(id)!;
+      host.body = body as Block[];
+      host.bodyText = flattenToText(body);
+    }
+    // En tête du plan : le dossier s'écrit avant ses bases.
+    pages.unshift({
+      id: folderId,
+      parentId: BASES_ROOT_ID,
+      dbId: null,
+      type: "folder",
+      title: folderTitle,
+      icon: FOLDER_ICON,
+      cover: null,
+      coverPosition: null,
+      body: [],
+      bodyText: "",
+      dbConfig: null,
+      propertyValues: null,
+      valuesText: "",
+      manualOrder: 0,
+    });
+    count(converted, `bases rangées dans « Bases / ${folderTitle} »`, databases);
   }
 
   const iconMediaList = [...iconMedia.values()];

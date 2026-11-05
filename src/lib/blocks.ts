@@ -4,11 +4,11 @@
 //
 // Le corps arrive du navigateur : on le parcourt sans lui faire confiance,
 // chaque champ inattendu est simplement ignoré.
-import { iconSrc, resolveIcon } from "./icons";
-import type { Orphan } from "./properties";
-import { domainOf } from "./unfurl";
-import { isStoredName } from "./upload_rules";
-import { youtubeEmbedUrl, youtubeId } from "./youtube";
+import { iconSrc, resolveIcon } from "./icons.ts";
+import type { Orphan } from "./properties.ts";
+import { domainOf } from "./unfurl.ts";
+import { isStoredName } from "./upload_rules.ts";
+import { youtubeEmbedUrl, youtubeId } from "./youtube.ts";
 
 type Json = unknown;
 

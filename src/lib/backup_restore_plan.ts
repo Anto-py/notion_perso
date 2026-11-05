@@ -7,7 +7,9 @@
 // disparue prend un id neuf, parce que le serveur fait gagner la purge contre
 // une modification et qu'un id purgé recréé serait effacé au cycle suivant.
 import type { Page } from "./pages";
-import { SUBPAGE_BLOCK } from "./blocks";
+import { BASES_ROOT_ID, type PageKind } from "./bases";
+import { planBasesMove } from "./bases_move";
+import { LINKED_BLOCK, SUBPAGE_BLOCK } from "./blocks";
 import { storedNamesIn } from "./media_cleanup";
 
 export type SourcePage = Pick<
@@ -29,8 +31,8 @@ export type SourcePage = Pick<
 >;
 
 // Ce que le plan a besoin de savoir de la base vive : la ligne existe-t-elle,
-// où est-elle rangée, et en corbeille ou non.
-export type LiveRef = { parentId: string | null; dbId: string | null; trashed: boolean };
+// où est-elle rangée, en corbeille ou non, et si c'est un dossier de « Bases ».
+export type LiveRef = { type: PageKind; parentId: string | null; dbId: string | null; trashed: boolean };
 
 export type PlannedPage = {
   // L'id sous lequel la page sera écrite dans la base vive.
@@ -58,8 +60,8 @@ export type RecoveryPlan = {
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-// Les blocs de sous-page portent l'id de leur cible : un id renommé se reporte
-// dans le corps, sinon le lien pointerait vers la page purgée.
+// Les blocs de sous-page et les vues liées portent l'id de leur cible : un id
+// renommé se reporte dans le corps, sinon le bloc pointerait vers la page purgée.
 function rewriteBody(body: unknown, rename: ReadonlyMap<string, string>): unknown {
   if (!Array.isArray(body)) return body;
   const visit = (blocks: unknown): unknown => {
@@ -73,6 +75,12 @@ function rewriteBody(body: unknown, rename: ReadonlyMap<string, string>): unknow
           copy.props = { ...copy.props, pageId: rename.get(pageId) };
         }
       }
+      if (copy.type === LINKED_BLOCK && isObject(copy.props)) {
+        const databaseId = copy.props.databaseId;
+        if (typeof databaseId === "string" && rename.has(databaseId)) {
+          copy.props = { ...copy.props, databaseId: rename.get(databaseId) };
+        }
+      }
       if ("children" in copy) copy.children = visit(copy.children);
       return copy;
     });
@@ -81,7 +89,9 @@ function rewriteBody(body: unknown, rename: ReadonlyMap<string, string>): unknow
 }
 
 // Profondeur dans l'ensemble repris : un parent absent de la sélection ne
-// compte pas, une donnée bouclée s'arrête à zéro.
+// compte pas, une donnée bouclée s'arrête à zéro. Une entrée n'a pas de
+// parent_id : sa base tient ce rôle, sans quoi elle passerait pour une racine
+// et s'écrirait avant sa base (clé étrangère db_id).
 function depthsOf(source: readonly SourcePage[]): Map<string, number> {
   const byId = new Map(source.map((page) => [page.id, page]));
   const depths = new Map<string, number>();
@@ -89,7 +99,7 @@ function depthsOf(source: readonly SourcePage[]): Map<string, number> {
     const known = depths.get(id);
     if (known !== undefined) return known;
     const page = byId.get(id);
-    const parentId = page?.parentId;
+    const parentId = page?.type === "entry" ? page.dbId : page?.parentId;
     if (!parentId || !byId.has(parentId) || seen.has(id)) {
       depths.set(id, 0);
       return 0;
@@ -142,6 +152,28 @@ export function planRecovery(
 
     pages.push({ id: rename.get(page.id)!, source: page, parentId, dbId, body: rewriteBody(page.body, rename) });
     if (live.has(page.id)) copies.push({ id: newId("pg"), sourceId: page.id });
+  }
+
+  // Étape 16 : une sauvegarde antérieure range ses bases sous des pages. Elles
+  // rejoignent « Bases » et la page reprise garde une vue liée à leur place ;
+  // un dossier hors de « Bases » y revient aussi. Un dossier vif en corbeille
+  // ne reçoit rien (même règle que la restauration).
+  const liveFolder = (id: string): boolean => {
+    const ref = live.get(id);
+    return ref !== undefined && !ref.trashed && ref.type === "folder";
+  };
+  const isFolder = (id: string | null): boolean =>
+    id !== null && (pages.some((planned) => planned.id === id && planned.source.type === "folder") || liveFolder(id));
+  const move = planBasesMove(
+    pages.map((planned) => ({ id: planned.id, type: planned.source.type, parentId: planned.parentId, body: planned.body, trashed: false })),
+    { isFolder: liveFolder },
+  );
+  const moved = new Set(move.moved.map((base) => base.id));
+  for (const planned of pages) {
+    const strayFolder = planned.source.type === "folder" && planned.id !== BASES_ROOT_ID && !isFolder(planned.parentId);
+    if (moved.has(planned.id) || strayFolder) planned.parentId = BASES_ROOT_ID;
+    const body = move.bodies.get(planned.id);
+    if (body) planned.body = body;
   }
 
   return { pages, copies, media: [...media], blockedBy };

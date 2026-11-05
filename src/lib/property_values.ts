@@ -1,7 +1,7 @@
 // Propriétés des bases, les valeurs : normalisation, contrôle, forme texte,
 // conversion quand une propriété change, report vers une autre base, pertes
 // annoncées avant confirmation, changement de type.
-import { isIsoDate, isTimestamp, parseNumber } from "./property_format";
+import { isIsoDate, isTimestamp, parseNumber } from "./property_format.ts";
 import {
   ID_PATTERN,
   LIMITS,
@@ -20,7 +20,7 @@ import {
   type SelectOption,
   type Value,
   type Values,
-} from "./property_schema";
+} from "./property_schema.ts";
 
 const TRUTHY = new Set(["oui", "vrai", "true", "yes", "x", "1"]);
 

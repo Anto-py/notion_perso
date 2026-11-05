@@ -1,6 +1,6 @@
 // Propriétés des bases, nombres et heures : saisie et écriture à la française,
 // jour et heure à Bruxelles, dates ISO, valeurs Créé le et Modifié le.
-import { LIMITS, isTimeType, type NumberFormat, type Property, type Values } from "./property_schema";
+import { LIMITS, isTimeType, type NumberFormat, type Property, type Values } from "./property_schema.ts";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 

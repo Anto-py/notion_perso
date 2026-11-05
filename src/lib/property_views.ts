@@ -1,7 +1,7 @@
 // Propriétés des bases, les vues : lecture tolérante d'un filtre, filtre,
 // tri, colonnes Kanban, ordre manuel après un dépôt.
-import { compareKeys } from "./order_key";
-import { brusselsParts, isIsoDate, parseNumber } from "./property_format";
+import { compareKeys } from "./order_key.ts";
+import { brusselsParts, isIsoDate, parseNumber } from "./property_format.ts";
 import {
   LIMITS,
   TITLE_PROP,
@@ -22,8 +22,8 @@ import {
   type Property,
   type Sort,
   type Value,
-} from "./property_schema";
-import { normalizeValue, valueText } from "./property_values";
+} from "./property_schema.ts";
+import { normalizeValue, valueText } from "./property_values.ts";
 
 // Lecture tolérante d'un filtre : ce qui pointe vers une propriété disparue,
 // une option supprimée ou un opérateur devenu étranger au type est retiré.

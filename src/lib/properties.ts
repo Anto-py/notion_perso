@@ -6,7 +6,7 @@
 //
 // Point d'entrée unique : le code vit dans quatre modules, chacun ne
 // dépendant que des précédents (schema, puis format, puis values, puis views).
-export * from "./property_schema";
-export * from "./property_format";
-export * from "./property_values";
-export * from "./property_views";
+export * from "./property_schema.ts";
+export * from "./property_format.ts";
+export * from "./property_values.ts";
+export * from "./property_views.ts";

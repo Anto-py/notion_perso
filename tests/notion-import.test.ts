@@ -47,7 +47,7 @@ function sample(): Uint8Array {
 
 describe("buildImportPlan", () => {
   it("reconstruit l'arbre, la base, l'entrée et le média", () => {
-    const plan = buildImportPlan(sample(), ids());
+    const plan = buildImportPlan(sample(), { ...ids(), now: new Date("2026-11-05T22:30:00Z") });
     const byTitle = new Map(plan.pages.map((page) => [page.title, page]));
 
     const root = byTitle.get("Veille")!;
@@ -57,9 +57,15 @@ describe("buildImportPlan", () => {
 
     expect(plan.rootId).toBe(root.id);
     expect(child.parentId).toBe(root.id);
-    expect(database.parentId).toBe(root.id);
     expect(entry.dbId).toBe(database.id);
     expect(entry.type).toBe("entry");
+
+    // Étape 16 : la base rejoint un dossier d'import sous « Bases », écrit en
+    // tête du plan ; sa page la montre par une vue liée ajoutée en fin de page.
+    const folder = plan.pages[0];
+    expect(folder).toMatchObject({ type: "folder", parentId: "pg_basesracine00000", title: "Import Notion du 2026-11-05" });
+    expect(database.parentId).toBe(folder.id);
+    expect(root.body.at(-1)).toEqual({ id: `linked-${database.id}`, type: "linked", props: { databaseId: database.id, config: "" }, children: [] });
 
     const subpage = root.body.find((block) => block.type === "subpage");
     expect(subpage?.props).toEqual({ pageId: child.id, kind: "page" });
@@ -160,7 +166,8 @@ describe("buildImportPlan", () => {
     expect(byTitle("Clés en main").parentId).toBe(plan.rootId);
     expect(byTitle("Retravailler un pdf").parentId).toBe(byTitle("Clés en main").id);
     expect(byTitle("Astuce").parentId).toBe(byTitle("Retravailler un pdf").id);
-    expect(byTitle("Outils").parentId).toBe(byTitle("Clés en main").id);
+    expect(byTitle("Outils").parentId).toBe(plan.pages[0].id);
+    expect(byTitle("Clés en main").body.some((block) => block.type === "linked" && block.props.databaseId === byTitle("Outils").id)).toBe(true);
   });
 
   it("ne devine pas le parent quand deux pages du même titre partagent un dossier", () => {
@@ -216,7 +223,7 @@ describe("buildImportPlan", () => {
     expect(plan.rootId).toBe(root.id);
     expect(child.parentId).toBe(root.id);
     expect(child.manualOrder).toBe(0);
-    expect(database.parentId).toBe(root.id);
+    expect(database.parentId).toBe(plan.pages.find((item) => item.type === "folder")!.id);
     expect(entry.dbId).toBe(database.id);
     expect(entry.bodyText).toContain("corps de l'entrée");
 
@@ -224,7 +231,8 @@ describe("buildImportPlan", () => {
     expect(root.cover).toMatch(/^image:up_[A-Za-z0-9_-]{16}\.png$/);
     expect(root.coverPosition).toBe(20);
     expect(plan.media.find((item) => item.originalName === "cover.png")?.pageId).toBe(root.id);
-    expect(root.body.some((block) => block.type === "linked" && block.props.databaseId === database.id)).toBe(true);
+    // La vue liée de l'export HTML suffit : aucune seconde ne s'ajoute.
+    expect(root.body.filter((block) => block.type === "linked" && block.props.databaseId === database.id)).toHaveLength(1);
     expect(plan.report.counts).toMatchObject({ pages: 2, databases: 1, entries: 1, media: 1 });
   });
 
