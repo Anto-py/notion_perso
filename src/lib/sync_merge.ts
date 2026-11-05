@@ -8,6 +8,7 @@
 // vue par id, bloc par bloc. Sur un même élément, la ligne la plus récemment
 // modifiée (updated_at) gagne ; pour un bloc, l'autre version est gardée juste
 // en dessous dans un encadré `conflict`. Module pur : ni base, ni réseau.
+import type { PageKind } from "./bases";
 import { LIMITS, fold, isOptionType, uniqueName, type Property, type SelectOption } from "./properties";
 import { parseConfig, sanitizeViews } from "./views";
 
@@ -18,7 +19,7 @@ export type Side = "mac" | "web";
 export type SyncPage = {
   id: string;
   parentId: string | null;
-  type: "page" | "database" | "entry";
+  type: PageKind;
   title: string;
   icon: string | null;
   cover: string | null;
@@ -29,6 +30,7 @@ export type SyncPage = {
   propertyValues: Record<string, unknown> | null;
   inboxKind: "link" | "note" | null;
   isInbox: boolean;
+  isBasesRoot: boolean;
   manualOrder: string;
   shareEnabled: boolean;
   publicId: string | null;
@@ -62,6 +64,7 @@ const FIELD_GROUPS: (keyof SyncPage)[][] = [
   ["cover", "coverPosition"],
   ["trashedAt"],
   ["isInbox"],
+  ["isBasesRoot"],
   // Publier et fermer s'excluent : ils voyagent ensemble.
   ["shareEnabled", "publicId", "shareIncludeSubpages", "shareClosed"],
 ];

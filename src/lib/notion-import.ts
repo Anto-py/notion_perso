@@ -2,6 +2,7 @@
 // plan d'écriture. Module pur (aucune base, aucun disque) : il rend des pages
 // prêtes à insérer, leurs médias et un rapport. L'écriture vit dans
 // lib/import_write.ts.
+import type { PageKind } from "./bases";
 import { createHash } from "node:crypto";
 import { flattenToText } from "./blocks";
 import { newId as defaultNewId } from "./ids";
@@ -69,7 +70,7 @@ export type PlanPage = {
   id: string;
   parentId: string | null;
   dbId: string | null;
-  type: "page" | "database" | "entry";
+  type: PageKind;
   title: string;
   icon: string | null;
   cover: string | null;

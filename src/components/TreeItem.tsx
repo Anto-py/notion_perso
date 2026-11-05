@@ -1,9 +1,11 @@
 "use client";
 // Un élément de l'arbre : à la fois saisissable (on le déplace) et cible (on
 // dépose une autre page dessus pour l'y ranger). Une sous-page naît du menu
-// « / » de sa mère, pas d'ici.
+// « / » de sa mère, pas d'ici ; « Bases » et ses dossiers ont un « + » qui
+// crée une base ou un dossier (étape 16).
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import Link from "next/link";
+import { useState } from "react";
 import type { TreeNode } from "@/lib/tree";
 import { PageLabel } from "./PageIcon";
 
@@ -16,14 +18,23 @@ type Props = {
   activeId: string | null;
   expanded: ReadonlySet<string>;
   onToggle: (id: string) => void;
+  onCreate: (type: "database" | "folder", parentId: string) => void;
 };
 
-export function TreeItem({ node, depth, activeId, expanded, onToggle }: Props) {
-  const drag = useDraggable({ id: node.id });
-  const drop = useDroppable({ id: node.id, disabled: node.type !== "page" });
+function hrefOf(node: TreeNode): string {
+  if (node.inbox) return "/inbox";
+  return node.type === "database" ? `/db/${node.id}` : `/page/${node.id}`;
+}
+
+export function TreeItem({ node, depth, activeId, expanded, onToggle, onCreate }: Props) {
+  // « Bases » ne se déplace pas ; une page ou un dossier reçoit un dépôt, le
+  // tri entre les deux est fait par placementError au lâcher.
+  const drag = useDraggable({ id: node.id, disabled: node.basesRoot });
+  const drop = useDroppable({ id: node.id, disabled: node.type !== "page" && node.type !== "folder" });
+  const [menu, setMenu] = useState(false);
   const open = expanded.has(node.id);
   const hasChildren = node.children.length > 0;
-  const href = node.type === "database" ? `/db/${node.id}` : `/page/${node.id}`;
+  const href = hrefOf(node);
 
   const classes = ["tree-row"];
   if (node.id === activeId) classes.push("active");
@@ -39,8 +50,9 @@ export function TreeItem({ node, depth, activeId, expanded, onToggle }: Props) {
         }}
         className={classes.join(" ")}
         style={{ paddingLeft: `${Math.min(depth, MAX_INDENT_DEPTH) * 14 + 4}px` }}
-        {...drag.attributes}
-        {...drag.listeners}
+        // Pas d'attributs de glisser sur « Bases » : dnd-kit y poserait
+        // aria-disabled, que le lecteur d'écran étend au lien et au « + ».
+        {...(node.basesRoot ? {} : { ...drag.attributes, ...drag.listeners })}
       >
         <button
           type="button"
@@ -59,6 +71,36 @@ export function TreeItem({ node, depth, activeId, expanded, onToggle }: Props) {
             </span>
           )}
         </Link>
+        {node.type === "folder" && (
+          <span className="tree-add">
+            <button
+              type="button"
+              className="tree-add-toggle"
+              aria-label={`Ajouter dans ${node.title || "Sans titre"}`}
+              aria-expanded={menu}
+              onClick={() => setMenu(!menu)}
+            >
+              +
+            </button>
+            {menu && (
+              <span className="tree-add-menu" role="menu">
+                {(["database", "folder"] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenu(false);
+                      onCreate(type, node.id);
+                    }}
+                  >
+                    {type === "database" ? "Base" : "Dossier"}
+                  </button>
+                ))}
+              </span>
+            )}
+          </span>
+        )}
       </div>
       {open && hasChildren && (
         <ul role="group">
@@ -70,6 +112,7 @@ export function TreeItem({ node, depth, activeId, expanded, onToggle }: Props) {
               activeId={activeId}
               expanded={expanded}
               onToggle={onToggle}
+              onCreate={onCreate}
             />
           ))}
         </ul>

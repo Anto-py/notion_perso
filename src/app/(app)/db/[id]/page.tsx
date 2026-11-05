@@ -4,7 +4,8 @@ import { DatabaseView } from "@/components/DatabaseView";
 import { canAccess } from "@/lib/access";
 import { getCurrentUser } from "@/lib/auth";
 import { configOf, listEntries } from "@/lib/databases";
-import { getPage, listDatabases } from "@/lib/pages";
+import { getPage, listDatabases, listTreeRows } from "@/lib/pages";
+import { ancestorRows } from "@/lib/tree";
 
 // Base : en-tête, propriétés, onglets des vues (Tableau, Kanban, Liste).
 export default function DatabaseRoute({ params, searchParams }: PageProps<"/db/[id]">) {
@@ -25,6 +26,7 @@ async function DatabaseLoader({ params, searchParams }: Pick<PageProps<"/db/[id]
   // Cibles possibles d'une relation : toutes les bases, la base courante
   // comprise (BRAINSTORMING §13).
   const databases = (await listDatabases()).filter((database) => canAccess(user, database, "read"));
+  const rows = (await listTreeRows()).filter((row) => canAccess(user, row, "read"));
   return (
     <DatabaseView
       key={page.id}
@@ -42,6 +44,7 @@ async function DatabaseLoader({ params, searchParams }: Pick<PageProps<"/db/[id]
       entries={entries}
       databases={databases.map(({ id: dbId, title, icon }) => ({ id: dbId, title, icon }))}
       initialViewId={typeof vue === "string" ? vue : null}
+      trail={ancestorRows(rows, page.id)}
     />
   );
 }

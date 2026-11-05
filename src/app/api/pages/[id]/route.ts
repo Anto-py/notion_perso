@@ -26,6 +26,9 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/pages/[id]
 
   const body = await readJson(request);
   if (!body) return fail(400, "Corps JSON attendu");
+  // « Bases » garde son nom et son icône ; un dossier n'a pas de corps.
+  if (found.page.isBasesRoot) return fail(400, "« Bases » ne se renomme pas.");
+  if (found.page.type === "folder" && ("body" in body || "cover" in body)) return fail(400, "Un dossier n'a ni corps ni bandeau.");
 
   const patch: PagePatch = {};
   if ("title" in body) {

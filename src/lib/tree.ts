@@ -1,23 +1,28 @@
 // Arbre de la sidebar, calculé depuis la liste plate des pages. Module pur :
 // importé par le serveur (contrôle du déplacement) comme par le navigateur
 // (refus immédiat pendant le glisser-déposer).
+import type { PageKind } from "./bases";
 import { fold } from "./property_schema";
 
 export type TreeRow = {
   id: string;
   parentId: string | null;
-  type: "page" | "database" | "entry";
+  type: PageKind;
   title: string;
   icon: string | null;
   // Exclusion du partage posée sur la page elle-même : cadenas dans la sidebar.
   closed: boolean;
+  // Le dossier « Bases » et le Vide-cerveau (étape 16) : rôles fixes, absents
+  // des lignes qui ne viennent pas de listTreeRows.
+  basesRoot?: boolean;
+  inbox?: boolean;
 };
 
 export type TreeNode = TreeRow & { children: TreeNode[] };
 
 // Les lignes arrivent déjà triées : l'ordre des frères est conservé. Une page
 // dont le parent est absent de la liste (en corbeille) remonte à la racine,
-// pour ne jamais disparaître de la sidebar.
+// pour ne jamais disparaître de la sidebar. « Bases » passe en tête.
 export function buildTree(rows: TreeRow[]): TreeNode[] {
   const nodes = new Map(rows.map((row) => [row.id, { ...row, children: [] as TreeNode[] }]));
   const roots: TreeNode[] = [];
@@ -26,6 +31,8 @@ export function buildTree(rows: TreeRow[]): TreeNode[] {
     if (parent) parent.children.push(node);
     else roots.push(node);
   }
+  const head = roots.findIndex((node) => node.basesRoot);
+  if (head > 0) roots.unshift(...roots.splice(head, 1));
   return roots;
 }
 
@@ -52,7 +59,8 @@ export type AbsentTarget = "trashed" | "deleted";
 export type LinkChoice = { row: TreeRow; path: string[] };
 
 // Pages et bases qu'un « Lien vers une page » peut viser : tout l'arbre sauf la
-// page hôte et les entrées, dans l'ordre de la sidebar, filtré par le titre
+// page hôte, les entrées et les dossiers de « Bases » (qui restent dans le
+// chemin), dans l'ordre de la sidebar, filtré par le titre
 // sans casse ni accents. Le chemin (titres des ancêtres, de la racine au
 // parent) départage deux homonymes ; la recherche ne le lit pas.
 export function linkChoices(rows: readonly TreeRow[], hostId: string, query: string): LinkChoice[] {
@@ -62,7 +70,7 @@ export function linkChoices(rows: readonly TreeRow[], hostId: string, query: str
     for (const node of nodes) {
       const { children, ...row } = node;
       const title = row.title || "Sans titre";
-      if (row.id !== hostId && row.type !== "entry" && fold(title).includes(wanted)) choices.push({ row, path });
+      if (row.id !== hostId && row.type !== "entry" && row.type !== "folder" && fold(title).includes(wanted)) choices.push({ row, path });
       visit(children, [...path, title]);
     }
   };
@@ -80,4 +88,14 @@ export function ancestorsOf(parentOf: ReadonlyMap<string, string | null>, pageId
     current = parentOf.get(current) ?? null;
   }
   return ancestors;
+}
+
+// Ancêtres d'une page dans l'ordre de lecture, de la racine au parent direct :
+// le fil « Bases / Cours » de l'écran d'une base ou d'un dossier.
+export function ancestorRows(rows: readonly TreeRow[], pageId: string): TreeRow[] {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const parentOf = new Map(rows.map((row) => [row.id, row.parentId]));
+  return ancestorsOf(parentOf, pageId)
+    .flatMap((id) => byId.get(id) ?? [])
+    .reverse();
 }

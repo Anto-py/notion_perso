@@ -4,7 +4,8 @@
 import { fail, readJson, requirePage } from "@/lib/api";
 import { publishPage, setShareClosed, shareState, unpublishPage } from "@/lib/publication_query";
 
-// GET : état du panneau → { publicId, closed, closedBy, sharedBy, privateLinks }.
+// GET : état du panneau → { type, publicId, closed, closedBy, sharedBy,
+// privateLinks, openedBases, openedBy }.
 export async function GET(_request: Request, ctx: RouteContext<"/api/share/[id]">) {
   const { id } = await ctx.params;
   const found = await requirePage(id, "read");

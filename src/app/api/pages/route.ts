@@ -10,14 +10,15 @@ export async function GET() {
   return Response.json({ pages: rows.filter((row) => canAccess(user, row, "read")) });
 }
 
-// POST { parentId?, type? } : crée une page vierge (type "page", par défaut)
-// ou une base vide (type "database"), à la racine ou sous parentId.
+// POST { parentId?, type? } : crée une page vierge (type "page", par défaut),
+// une base vide (type "database") ou un dossier (type "folder"), sous parentId
+// ou, sans lui, à la racine de l'arbre (page) ou de « Bases » (base, dossier).
 export async function POST(request: Request) {
   const body = await readJson(request);
   const parentId = optionalId(body?.parentId);
   if (parentId === undefined) return fail(400, "parentId invalide");
   const type = body?.type ?? "page";
-  if (type !== "page" && type !== "database") return fail(400, "type invalide");
+  if (type !== "page" && type !== "database" && type !== "folder") return fail(400, "type invalide");
 
   if (parentId) {
     const parent = await requirePage(parentId, "write");

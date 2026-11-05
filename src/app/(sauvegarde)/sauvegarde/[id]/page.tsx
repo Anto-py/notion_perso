@@ -28,7 +28,7 @@ async function BackupPageData({ params }: { params: PageProps<"/sauvegarde/[id]"
   if (!page || page.trashedAt) notFound();
   const [crumbs, children, subtree] = await Promise.all([
     backupCrumbs(id),
-    page.type === "page" ? backupChildren(id) : Promise.resolve([]),
+    page.type === "page" || page.type === "folder" ? backupChildren(id) : Promise.resolve([]),
     backupSubtree(id),
   ]);
   return (

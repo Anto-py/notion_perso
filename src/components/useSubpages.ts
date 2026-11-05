@@ -6,6 +6,7 @@
 // un bloc collé d'ailleurs ou un « Lien vers une page » ne jette rien.
 import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
+import { BASES_ROOT_ID } from "@/lib/bases";
 import { ownerRefs, refChanges } from "@/lib/blocks";
 import type { AbsentTarget, TreeRow } from "@/lib/tree";
 import type { ChildKind } from "./Editor";
@@ -34,14 +35,17 @@ export function useSubpages(
     setPageDirectory(directory, { hostId: pageId, absent });
   }, [directory, pageId, absent]);
 
+  // Une base naît à la racine de « Bases » (parentId null côté serveur) ; la
+  // page ne la montre que par une vue liée.
   async function createChild(kind: ChildKind): Promise<string | null> {
-    const result = await send("/api/pages", "POST", { parentId: pageId, type: kind });
+    const parentId = kind === "database" ? null : pageId;
+    const result = await send("/api/pages", "POST", { parentId, type: kind });
     if (!result.ok || typeof result.data.id !== "string") {
       onError(result.ok ? "Création impossible : réessayez." : result.error);
       return null;
     }
     const id = result.data.id;
-    addToDirectory({ id, parentId: pageId, type: kind, title: "", icon: null, closed: false });
+    addToDirectory({ id, parentId: kind === "database" ? BASES_ROOT_ID : pageId, type: kind, title: "", icon: null, closed: false });
     router.refresh();
     return id;
   }
@@ -51,7 +55,12 @@ export function useSubpages(
     const { gone, back } = refChanges(refs.current, next);
     refs.current = next;
     const pages = getPageDirectory();
-    const toTrash = gone.filter((id) => pages.get(id)?.parentId === pageId && !trashed.current.has(id));
+    // Une base n'est jamais jetée par un bloc (étape 16), même un ancien
+    // bloc-lien né avant « Bases ».
+    const toTrash = gone.filter((id) => {
+      const row = pages.get(id);
+      return row?.parentId === pageId && row.type === "page" && !trashed.current.has(id);
+    });
     const toRestore = back.filter((id) => trashed.current.has(id));
     if (!toTrash.length && !toRestore.length) return;
     // Marqué tout de suite, pas au retour de la requête : une annulation

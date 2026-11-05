@@ -129,6 +129,8 @@ const MEDIA_GROUP = "Médias";
 
 // Le bloc s'insère aussitôt, en attente, puis reçoit l'id de l'enfant créé :
 // le curseur reste à sa place pendant la requête. Un échec retire le bloc.
+// Une base naît dans « Bases » (étape 16) : le bloc en attente cède la place
+// à une vue liée de même position, qui n'a aucun pouvoir sur sa base.
 function childItems(editor: EditorInstance, onCreateChild: (kind: ChildKind) => Promise<string | null>) {
   const item = (kind: ChildKind, title: string, subtext: string, aliases: string[], icon: string) => ({
     title,
@@ -141,14 +143,15 @@ function childItems(editor: EditorInstance, onCreateChild: (kind: ChildKind) => 
       void onCreateChild(kind).then((id) => {
         const block = editor.getBlock(inserted.id);
         if (!block) return;
-        if (id) editor.updateBlock(block, { props: { pageId: id } });
+        if (id && kind === "database") editor.replaceBlocks([block], [{ type: "linked", props: { databaseId: id } }]);
+        else if (id) editor.updateBlock(block, { props: { pageId: id } });
         else editor.removeBlocks([block]);
       });
     },
   });
   return [
     item("page", "Page", "Créer une sous-page ici", ["page", "sous-page", "subpage"], "📄"),
-    item("database", "Base", "Créer une base de données ici", ["base", "database", "tableau", "kanban"], "🗃️"),
+    item("database", "Base", "Créer une base dans « Bases », montrée ici", ["base", "database", "tableau", "kanban"], "🗃️"),
   ];
 }
 

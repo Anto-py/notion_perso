@@ -17,6 +17,7 @@ const IMAGE_PREFIX = "image:";
 export type Icon = { kind: "emoji"; emoji: string } | { kind: "image"; filename: string };
 
 export function defaultEmoji(type?: string): string {
+  if (type === "folder") return "📁";
   return type === "database" ? "🗃️" : "📄";
 }
 

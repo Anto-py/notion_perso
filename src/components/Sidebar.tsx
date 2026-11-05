@@ -16,6 +16,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { placementError } from "@/lib/bases";
 import { ancestorsOf, buildTree, wouldCreateCycle, type TreeRow } from "@/lib/tree";
 import { AUTHOR_NAME, CV_URL } from "@/lib/branding";
 import { formatClock } from "@/lib/sync_status";
@@ -80,10 +81,13 @@ export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
     return data ?? {};
   }
 
-  // À la racine seulement : une sous-page naît du menu « / » de sa mère.
-  async function createPage(type: "page" | "database" = "page") {
-    const data = await post("/api/pages", { parentId: null, type });
+  // Sans parent : une page naît à la racine de l'arbre, une base à celle de
+  // « Bases » ; une sous-page naît du menu « / » de sa mère. Le « + » de
+  // « Bases » et de ses dossiers passe parentId.
+  async function createPage(type: "page" | "database" | "folder" = "page", parentId: string | null = null) {
+    const data = await post("/api/pages", { parentId, type });
     if (!data?.id) return;
+    if (parentId && !expanded.has(parentId)) setExpanded(new Set([...expanded, parentId]));
     router.refresh();
     router.push(type === "database" ? `/db/${data.id}` : `/page/${data.id}`);
   }
@@ -107,8 +111,13 @@ export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
     const pageId = String(active.id);
     const target = over.id === ROOT_DROP_ID ? null : String(over.id);
     if (target === (parentOf.get(pageId) ?? null)) return;
-    if (target && rows.find((row) => row.id === target)?.type !== "page") {
-      setMessage("Seule une page peut recevoir des sous-pages.");
+    const moved = rows.find((row) => row.id === pageId);
+    const parent = target ? rows.find((row) => row.id === target) : undefined;
+    // Même règle que le serveur (lib/bases.ts) : une page n'entre pas dans
+    // « Bases », une base n'en sort pas. La ligne reste à sa place.
+    const refused = moved && placementError({ type: moved.type, isBasesRoot: moved.basesRoot }, parent ? { type: parent.type, isBasesRoot: parent.basesRoot } : null);
+    if (refused) {
+      setMessage(refused);
       return;
     }
     // Refus immédiat, sans attendre le serveur (qui refuserait aussi).
@@ -170,11 +179,12 @@ export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
                       activeId={activeId}
                       expanded={expanded}
                       onToggle={toggle}
+                      onCreate={(type, parentId) => void createPage(type, parentId)}
                     />
                   ))}
                 </ul>
               )}
-              {dragging && <RootDropZone />}
+              {dragging?.type === "page" && <RootDropZone />}
             </nav>
             <DragOverlay dropAnimation={null}>
               {dragging && <div className="drag-overlay"><PageLabel row={dragging} /></div>}

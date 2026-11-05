@@ -46,7 +46,9 @@ type Props = {
   // Une vue triée n'a pas d'ordre manuel visible : la poignée des lignes
   // s'efface et une mention invite à retirer le tri.
   canReorderEntries: boolean;
-  onReorderProperty: (propId: string, place: OrderPlace) => void;
+  // Absent dans une vue liée (étape 16) : l'ordre des colonnes appartient à la
+  // base, qui ne se modifie que sur son écran. Les en-têtes perdent leur poignée.
+  onReorderProperty?: (propId: string, place: OrderPlace) => void;
   onMoveEntry: (entryId: string, place: OrderPlace) => void;
   frozenFirstColumn: boolean;
   frozenHeader: boolean;
@@ -136,7 +138,7 @@ export function TableView({
     const activeId = String(active.id);
     const overId = String(over.id);
     const place: OrderPlace = spot.before ? { before: keyOf(overId) } : { after: keyOf(overId) };
-    if (activeId.startsWith(COL) && overId.startsWith(COL)) onReorderProperty(keyOf(activeId), place);
+    if (activeId.startsWith(COL) && overId.startsWith(COL)) onReorderProperty?.(keyOf(activeId), place);
     else if (activeId.startsWith(ROW) && overId.startsWith(ROW) && canReorderEntries) onMoveEntry(keyOf(activeId), place);
   }
 
@@ -173,6 +175,7 @@ export function TableView({
                     broken={broken.includes(prop.id)}
                     dir={sortDir(sorts, prop.id)}
                     hint={hint}
+                    movable={!!onReorderProperty}
                     onCycle={() => onCycleSort(prop.id)}
                   />
                 ))}
@@ -239,29 +242,33 @@ function ColumnHead({
   broken,
   dir,
   hint,
+  movable,
   onCycle,
 }: {
   prop: Property;
   broken: boolean;
   dir: Sort["dir"] | null;
   hint: Hint | null;
+  movable: boolean;
   onCycle: () => void;
 }) {
-  const drag = useDraggable({ id: COL + prop.id });
-  const drop = useDroppable({ id: COL + prop.id });
+  const drag = useDraggable({ id: COL + prop.id, disabled: !movable });
+  const drop = useDroppable({ id: COL + prop.id, disabled: !movable });
   const side = hint?.id === COL + prop.id ? (hint.before ? "drop-before" : "drop-after") : null;
   return (
     <th ref={(element) => drop.setNodeRef(element)} scope="col" className={side ?? undefined} aria-sort={ariaSort(dir)}>
-      <button
-        ref={(element) => drag.setNodeRef(element)}
-        type="button"
-        className="drag-handle"
-        aria-label={`Déplacer la colonne ${prop.name}`}
-        {...drag.listeners}
-        {...drag.attributes}
-      >
-        ⠿
-      </button>
+      {movable && (
+        <button
+          ref={(element) => drag.setNodeRef(element)}
+          type="button"
+          className="drag-handle"
+          aria-label={`Déplacer la colonne ${prop.name}`}
+          {...drag.listeners}
+          {...drag.attributes}
+        >
+          ⠿
+        </button>
+      )}
       <SortButton label={prop.name} icon={propIcon(prop)} dir={dir} onCycle={onCycle} />
       {broken && (
         <span className="hint" title="La propriété visée a disparu ou changé de type : réparez le cumul dans les propriétés">

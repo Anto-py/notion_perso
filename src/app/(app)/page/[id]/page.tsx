@@ -1,13 +1,15 @@
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
+import { FolderView } from "@/components/FolderView";
 import { PageView, type EntryContext } from "@/components/PageView";
 import { canAccess } from "@/lib/access";
 import { subpageRefs } from "@/lib/blocks";
 import { getCurrentUser } from "@/lib/auth";
 import { configOf, linksForValues } from "@/lib/databases";
-import { getPage, linkTargets, listDatabases, listTreeRows } from "@/lib/pages";
+import { countFolderBases, getPage, linkTargets, listDatabases, listFolder, listTreeRows } from "@/lib/pages";
 import { normalizeValues, withTimes } from "@/lib/properties";
 import { fillRollups, fillTwins } from "@/lib/relation_query";
+import { ancestorRows } from "@/lib/tree";
 
 // Page normale ou entrée de base ; une entrée affiche en plus ses propriétés.
 export default function PageRoute({ params }: PageProps<"/page/[id]">) {
@@ -23,7 +25,19 @@ async function PageLoader({ params }: Pick<PageProps<"/page/[id]">, "params">) {
   const user = await getCurrentUser();
   const page = await getPage(id);
   if (!page || page.trashedAt || !canAccess(user, page, "read")) notFound();
-  if (page.type === "database") redirect(`/db/${page.id}`);
+  if (page.type === "database") redirect(page.isInbox ? "/inbox" : `/db/${page.id}`);
+  if (page.type === "folder") {
+    const rows = (await listTreeRows()).filter((row) => canAccess(user, row, "read"));
+    return (
+      <FolderView
+        key={page.id}
+        folder={{ id: page.id, title: page.title, icon: page.icon, isRoot: page.isBasesRoot }}
+        trail={ancestorRows(rows, page.id)}
+        items={await listFolder(page.id)}
+        basesInside={page.isBasesRoot ? 0 : await countFolderBases(page.id)}
+      />
+    );
+  }
 
   let entry: EntryContext | undefined;
   if (page.type === "entry") {

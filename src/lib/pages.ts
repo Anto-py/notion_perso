@@ -4,6 +4,7 @@
 import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { media, pages } from "@/db/schema";
+import { FOLDER_ICON, fallbackParent, placementError, trashError, type PageKind } from "./bases";
 import { flattenToText } from "./blocks";
 import { newId } from "./ids";
 import { removeCitedEntries } from "./relation_query";
@@ -19,14 +20,23 @@ export type Outcome = { ok: true } | { ok: false; status: 400 | 404 | 409; error
 
 const NOT_FOUND: Outcome = { ok: false, status: 404, error: "Page introuvable" };
 
-// Pages et bases, hors corbeille. Les entrées de base vivent dans leur base,
-// pas dans la sidebar ; le Vide-cerveau y est épinglé à part, jamais dans
-// l'arbre.
+// Pages, bases et dossiers, hors corbeille. Les entrées de base vivent dans
+// leur base, pas dans la sidebar. Le Vide-cerveau y figure comme toute base,
+// dans « Bases », en plus de son épingle (étape 16).
 export async function listTreeRows(): Promise<TreeRow[]> {
   return db
-    .select({ id: pages.id, parentId: pages.parentId, type: pages.type, title: pages.title, icon: pages.icon, closed: pages.shareClosed })
+    .select({
+      id: pages.id,
+      parentId: pages.parentId,
+      type: pages.type,
+      title: pages.title,
+      icon: pages.icon,
+      closed: pages.shareClosed,
+      basesRoot: pages.isBasesRoot,
+      inbox: pages.isInbox,
+    })
     .from(pages)
-    .where(and(isNull(pages.trashedAt), ne(pages.type, "entry"), eq(pages.isInbox, false)))
+    .where(and(isNull(pages.trashedAt), ne(pages.type, "entry")))
     .orderBy(asc(pages.manualOrder), asc(pages.createdAt));
 }
 
@@ -85,23 +95,35 @@ export async function getPage(id: string, executor: Pick<typeof db, "select"> = 
   return row ?? null;
 }
 
-// Un parent doit exister, être hors corbeille et être une page : une base
-// range ses entrées elle-même, une entrée n'a pas de sous-pages dans l'arbre.
-async function checkParent(parentId: string): Promise<Outcome> {
-  const parent = await getPage(parentId);
-  if (!parent || parent.trashedAt) return { ok: false, status: 404, error: "Page parente introuvable" };
-  if (parent.type !== "page") return { ok: false, status: 400, error: "Seule une page peut recevoir des sous-pages" };
-  return { ok: true };
+// Un parent doit exister et être hors corbeille, puis accepter l'élément
+// (lib/bases.ts) : une page sous une page ou à la racine, une base ou un
+// dossier dans « Bases ».
+async function checkParent(child: { type: PageKind; isBasesRoot?: boolean }, parentId: string | null): Promise<Outcome> {
+  let parent: Page | null = null;
+  if (parentId) {
+    parent = await getPage(parentId);
+    if (!parent || parent.trashedAt) return { ok: false, status: 404, error: "Page parente introuvable" };
+  }
+  const error = placementError(child, parent);
+  return error ? { ok: false, status: 400, error } : { ok: true };
 }
 
-// Page vierge ou base vide, à la racine ou sous parentId.
-export async function createPage(parentId: string | null, type: "page" | "database" = "page"): Promise<Outcome & { id?: string }> {
-  if (parentId) {
-    const check = await checkParent(parentId);
-    if (!check.ok) return check;
-  }
+export type CreatedKind = "page" | "database" | "folder";
+
+// Page vierge, base vide ou dossier. Sans parentId, une page naît à la racine
+// de l'arbre, une base ou un dossier à la racine de « Bases ».
+export async function createPage(parentId: string | null, type: CreatedKind = "page"): Promise<Outcome & { id?: string }> {
+  const parent = parentId ?? fallbackParent(type);
+  const check = await checkParent({ type }, parent);
+  if (!check.ok) return check;
   const id = newId("pg");
-  await db.insert(pages).values({ id, parentId, type, dbConfig: type === "database" ? emptyConfig() : null });
+  await db.insert(pages).values({
+    id,
+    parentId: parent,
+    type,
+    icon: type === "folder" ? FOLDER_ICON : null,
+    dbConfig: type === "database" ? emptyConfig() : null,
+  });
   return { ok: true, id };
 }
 
@@ -163,14 +185,13 @@ export async function updatePage(id: string, patch: PagePatch, check?: SaveCheck
   });
 }
 
-// Reparentage. newParentId null : la page remonte à la racine.
+// Reparentage. newParentId null : la page remonte à la racine de l'arbre ;
+// une base ou un dossier ne quitte jamais « Bases ».
 export async function movePage(id: string, newParentId: string | null): Promise<Outcome> {
   const page = await getPage(id);
   if (!page || page.trashedAt || page.type === "entry") return NOT_FOUND;
-  if (newParentId) {
-    const check = await checkParent(newParentId);
-    if (!check.ok) return check;
-  }
+  const check = await checkParent(page, newParentId);
+  if (!check.ok) return check;
   const rows = await db.select({ id: pages.id, parentId: pages.parentId }).from(pages);
   const parentOf = new Map(rows.map((row) => [row.id, row.parentId]));
   if (wouldCreateCycle(parentOf, id, newParentId)) {
@@ -204,6 +225,10 @@ export function trashedBatch(rootId: string) {
 }
 
 export async function trashPage(id: string): Promise<Outcome> {
+  const page = await getPage(id);
+  if (!page || page.trashedAt) return NOT_FOUND;
+  const refused = trashError(page);
+  if (refused) return { ok: false, status: 400, error: refused };
   const result = await db.execute(sql`
     WITH RECURSIVE subtree AS (
       SELECT id FROM pages WHERE id = ${id} AND trashed_at IS NULL
@@ -245,10 +270,11 @@ export async function countTrash(): Promise<number> {
   return row?.n ?? 0;
 }
 
-// Restaure le lot. Si le parent est resté en corbeille, la page remonte à la
-// racine plutôt que de rester invisible (parent purgé : déjà null, par la FK).
-// Une entrée ne vit que dans sa base : tant que la base est en corbeille,
-// l'entrée y reste aussi.
+// Restaure le lot. Si le parent est resté en corbeille, purgé (déjà null, par
+// la FK) ou refuse l'élément (lib/bases.ts), la page remonte à la racine de
+// l'arbre, une base ou un dossier à celle de « Bases », plutôt que de rester
+// invisible. Une entrée ne vit que dans sa base : tant que la base est en
+// corbeille, l'entrée y reste aussi.
 export async function restorePage(id: string): Promise<Outcome> {
   return db.transaction(async (tx) => {
     const [base] = await tx
@@ -261,10 +287,19 @@ export async function restorePage(id: string): Promise<Outcome> {
     const restored = await tx.execute(sql`
       UPDATE pages SET trashed_at = NULL, updated_at = now() WHERE id IN (${trashedBatch(id)})`);
     if (!restored.rowCount) return NOT_FOUND;
-    await tx.execute(sql`
-      UPDATE pages p SET parent_id = NULL
-      FROM pages parent
-      WHERE p.id = ${id} AND parent.id = p.parent_id AND parent.trashed_at IS NOT NULL`);
+    const [head] = await tx
+      .select({ type: pages.type, parentId: pages.parentId, isBasesRoot: pages.isBasesRoot })
+      .from(pages)
+      .where(eq(pages.id, id));
+    if (head && head.type !== "entry") {
+      const [parent] = head.parentId
+        ? await tx.select({ type: pages.type, isBasesRoot: pages.isBasesRoot, trashedAt: pages.trashedAt }).from(pages).where(eq(pages.id, head.parentId))
+        : [];
+      const livable = parent && !parent.trashedAt ? parent : null;
+      if ((head.parentId && !livable) || placementError(head, livable)) {
+        await tx.update(pages).set({ parentId: fallbackParent(head.type) }).where(eq(pages.id, id));
+      }
+    }
     return { ok: true } as const;
   });
 }
@@ -308,4 +343,48 @@ export async function recordMedia(values: typeof media.$inferInsert): Promise<vo
 export async function getMedia(filename: string) {
   const [row] = await db.select().from(media).where(eq(media.filename, filename)).limit(1);
   return row ?? null;
+}
+
+// --- Dossiers de « Bases » ---------------------------------------------------
+
+export type FolderItem = { id: string; type: "database" | "folder"; title: string; icon: string | null; entries: number; inbox: boolean };
+
+// Contenu d'un dossier, dossiers d'abord puis bases, dans l'ordre de la barre
+// latérale ; le nombre d'entrées vivantes de chaque base en une requête groupée.
+export async function listFolder(folderId: string): Promise<FolderItem[]> {
+  const result = await db.execute<{ id: string; type: "database" | "folder"; title: string; icon: string | null; entries: number; is_inbox: boolean }>(sql`
+    SELECT p.id, p.type, p.title, p.icon, p.is_inbox, coalesce(n.entries, 0)::int AS entries
+    FROM pages p
+    LEFT JOIN (
+      SELECT db_id, count(*) AS entries FROM pages
+      WHERE type = 'entry' AND trashed_at IS NULL AND db_id IS NOT NULL
+      GROUP BY db_id
+    ) n ON n.db_id = p.id
+    WHERE p.parent_id = ${folderId} AND p.trashed_at IS NULL AND p.type IN ('folder', 'database')
+    ORDER BY (p.type = 'folder') DESC, p.manual_order, p.created_at`);
+  return result.rows.map((row) => ({ id: row.id, type: row.type, title: row.title, icon: row.icon, entries: Number(row.entries), inbox: row.is_inbox }));
+}
+
+// Ce qu'emporte un dossier mis à la corbeille : ses bases, à toute profondeur.
+export async function countFolderBases(folderId: string): Promise<number> {
+  const result = await db.execute<{ n: number }>(sql`
+    WITH RECURSIVE subtree AS (
+      SELECT id FROM pages WHERE id = ${folderId} AND trashed_at IS NULL
+      UNION
+      SELECT p.id FROM pages p JOIN subtree s ON p.parent_id = s.id
+      WHERE p.trashed_at IS NULL AND p.type IN ('folder', 'database')
+    )
+    SELECT count(*)::int AS n FROM pages WHERE id IN (SELECT id FROM subtree) AND type = 'database'`);
+  return Number(result.rows[0]?.n ?? 0);
+}
+
+// Pages hors corbeille qui montrent la base par une vue liée : la confirmation
+// de corbeille les nomme, leurs vues afficheront « Base introuvable ».
+export async function linkedHosts(dbId: string): Promise<{ id: string; title: string }[]> {
+  const result = await db.execute<{ id: string; title: string }>(sql`
+    SELECT id, title FROM pages
+    WHERE trashed_at IS NULL
+      AND jsonb_path_exists(body, '$.** ? (@.type == "linked" && @.props.databaseId == $id)', jsonb_build_object('id', ${dbId}::text))
+    ORDER BY title`);
+  return result.rows;
 }

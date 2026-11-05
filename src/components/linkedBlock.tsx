@@ -3,7 +3,9 @@
 // propres au bloc. Les onglets, filtres, tris, colonnes et calculs vivent dans
 // la propriété `config` du bloc (texte JSON, lib/views.ts parseLinkedConfig) ;
 // les entrées et le schéma restent ceux de la base source, où les saisies
-// s'écrivent. BRAINSTORMING §4, SPECS « views ».
+// s'écrivent. BRAINSTORMING §4, SPECS « views ». Depuis l'étape 16, la
+// structure de la base (colonnes, ordre, titre, icône) ne se modifie que sur
+// son écran, dans « Bases » : le bloc saisit des entrées et règle ses vues.
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createReactBlockSpec } from "@blocknote/react";
@@ -226,26 +228,6 @@ function LinkedDatabase({ databaseId, config, onPick, onConfig }: Props) {
     else reload();
   }
 
-  // Le schéma est commun à la base source : réordonner depuis le bloc y écrit
-  // l'ordre, comme depuis la base ouverte.
-  async function reorderProperty(propId: string, place: OrderPlace) {
-    if (!loaded) return;
-    const byId = new Map(properties.map((prop) => [prop.id, prop]));
-    const next = moveInOrder(
-      properties.map((prop) => prop.id),
-      propId,
-      place,
-    ).flatMap((id) => {
-      const prop = byId.get(id);
-      return prop ? [prop] : [];
-    });
-    if (next.length !== properties.length) return;
-    setMessage(null);
-    const result = await send(`/api/databases/${loaded.database.id}`, "PATCH", { properties: next, base: { properties } });
-    if (!result.ok) setMessage(result.error);
-    else reload();
-  }
-
   // Déplacement manuel d'une ligne : même ordre commun que le Kanban.
   async function moveEntry(entryId: string, place: OrderPlace) {
     if (!loaded) return;
@@ -286,6 +268,9 @@ function LinkedDatabase({ databaseId, config, onPick, onConfig }: Props) {
             {hidden} {hidden > 1 ? "entrées masquées" : "entrée masquée"} par les filtres
           </span>
         )}
+        <Link href={`/db/${loaded.database.id}`} className="linked-open">
+          Ouvrir dans Bases ↗
+        </Link>
       </div>
       {message && (
         <p className="status status-error" role="alert">
@@ -302,7 +287,7 @@ function LinkedDatabase({ databaseId, config, onPick, onConfig }: Props) {
           selectView(nextActive ?? kept, next);
         }}
       />
-      <ViewControls properties={properties} view={view} columns={boardColumns} onChange={changeView} onReorderProperty={reorderProperty} />
+      <ViewControls properties={properties} view={view} columns={boardColumns} onChange={changeView} />
       {view.kind === "table" && (
         <TableView
           properties={shown}
@@ -311,7 +296,6 @@ function LinkedDatabase({ databaseId, config, onPick, onConfig }: Props) {
           sorts={view.sorts}
           onCycleSort={(propId) => changeView({ ...view, sorts: cycleSort(view.sorts, propId) })}
           canReorderEntries={view.sorts.length === 0}
-          onReorderProperty={reorderProperty}
           onMoveEntry={moveEntry}
           frozenFirstColumn={view.frozen_first_column}
           frozenHeader={view.frozen_header}

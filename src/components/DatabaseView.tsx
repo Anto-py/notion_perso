@@ -31,6 +31,7 @@ import { IconPicker } from "./IconPicker";
 import { CoverPicker } from "./CoverPicker";
 import { KanbanView } from "./KanbanView";
 import { CalendarView } from "./CalendarView";
+import { BasesCrumbs, type Crumb } from "./FolderView";
 import { GalleryView } from "./GalleryView";
 import { ListView } from "./ListView";
 import { SaveIndicator, TitleField } from "./PageView";
@@ -60,6 +61,8 @@ type Props = {
   databases: { id: string; title: string; icon: string | null }[];
   // Vue demandée par l'adresse (?vue=), si elle existe encore.
   initialViewId: string | null;
+  // Dossiers de « Bases » qui la contiennent, de la racine au parent.
+  trail: Crumb[];
 };
 
 type Pending = { properties: Property[]; losses: number };
@@ -77,7 +80,7 @@ function readStoredView(dbId: string): string | null {
   }
 }
 
-export function DatabaseView({ database, config, entries, databases, initialViewId }: Props) {
+export function DatabaseView({ database, config, entries, databases, initialViewId, trail }: Props) {
   const router = useRouter();
   // Titre relu au retour sur l'onglet, s'il a changé ailleurs (key).
   const [shownTitle, setShownTitle] = useState({ generation: 0, title: database.title });
@@ -355,8 +358,22 @@ export function DatabaseView({ database, config, entries, databases, initialView
     return added.option.id;
   }
 
+  // Corbeille en deux temps quand une page montre la base : la confirmation
+  // nomme ces pages, dont les vues liées afficheront « Base introuvable ».
+  const [hosts, setHosts] = useState<string[] | null>(null);
+
+  async function askTrash() {
+    setMessage(null);
+    const response = await fetch(`/api/databases/${database.id}/hosts`, { cache: "no-store" }).catch(() => null);
+    const data = (await response?.json().catch(() => null)) as { hosts?: { title: string }[] } | null;
+    const found = data?.hosts ?? [];
+    if (found.length) setHosts(found.map((host) => host.title || "Sans titre"));
+    else await moveToTrash();
+  }
+
   async function moveToTrash() {
     cancel();
+    setHosts(null);
     const result = await send(`/api/pages/${database.id}`, "DELETE");
     if (!result.ok) {
       setMessage(result.error);
@@ -371,10 +388,24 @@ export function DatabaseView({ database, config, entries, databases, initialView
       <div className="page-bar">
         <SaveIndicator status={status} pending={pagePending} />
         <SharePanel pageId={database.id} initialPublicId={database.publicId} initialClosed={database.shareClosed} />
-        <button type="button" className="ghost" onClick={moveToTrash}>
+        <button type="button" className="ghost" onClick={() => void askTrash()}>
           Supprimer la base
         </button>
       </div>
+      {hosts && (
+        <div className="confirm-bar" role="alert">
+          <span>
+            Montrée dans {frenchList(hosts.map((title) => `« ${title} »`))} : {hosts.length > 1 ? "ces vues afficheront" : "cette vue affichera"} « Base introuvable ».
+          </span>
+          <button type="button" className="danger" onClick={() => void moveToTrash()}>
+            Confirmer
+          </button>
+          <button type="button" onClick={() => setHosts(null)}>
+            Annuler
+          </button>
+        </div>
+      )}
+      <BasesCrumbs trail={trail} />
       <CoverPicker pageId={database.id} initial={database.cover} initialPosition={database.coverPosition} />
       <IconPicker pageId={database.id} type="database" initial={database.icon} />
       <TitleField
@@ -503,4 +534,9 @@ export function DatabaseView({ database, config, entries, databases, initialView
         ))}
     </main>
   );
+}
+
+// « A », « A et B », « A, B et C ».
+function frenchList(items: string[]): string {
+  return items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} et ${items[items.length - 1]}`;
 }

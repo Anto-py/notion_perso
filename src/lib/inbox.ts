@@ -1,6 +1,7 @@
 // Vide-cerveau : la base Inbox, son schéma de départ et la capture rapide
 // (note ou lien). Une seule base porte le rôle, garanti par l'index unique
 // partiel pages_inbox_idx ; elle est créée à la première visite de /inbox.
+import { BASES_ROOT_ID } from "./bases";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { pages } from "@/db/schema";
@@ -65,6 +66,8 @@ export async function ensureInbox(): Promise<Page> {
       title: INBOX_TITLE,
       dbConfig: inboxConfig(),
       isInbox: true,
+      // Rangé dans « Bases » comme toute base (étape 16).
+      parentId: BASES_ROOT_ID,
     })
     .onConflictDoNothing()
     .returning();

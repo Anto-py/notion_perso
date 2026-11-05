@@ -34,6 +34,7 @@ function page(over: Partial<SyncPage> = {}): SyncPage {
     propertyValues: null,
     inboxKind: null,
     isInbox: false,
+    isBasesRoot: false,
     manualOrder: "a0",
     shareEnabled: false,
     publicId: null,
@@ -109,6 +110,21 @@ describe("parsePush", () => {
     void _dropped;
     const items = parsePush({ items: [pushPage(page({ title: "Mac" }), 3, old as SyncPage)] });
     expect(Array.isArray(items) && items[0].kind === "page" && "base" in items[0] && items[0].base).toEqual(page());
+  });
+
+  // Même cas pour la migration 0012 : un instantané antérieur n'a pas
+  // isBasesRoot, la ligne qu'il décrit n'était pas « Bases ».
+  it("lit un instantané antérieur à isBasesRoot comme une page ordinaire", () => {
+    const { isBasesRoot: _dropped, shareClosed: _closed, ...old } = page();
+    void _dropped;
+    void _closed;
+    const items = parsePush({ items: [pushPage(page({ title: "Mac" }), 3, old as SyncPage)] });
+    expect(Array.isArray(items) && items[0].kind === "page" && "base" in items[0] && items[0].base).toEqual(page());
+  });
+
+  it("accepte un dossier de « Bases »", () => {
+    const items = parsePush({ items: [pushPage(page({ type: "folder" }))] });
+    expect(Array.isArray(items)).toBe(true);
   });
 
   it("exige shareClosed sur la ligne envoyée", () => {

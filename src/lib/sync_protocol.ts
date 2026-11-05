@@ -67,6 +67,7 @@ export function pageToSync(row: PageRow): SyncPage {
     propertyValues: (row.propertyValues as Record<string, unknown> | null) ?? null,
     inboxKind: row.inboxKind,
     isInbox: row.isInbox,
+    isBasesRoot: row.isBasesRoot,
     manualOrder: row.manualOrder,
     shareEnabled: row.shareEnabled,
     publicId: row.publicId,
@@ -116,7 +117,7 @@ const oneOf = (...allowed: unknown[]): Check => (value) => allowed.includes(valu
 const PAGE_FIELDS: Record<keyof SyncPage, Check> = {
   id: isId,
   parentId: orNull(isId),
-  type: oneOf("page", "database", "entry"),
+  type: oneOf("page", "database", "entry", "folder"),
   title: isText,
   icon: orNull(isText),
   cover: orNull(isText),
@@ -127,6 +128,7 @@ const PAGE_FIELDS: Record<keyof SyncPage, Check> = {
   propertyValues: (v) => v === null || isObj(v),
   inboxKind: oneOf(null, "link", "note"),
   isInbox: isBool,
+  isBasesRoot: isBool,
   manualOrder: isOrderKey,
   shareEnabled: isBool,
   publicId: orNull(isText),
@@ -188,7 +190,7 @@ const READERS = {
 // une clé absente pour différente de false). La ligne envoyée, elle, reste
 // exigée complète.
 const BASE_DEFAULTS: Partial<Record<SyncKind, Record<string, unknown>>> = {
-  page: { shareClosed: false }, // migration 0011_ne_pas_partager
+  page: { shareClosed: false, isBasesRoot: false }, // migrations 0011_ne_pas_partager, 0012_bases
 };
 
 function withBaseDefaults(kind: SyncKind, base: unknown): unknown {

@@ -233,6 +233,7 @@ async function writePage(tx: Tx, row: SyncPage, properties: Map<string, Property
     valuesText,
     inboxKind: row.inboxKind,
     isInbox: row.isInbox,
+    isBasesRoot: row.isBasesRoot,
     manualOrder: row.manualOrder,
     shareEnabled: row.shareEnabled,
     publicId: row.publicId,

@@ -2,13 +2,14 @@
 // seule, ou tout son contenu d'un geste. La version actuelle part en corbeille
 // comme copie, rien ne se perd.
 "use client";
+import type { PageKind } from "@/lib/bases";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 type Recovered = { pageId: string; recovered: number; trashedCopies: number; missingFiles: number };
 
-export function RecoverButton({ id, kind, descendants }: { id: string; kind: "page" | "database" | "entry"; descendants: number }) {
+export function RecoverButton({ id, kind, descendants }: { id: string; kind: PageKind; descendants: number }) {
   const router = useRouter();
   const [busy, setBusy] = useState<"page" | "all" | null>(null);
   const [error, setError] = useState<string | null>(null);

@@ -3,7 +3,9 @@
 // publier sur le web, copier le lien, dépublier ; sous une page publiée,
 // exclure la page de ce partage. Publier et exclure s'excluent. Une page
 // publiée liste les liens où le visiteur lit « Contenu privé », chacun avec
-// « Publier » (BRAINSTORMING §7).
+// « Publier » (BRAINSTORMING §7), et les bases que ses vues liées ouvrent,
+// chacune avec « Exclure » ; une base ainsi ouverte nomme la page qui
+// l'ouvre (étape 16, §14).
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { TreeRow } from "@/lib/tree";
@@ -14,14 +16,44 @@ type Props = { pageId: string; initialPublicId: string | null; initialClosed: bo
 
 type Named = { id: string; title: string } | null;
 type PrivateLink = { row: TreeRow; path: string[]; excluded: boolean };
-type State = { closedBy: Named; sharedBy: Named; privateLinks: PrivateLink[] };
+type OpenedBase = { row: TreeRow; path: string[]; host: { id: string; title: string } };
+type Opener = { host: { id: string; title: string }; root: { id: string; title: string } };
+type State = { isBase: boolean; closedBy: Named; sharedBy: Named; privateLinks: PrivateLink[]; openedBases: OpenedBase[]; openedBy: Opener[] };
+
+const list = <T,>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
+const quoted = (title: string) => `« ${title || "Sans titre"} »`;
 
 function parseState(data: Record<string, unknown>): State {
   return {
+    isBase: data.type === "database",
     closedBy: (data.closedBy as Named) ?? null,
     sharedBy: (data.sharedBy as Named) ?? null,
-    privateLinks: Array.isArray(data.privateLinks) ? (data.privateLinks as PrivateLink[]) : [],
+    privateLinks: list<PrivateLink>(data.privateLinks),
+    openedBases: list<OpenedBase>(data.openedBases),
+    openedBy: list<Opener>(data.openedBy),
   };
+}
+
+// « Lisible par la vue liée de « Veille », publiée » ; la page publiée est
+// nommée à part quand la vue vit plus bas qu'elle.
+function openerText(openers: Opener[]): string {
+  const parts = openers.map(({ host, root }) =>
+    host.id === root.id ? `${quoted(host.title)}, publiée` : `${quoted(host.title)}, dans le partage de ${quoted(root.title)}`,
+  );
+  return `Lisible par la vue liée de ${parts.join(" ; de ")}.`;
+}
+
+// Ce que dit le panneau d'une page non publiée : exclue ou non, lisible par
+// le partage d'un ancêtre, ou par la vue liée d'une page publiée (une base).
+function privateHint({ closed, isBase, sharer, openedBy }: { closed: boolean; isBase: boolean; sharer: string | null; openedBy: Opener[] }): string {
+  if (closed) {
+    if (sharer) return `Ni cette page ni ses sous-pages ne se lisent par le partage de ${sharer}.`;
+    if (isBase) return "Exclue : aucune vue liée ne l'ouvre, le visiteur lit « Contenu privé ».";
+    return "Aucune page publiée au-dessus : l'exclusion est sans effet pour l'instant.";
+  }
+  if (sharer) return `Lisible par le partage de ${sharer}. L'exclure la retire avec ses sous-pages.`;
+  if (openedBy.length) return `${openerText(openedBy)} L'exclure la rend privée partout.`;
+  return "Page privée : seul « Publier » la rend lisible. Un lien depuis une page publiée y affiche « Contenu privé ».";
 }
 
 export function SharePanel({ pageId, initialPublicId, initialClosed }: Props) {
@@ -110,6 +142,9 @@ export function SharePanel({ pageId, initialPublicId, initialClosed }: Props) {
   const closedBy = state?.closedBy ?? null;
   const sharedBy = state?.sharedBy ?? null;
   const privateLinks = state?.privateLinks ?? [];
+  const openedBases = state?.openedBases ?? [];
+  const openedBy = state?.openedBy ?? [];
+  const isBase = state?.isBase ?? false;
   const sharer = `« ${sharedBy?.title || "Sans titre"} »`;
 
   return (
@@ -173,10 +208,37 @@ export function SharePanel({ pageId, initialPublicId, initialClosed }: Props) {
                       </ul>
                     </div>
                   )}
+                  {openedBases.length > 0 && (
+                    <div className="share-opens">
+                      <p className="share-opens-title">Bases ouvertes par une vue liée</p>
+                      <ul>
+                        {openedBases.map((base) => (
+                          <li key={base.row.id}>
+                            <span className="share-opens-label">
+                              <span className="share-opens-name">
+                                <PageLabel row={base.row} />
+                              </span>
+                              <span className="share-opens-path">
+                                {[...base.path, `vue liée de ${quoted(base.host.title)}`].join(" / ")}
+                              </span>
+                            </span>
+                            <button
+                              type="button"
+                              className="ghost"
+                              disabled={busy}
+                              onClick={() => act(`/api/share/${base.row.id}`, "PATCH", { closed: true })}
+                            >
+                              Exclure
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </>
               ) : (
                 <>
-                  {(sharedBy || closed) && (
+                  {(sharedBy || closed || openedBy.length > 0) && (
                     <label className="share-switch">
                       <input
                         type="checkbox"
@@ -189,13 +251,7 @@ export function SharePanel({ pageId, initialPublicId, initialClosed }: Props) {
                     </label>
                   )}
                   <p className="hint">
-                    {closed
-                      ? sharedBy
-                        ? `Ni cette page ni ses sous-pages ne se lisent par le partage de ${sharer}.`
-                        : "Aucune page publiée au-dessus : l'exclusion est sans effet pour l'instant."
-                      : sharedBy
-                        ? `Lisible par le partage de ${sharer}. L'exclure la retire avec ses sous-pages.`
-                        : "Page privée : seul « Publier » la rend lisible. Un lien depuis une page publiée y affiche « Contenu privé »."}
+                    {privateHint({ closed, isBase, sharer: sharedBy ? sharer : null, openedBy })}
                   </p>
                 </>
               )}

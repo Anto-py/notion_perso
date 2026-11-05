@@ -5,6 +5,7 @@
 // Comparaison « pliée » : minuscules, sans accents, ligatures dépliées, comme
 // f_unaccent côté base. Chaque mot vaut pour un début de mot (« eval » trouve
 // « Évaluations ») : on cherche en tapant.
+import type { PageKind } from "./bases";
 
 export const SEARCH_MIN_LENGTH = 2;
 export const SEARCH_MAX_TERMS = 8;
@@ -118,7 +119,7 @@ export function highlightSegments(text: string, terms: readonly string[]): Segme
   return segments;
 }
 
-export type SearchKind = "page" | "database" | "entry";
+export type SearchKind = PageKind;
 
 // Un résultat tel que l'API le renvoie ; l'extrait porte les marqueurs.
 export type SearchHit = {

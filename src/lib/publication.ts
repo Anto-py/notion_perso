@@ -2,12 +2,15 @@
 // ce qui est rangé dessous, sauf une sous-page exclue et ses descendantes ;
 // puis, de lien en lien, les pages publiées que ses liens citent, lues sous
 // la même adresse. Un lien ne rend rien lisible : il mène seulement à ce qui
-// l'est déjà. Pur : le graphe vient de publication_query (loadShareGraph).
+// l'est déjà. Exception de l'étape 16 : une vue liée ouvre sa base, entrées
+// comprises, sauf base exclue. Pur : le graphe vient de publication_query
+// (loadShareGraph).
+import type { PageKind } from "./bases";
 import { internalLinkId } from "./blocks";
 
 export type ShareNode = {
   id: string;
-  type: "page" | "database" | "entry";
+  type: PageKind;
   parentId: string | null;
   dbId: string | null;
   // Exclusion posée sur la page elle-même (colonne share_closed) : la page et
@@ -20,6 +23,9 @@ export type ShareNode = {
   // Cibles des liens du corps dans l'ordre du texte : blocs subpage (liens ou
   // non), bases des vues liées, liens écrits dans une phrase.
   links: string[];
+  // Parmi elles, les bases des vues liées : les seules cibles qu'un passage
+  // ouvre au lieu d'y mener (étape 16, BRAINSTORMING §14).
+  opens: string[];
 };
 
 // Pages hors corbeille, dans l'ordre de la sidebar. trashPage jette tout un
@@ -105,13 +111,21 @@ function childIndex(graph: ShareGraph): Map<string, string[]> {
   return children;
 }
 
+// Une vue liée ouvre sa base si c'en est une, vivante, et que ni elle ni un
+// dossier au-dessus ne l'exclut.
+function opensBase(graph: ShareGraph, from: ShareNode, target: ShareNode): boolean {
+  return target.type === "database" && from.opens.includes(target.id) && closedBy(graph, target.id) === null;
+}
+
 // Portée d'une publication : parcours en largeur depuis la racine, enfants de
 // l'arbre d'abord (une page exclue n'est ni rendue ni traversée), puis liens
 // dans l'ordre du corps, vers les seules pages déjà lisibles par une
-// publication (publicationOf). Rend chaque page atteinte avec la page d'où on
-// l'a atteinte (null pour la racine) : l'appartenance décide l'accès sous
-// cette adresse, le précédent trace le fil d'Ariane. Une boucle de liens ne
-// bloque rien, une page n'étant visitée qu'une fois.
+// publication (publicationOf) ou les bases qu'une vue liée ouvre, de proche en
+// proche. Un dossier de « Bases » n'est jamais atteint. Rend chaque page
+// atteinte avec la page d'où on l'a atteinte (null pour la racine) :
+// l'appartenance décide l'accès sous cette adresse, le précédent trace le fil
+// d'Ariane. Une boucle de liens ne bloque rien, une page n'étant visitée
+// qu'une fois.
 export function shareReach(graph: ShareGraph, rootId: string): Map<string, string | null> {
   const reach = new Map<string, string | null>();
   if (!graph.has(rootId)) return reach;
@@ -127,11 +141,46 @@ export function shareReach(graph: ShareGraph, rootId: string): Map<string, strin
     for (const child of children.get(id) ?? []) {
       if (!reach.has(child) && !graph.get(child)!.closed) visit(child, id);
     }
-    for (const target of graph.get(id)!.links) {
-      if (!reach.has(target) && graph.has(target) && publicationOf(graph, target)) visit(target, id);
+    const from = graph.get(id)!;
+    for (const target of from.links) {
+      const node = graph.get(target);
+      if (!node || reach.has(target) || node.type === "folder") continue;
+      if (publicationOf(graph, target) || opensBase(graph, from, node)) visit(target, id);
     }
   }
   return reach;
+}
+
+export type OpenedBase = { node: ShareNode; host: ShareNode };
+
+// Bases que la portée rend lisibles sans publication propre ni ancêtre
+// publié : seule une vue liée les ouvre. Le panneau « Partager » de la page
+// publiée les liste, avec la page qui porte la vue (parade contre
+// l'exposition silencieuse, choix d'Antonin du 2026-11-05).
+export function openedBases(graph: ShareGraph, reach: ReadonlyMap<string, string | null>): OpenedBase[] {
+  const found: OpenedBase[] = [];
+  for (const [id, from] of reach) {
+    const node = graph.get(id);
+    const host = from ? graph.get(from) : undefined;
+    if (node?.type === "database" && host && !publicationOf(graph, id)) found.push({ node, host });
+  }
+  return found;
+}
+
+export type Opener = { host: ShareNode; root: ShareNode };
+
+// Pages qui ouvrent la base par une vue liée, dans chaque publication qui
+// l'atteint ainsi : le panneau de la base les nomme.
+export function openersOf(graph: ShareGraph, baseId: string): Opener[] {
+  if (publicationOf(graph, baseId)) return [];
+  const found: Opener[] = [];
+  for (const root of graph.values()) {
+    if (!root.publicId) continue;
+    const from = shareReach(graph, root.id).get(baseId);
+    const host = from ? graph.get(from) : undefined;
+    if (host) found.push({ host, root });
+  }
+  return found;
 }
 
 // Chemin de la racine jusqu'à la page, racine en tête, par les précédents de

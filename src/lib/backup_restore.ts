@@ -98,6 +98,8 @@ export async function recoverFromBackup(id: string, subtree: boolean): Promise<R
         valuesText: row.valuesText,
         manualOrder: row.manualOrder,
         isInbox: row.isInbox,
+        // Une copie n'est jamais « Bases » : l'index unique refuserait la seconde.
+        isBasesRoot: false,
         shareEnabled: row.shareEnabled,
         publicId: row.publicId,
         shareIncludeSubpages: row.shareIncludeSubpages,

@@ -513,6 +513,59 @@ a {
   opacity: 0.6;
 }
 
+/* « + » de « Bases » et de ses dossiers (étape 16) : discret, visible au
+   survol ou au clavier, toujours au doigt. */
+.tree-add {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.tree-add-toggle {
+  border: none;
+  background: transparent;
+  padding: 0 0.35rem;
+  color: var(--ink-soft);
+  opacity: 0;
+}
+
+.tree-row:hover .tree-add-toggle,
+.tree-add-toggle:focus-visible,
+.tree-add-toggle[aria-expanded="true"] {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .tree-add-toggle {
+    opacity: 1;
+  }
+}
+
+.tree-add-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 7rem;
+  padding: 0.25rem;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-inner);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 12%);
+}
+
+.tree-add-menu button {
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 0.3rem 0.5rem;
+}
+
+.tree-add-menu button:hover {
+  background: var(--hover);
+}
+
 .root-drop {
   margin: 0.5rem 0.25rem;
   padding: 0.6rem;
@@ -4162,4 +4215,70 @@ button.link.icon-danger {
     width: 100%;
     height: 170px;
   }
+}
+
+/* --- Dossier « Bases » (étape 16) --------------------------------------- */
+
+.bases-crumbs {
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  margin: 0.5rem 0 0.25rem;
+}
+
+.bases-crumbs a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.bases-crumbs a:hover {
+  text-decoration: underline;
+}
+
+.folder-title {
+  font-size: 2.4rem;
+  line-height: 1.2;
+  margin: 0.5rem 0 1rem;
+}
+
+.folder-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.folder-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border-top: 1px solid var(--line);
+}
+
+.folder-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.45rem 0.25rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.folder-list a {
+  text-decoration: none;
+}
+
+.folder-count {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.linked-open {
+  margin-left: auto;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.linked-open:hover {
+  color: var(--accent);
 }

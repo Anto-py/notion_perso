@@ -5,6 +5,7 @@
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { deletions, iconImages, media, pages } from "@/db/schema";
+import { BASES_ROOT_ID, fallbackParent, placementError } from "./bases";
 import { flattenToText } from "./blocks";
 import { deleteMediaIfUnused } from "./media_cleanup_query";
 import { migrateValues, normalizeValues, valuesToText, type Property } from "./properties";
@@ -79,12 +80,24 @@ export async function applyPush(items: PushItem[]): Promise<PushOutcome[]> {
 // valeurs. Les champs dérivés sont recalculés ici, jamais reçus.
 async function writePage(tx: Tx, input: SyncPage, previous: typeof pages.$inferSelect | undefined, now: string) {
   let row = input;
+  // « Bases » n'a qu'une ligne, d'id fixe : une autre qui prétendrait au rôle
+  // le perd.
+  if (row.isBasesRoot && row.id !== BASES_ROOT_ID) row = { ...row, isBasesRoot: false };
   const refs = [row.parentId, row.dbId].filter((ref): ref is string => ref !== null);
   const targets = refs.length
-    ? await tx.select({ id: pages.id, type: pages.type, dbConfig: pages.dbConfig }).from(pages).where(inArray(pages.id, refs))
+    ? await tx
+        .select({ id: pages.id, type: pages.type, dbConfig: pages.dbConfig, isBasesRoot: pages.isBasesRoot })
+        .from(pages)
+        .where(inArray(pages.id, refs))
     : [];
   const byId = new Map(targets.map((target) => [target.id, target]));
-  if (row.parentId && !byId.has(row.parentId)) row = { ...row, parentId: null };
+  // Parent absent, ou qui refuse l'élément (lib/bases.ts) : une page remonte à
+  // la racine de l'arbre, une base ou un dossier à celle de « Bases ».
+  if (row.type !== "entry") {
+    const parent = row.parentId ? byId.get(row.parentId) : undefined;
+    if ((row.parentId && !parent) || placementError(row, parent ?? null)) row = { ...row, parentId: fallbackParent(row.type) };
+  }
+  if (row.type === "entry" && row.parentId && !byId.has(row.parentId)) row = { ...row, parentId: null };
   const database = row.dbId ? byId.get(row.dbId) : undefined;
   if (row.type === "entry" && database?.type !== "database") {
     row = { ...row, type: "page", dbId: null, propertyValues: null, inboxKind: null, trashedAt: row.trashedAt ?? now };
@@ -125,6 +138,7 @@ async function writePage(tx: Tx, input: SyncPage, previous: typeof pages.$inferS
     valuesText,
     inboxKind: row.inboxKind,
     isInbox: row.isInbox,
+    isBasesRoot: row.isBasesRoot,
     manualOrder: row.manualOrder,
     shareEnabled: row.shareEnabled,
     publicId: row.publicId,

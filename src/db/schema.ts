@@ -77,7 +77,8 @@ export const pages = pgTable(
     parentId: text("parent_id").references((): AnyPgColumn => pages.id, {
       onDelete: "set null",
     }),
-    type: text("type", { enum: ["page", "database", "entry"] }).notNull(),
+    // folder : dossier de « Bases », sans corps (étape 16, lib/bases.ts).
+    type: text("type", { enum: ["page", "database", "entry", "folder"] }).notNull(),
     title: text("title").notNull().default(""),
     icon: text("icon"),
     // Bandeau : "color:<teinte>" ou "image:<fichier>", comme icon (lib/covers.ts).
@@ -100,6 +101,9 @@ export const pages = pgTable(
     // La base Vide-cerveau, une seule : l'index unique partiel ci-dessous
     // garantit qu'une seconde ligne ne peut pas porter le rôle.
     isInbox: boolean("is_inbox").notNull().default(false),
+    // Le dossier « Bases », une seule ligne d'id fixe posée par la migration
+    // 0012 (lib/bases.ts, BASES_ROOT_ID), même motif d'index qu'is_inbox.
+    isBasesRoot: boolean("is_bases_root").notNull().default(false),
     // Clé d'ordre fractionnaire (lib/order_key.ts), triée octet par octet :
     // la migration 0008 pose COLLATE "C", que Drizzle ne sait pas déclarer.
     manualOrder: text("manual_order").notNull().default("a0"),
@@ -130,6 +134,7 @@ export const pages = pgTable(
     index("pages_db_id_idx").on(t.dbId),
     index("pages_trashed_at_idx").on(t.trashedAt),
     uniqueIndex("pages_inbox_idx").on(t.isInbox).where(sql`is_inbox`),
+    uniqueIndex("pages_bases_root_idx").on(t.isBasesRoot).where(sql`is_bases_root`),
     index("pages_sync_xid_idx").on(t.syncXid),
   ],
 );

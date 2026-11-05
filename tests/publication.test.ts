@@ -3,6 +3,8 @@ import {
   closedBy,
   crumbTrail,
   linkTargets,
+  openedBases,
+  openersOf,
   privateTargets,
   publicationOf,
   publicHref,
@@ -15,7 +17,7 @@ import {
 } from "@/lib/publication";
 
 function node(id: string, extra: Partial<ShareNode> = {}): ShareNode {
-  return { id, type: "page", parentId: null, dbId: null, closed: false, publicId: null, title: id, icon: null, links: [], ...extra };
+  return { id, type: "page", parentId: null, dbId: null, closed: false, publicId: null, title: id, icon: null, links: [], opens: [], ...extra };
 }
 
 function graphOf(...nodes: ShareNode[]): Map<string, ShareNode> {
@@ -177,5 +179,66 @@ describe("crumbTrail, le fil d'Ariane", () => {
 
   it("un chemin vide reste vide", () => {
     expect(crumbTrail([], href)).toEqual([]);
+  });
+});
+
+// Étape 16 : une vue liée ouvre sa base, rangée dans « Bases », entrées
+// comprises ; un lien ↗ ne l'ouvre pas ; l'exclusion de la base, ou d'un
+// dossier au-dessus, l'en empêche.
+describe("une vue liée ouvre sa base", () => {
+  const bases = (over: Record<string, Partial<ShareNode>> = {}): ShareGraph => {
+    const nodes = [
+      node("racine", { type: "folder", title: "Bases" }),
+      node("cours", { type: "folder", parentId: "racine", title: "Cours" }),
+      node("seq", { type: "database", parentId: "cours", title: "Séquences" }),
+      node("s1", { type: "entry", dbId: "seq", links: ["notes"], opens: ["notes"] }),
+      node("notes", { type: "database", parentId: "racine", title: "Notes" }),
+      node("n1", { type: "entry", dbId: "notes" }),
+      node("secret", { type: "database", parentId: "racine" }),
+      node("veille", { publicId: "pub", title: "Veille", links: ["seq", "secret"], opens: ["seq"] }),
+    ];
+    return graphOf(...nodes.map((item) => ({ ...item, ...over[item.id] })));
+  };
+
+  it("rend la base lisible avec ses entrées, et de vue liée en vue liée", () => {
+    const reach = shareReach(bases(), "veille");
+    expect([...reach.keys()]).toEqual(["veille", "seq", "s1", "notes", "n1"]);
+    expect(reach.get("seq")).toBe("veille");
+    expect(reach.get("notes")).toBe("s1");
+  });
+
+  it("ne nomme ni « Bases » ni un dossier dans le chemin d'une entrée", () => {
+    const graph = bases();
+    expect(reachPath(graph, shareReach(graph, "veille"), "s1").map((item) => item.id)).toEqual(["veille", "seq", "s1"]);
+  });
+
+  it("un lien vers une base non publiée ne l'ouvre pas", () => {
+    const graph = bases();
+    const reach = shareReach(graph, "veille");
+    expect(reach.has("secret")).toBe(false);
+    expect(privateTargets(graph, reach).map((item) => item.id)).toEqual(["secret"]);
+  });
+
+  it("une base exclue, ou sous un dossier exclu, ne s'ouvre pas", () => {
+    expect(shareReach(bases({ seq: { closed: true } }), "veille").has("seq")).toBe(false);
+    const underClosed = shareReach(bases({ cours: { closed: true } }), "veille");
+    expect(underClosed.has("seq")).toBe(false);
+    expect(underClosed.has("s1")).toBe(false);
+  });
+
+  it("liste les bases ouvertes avec la page qui porte la vue", () => {
+    const graph = bases();
+    const opened = openedBases(graph, shareReach(graph, "veille"));
+    expect(opened.map(({ node: base, host }) => [base.id, host.id])).toEqual([
+      ["seq", "veille"],
+      ["notes", "s1"],
+    ]);
+  });
+
+  it("nomme, sur la base, la page qui l'ouvre et la publication", () => {
+    const graph = bases();
+    expect(openersOf(graph, "seq").map(({ host, root }) => [host.id, root.id])).toEqual([["veille", "veille"]]);
+    expect(openersOf(graph, "notes").map(({ host, root }) => [host.id, root.id])).toEqual([["s1", "veille"]]);
+    expect(openersOf(bases({ seq: { publicId: "pub2" } }), "seq")).toEqual([]);
   });
 });
