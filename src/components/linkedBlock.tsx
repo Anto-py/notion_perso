@@ -25,8 +25,10 @@ import {
   type Values,
 } from "@/lib/properties";
 import {
+  legacyLinkedViews,
   linkedConfigText,
   linkedViews,
+  missingLegacyViews,
   parseLinkedConfig,
   pickView,
   prefillValues,
@@ -95,6 +97,8 @@ function LinkedDatabase({ databaseId, config, onPick, onConfig }: Props) {
   // frappe de filtre puis un tri ne doivent pas se perdre l'un l'autre.
   const pending = useRef<LinkedConfig | null>(null);
   const root = useRef<HTMLDivElement | null>(null);
+  // Un ancien bloc ne promeut ses vues qu'une fois par montage.
+  const promoted = useRef(false);
   useEffect(() => () => clearTimeout(timer.current), []);
 
   // La base, sa configuration et ses entrées : relues à chaque écriture, sans
@@ -146,11 +150,39 @@ function LinkedDatabase({ databaseId, config, onPick, onConfig }: Props) {
 
   const properties = useMemo(() => loaded?.config.properties ?? [], [loaded]);
   const linked = useMemo(() => parseLinkedConfig(config), [config]);
+  // Vues copiées par un ancien bloc, avant l'héritage.
+  const legacy = useMemo(() => legacyLinkedViews(config), [config]);
   const baseViews = loaded?.config.views ?? [];
   // Les vues montrées sont celles de la base, chacune avec la surcharge que le
   // bloc porte pour elle. Aucun onglet local : la base fait référence.
   const views = useMemo(() => linkedViews(baseViews, linked, properties), [baseViews, linked, properties]);
   const view = pickView(views, activeId || linked.active);
+
+  // Un ancien bloc portait des vues copiées, désormais ignorées. Une fois, on
+  // ajoute à la base celles qu'elle n'a pas encore, puis le bloc adopte le
+  // nouveau format : aucune vue réglée dans le bloc ne disparaît en silence.
+  useEffect(() => {
+    if (!loaded || promoted.current || legacy.length === 0) return;
+    promoted.current = true;
+    const missing = missingLegacyViews(baseViews, legacy, properties);
+    const adopt = () => onConfig(linkedConfigText({ active: linked.active, overrides: {} }));
+    if (missing.length === 0) {
+      adopt();
+      return;
+    }
+    void (async () => {
+      const result = await send(`/api/databases/${loaded.database.id}`, "PATCH", {
+        views: [...baseViews, ...missing],
+        base: { views: baseViews },
+      });
+      if (!result.ok) {
+        setMessage(result.error);
+        return;
+      }
+      adopt();
+      reload();
+    })();
+  }, [loaded, baseViews, properties, legacy, linked.active, onConfig, reload]);
 
   function current(): LinkedConfig {
     return pending.current ?? linked;

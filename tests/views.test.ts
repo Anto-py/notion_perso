@@ -30,7 +30,9 @@ import {
   duplicateView,
   LEGACY_VIEW_ID,
   linkedConfigText,
+  legacyLinkedViews,
   linkedViews,
+  missingLegacyViews,
   newView,
   parseConfig,
   parseLinkedConfig,
@@ -523,6 +525,25 @@ describe("vue liée", () => {
     expect(withoutLinkedOverride(config, base.id).overrides).toEqual({});
     config = withLinkedOverride(config, base.id, {});
     expect(config.overrides).toEqual({});
+  });
+
+  it("retrouve les vues d'un ancien bloc absentes de la base", () => {
+    const legacy = [
+      { id: "view_ecole", name: "Ecole", kind: "board", group_by: "prop_statut" },
+      { id: "view_table", name: "Copie", kind: "table" },
+      { id: "id invalide", name: "Écartée", kind: "table" },
+      { id: "view_ecole", name: "Doublon", kind: "list" },
+    ];
+    const added = missingLegacyViews(baseViews, legacy, all);
+    expect(added.map((view) => view.id)).toEqual(["view_ecole"]);
+    expect(added[0]).toMatchObject({ name: "Ecole", kind: "board", group_by: "prop_statut" });
+  });
+
+  it("lit la liste de vues d'un ancien bloc, sans la confondre avec le nouveau format", () => {
+    expect(legacyLinkedViews(JSON.stringify({ views: [{ id: "v" }], active: "v" }))).toHaveLength(1);
+    expect(legacyLinkedViews("")).toEqual([]);
+    expect(legacyLinkedViews(JSON.stringify({ overrides: {} }))).toEqual([]);
+    expect(legacyLinkedViews("{pas du json")).toEqual([]);
   });
 
   it("fait l'aller-retour par le texte du bloc", () => {

@@ -429,6 +429,31 @@ export function withLinkedOverride(config: LinkedConfig, viewId: string, patch: 
   return { ...config, overrides: { ...config.overrides, [viewId]: patch } };
 }
 
+// Vues d'un ancien bloc, écrites avant l'héritage sous forme de liste copiée.
+// Elles ne sont plus lues, mais le bloc les promeut dans la base au premier
+// chargement, pour qu'un réglage fait dans le bloc ne disparaisse pas.
+export function legacyLinkedViews(raw: unknown): unknown[] {
+  const record = configRecord(raw);
+  return Array.isArray(record?.views) ? record.views : [];
+}
+
+// Vues d'un ancien bloc absentes de la base, prêtes à y être ajoutées : une
+// vue invalide est écartée, un id déjà présent n'est pas dupliqué, la limite
+// de vues de la base s'applique.
+export function missingLegacyViews(baseViews: readonly View[], legacy: unknown, properties: readonly Property[]): View[] {
+  if (!Array.isArray(legacy)) return [];
+  const ids = new Set(baseViews.map((view) => view.id));
+  const added: View[] = [];
+  for (const item of legacy) {
+    if (!isRecord(item) || typeof item.id !== "string" || !ID_PATTERN.test(item.id) || ids.has(item.id)) continue;
+    const view = sanitizeView({ ...item, id: item.id }, properties, item.id);
+    ids.add(view.id);
+    added.push(view);
+    if (baseViews.length + added.length >= VIEW_LIMITS.views) break;
+  }
+  return added;
+}
+
 // --- Galerie --------------------------------------------------------------
 
 // Image d'une carte : le bandeau de l'entrée, à défaut la première image de son
