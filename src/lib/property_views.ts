@@ -252,6 +252,9 @@ function canonicalIds(prop: Property, ids: readonly string[]): string[] {
 // - Sélection multiple : « Sans … » puis une colonne par combinaison de
 //   valeurs présente, rangée par nom.
 // - Case à cocher : « Non coché » puis « Coché ».
+// - Texte : « Sans … » puis une colonne par valeur distincte (espaces de bord
+//   retirés, casse respectée), rangée par nom. Un texte à virgules reste une
+//   seule valeur, comme dans Notion.
 // Les entrées gardent l'ordre reçu.
 export function groupEntries(entries: readonly EntryRow[], prop: Property): Column[] {
   const columns: Column[] = [];
@@ -278,6 +281,14 @@ export function groupEntries(entries: readonly EntryRow[], prop: Property): Colu
     let column: Column | undefined;
     if (prop.type === "checkbox") {
       column = byKey.get(value === true ? "true" : "false");
+    } else if (prop.type === "text") {
+      const text = typeof value === "string" ? value.trim() : "";
+      if (text === "") {
+        column = byKey.get(null);
+      } else {
+        const key = textKey(text);
+        column = byKey.get(key) ?? add(key, text, null, text);
+      }
     } else if (prop.type === "multiselect") {
       const ids = Array.isArray(value) ? canonicalIds(prop, value) : [];
       if (ids.length === 0) {
@@ -294,15 +305,21 @@ export function groupEntries(entries: readonly EntryRow[], prop: Property): Colu
     column?.entries.push(entry);
   }
 
-  // Les combinaisons d'une multi-sélection ne viennent pas du schéma : on les
-  // range par nom, après « Sans … », pour que leur ordre ne dépende pas de
-  // l'ordre d'arrivée des entrées.
-  if (prop.type === "multiselect") {
+  // Les combinaisons d'une multi-sélection et les valeurs d'un texte ne
+  // viennent pas du schéma : on les range par nom, après « Sans … », pour que
+  // leur ordre ne dépende pas de l'ordre d'arrivée des entrées.
+  if (prop.type === "multiselect" || prop.type === "text") {
     const [first, ...rest] = columns;
     rest.sort((a, b) => collator.compare(a.name, b.name));
     return [first, ...rest];
   }
   return columns;
+}
+
+// Clé d'une colonne de texte : un préfixe la distingue de NO_COLUMN, qu'une
+// valeur saisie pourrait sinon imiter.
+function textKey(text: string): string {
+  return `t:${text}`;
 }
 
 // Ordre manuel complet après un dépôt Kanban. allIds est l'ordre de toutes les

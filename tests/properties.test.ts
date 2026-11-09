@@ -13,6 +13,7 @@ import {
   migrateValues,
   moveInOrder,
   nextColor,
+  NO_COLUMN,
   normalizeValue,
   orphanValues,
   withNewOption,
@@ -120,7 +121,8 @@ describe("sanitizeView", () => {
     expect(sanitizeView({ kind: "board", group_by: "prop_tags" }, veille).group_by).toBe("prop_tags");
     expect(sanitizeView({ kind: "board" }, [tags, note]).group_by).toBe("prop_tags");
     expect(sanitizeView({ kind: "board" }, [lu, note]).group_by).toBe("prop_lu");
-    expect(sanitizeView({ kind: "board" }, [note, source]).group_by).toBeNull();
+    expect(sanitizeView({ kind: "board" }, [note, source]).group_by).toBe("prop_note");
+    expect(sanitizeView({ kind: "board" }, [source, date]).group_by).toBeNull();
   });
 
   it("garde les colonnes masquées qui existent, une seule fois, et rien d'une vue ancienne", () => {
@@ -313,6 +315,27 @@ describe("groupEntries", () => {
     expect(columns.map((column) => column.name)).toEqual(["Non coché", "Coché"]);
     expect(columns.map((column) => column.entries.map((e) => e.id))).toEqual([["y"], ["x"]]);
     expect(columns.map((column) => column.value)).toEqual([null, true]);
+  });
+
+  it("groupe un texte par valeur distincte, après « Sans » et par ordre alphabétique", () => {
+    const columns = groupEntries(
+      [
+        entry("x", { prop_note: "Prof" }),
+        entry("y", {}),
+        entry("z", { prop_note: "Astro" }),
+        entry("w", { prop_note: " Prof " }),
+        entry("v", { prop_note: "EI, Techno péda" }),
+      ],
+      note,
+    );
+    expect(columns.map((column) => column.name)).toEqual(["Sans note", "Astro", "EI, Techno péda", "Prof"]);
+    expect(columns.map((column) => column.entries.map((e) => e.id))).toEqual([["y"], ["z"], ["v"], ["x", "w"]]);
+    expect(columns.map((column) => column.value)).toEqual([null, "Astro", "EI, Techno péda", "Prof"]);
+  });
+
+  it("ne confond pas une valeur de texte avec la clé de « Sans »", () => {
+    const columns = groupEntries([entry("x", { prop_note: "__none__" })], note);
+    expect(columns.map(columnKey)).toEqual([NO_COLUMN, "t:__none__"]);
   });
 });
 

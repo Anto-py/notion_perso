@@ -75,10 +75,10 @@ export function isSingleOptionType(type: PropertyType): boolean {
 }
 
 // Types sur lesquels un Kanban peut se regrouper : ceux dont les valeurs sont
-// discrètes (une option, une combinaison d'options, coché ou non). Le texte
-// libre, les liens et les dates restent hors du Kanban.
+// discrètes (une option, une combinaison d'options, coché ou non, un texte
+// distinct). Les liens, les dates et les nombres restent hors du Kanban.
 export function isGroupableType(type: PropertyType): boolean {
-  return type === "select" || type === "multiselect" || type === "checkbox";
+  return type === "select" || type === "multiselect" || type === "checkbox" || type === "text";
 }
 
 export const OPTION_COLORS = ["gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red"] as const;
