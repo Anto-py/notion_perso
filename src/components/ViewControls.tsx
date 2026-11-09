@@ -25,7 +25,7 @@ import {
   type Sort,
 } from "@/lib/properties";
 import { CALENDAR_SCALES, CALENDAR_SCALE_LABELS, type CalendarScale } from "@/lib/calendar";
-import { CARD_SIZE_LABELS, CARD_SIZES, type CardSize, type View } from "@/lib/views";
+import { CARD_SIZE_LABELS, CARD_SIZES, filterLabels, type CardSize, type View } from "@/lib/views";
 
 type Props = {
   properties: Property[];
@@ -82,18 +82,28 @@ export function ViewControls({ properties, view, columns, onChange }: Props) {
     <div className="view-controls">
       {view.kind === "board" && groupables.length > 0 && (
         <div className="control-row">
-          <span className="control-label">Regroupement</span>
-          <select
-            aria-label="Propriété de regroupement"
-            value={view.group_by ?? groupables[0].id}
-            onChange={(event) => onChange({ ...view, group_by: event.target.value })}
+          <button
+            type="button"
+            className="control-label control-fold"
+            aria-expanded={view.group_open}
+            onClick={() => onChange({ ...view, group_open: !view.group_open })}
           >
-            {groupables.map((prop) => (
-              <option key={prop.id} value={prop.id}>
-                {prop.name}
-              </option>
-            ))}
-          </select>
+            <span aria-hidden="true">{view.group_open ? "▾" : "▸"}</span> Regroupement
+            {!view.group_open && groupProp ? ` : ${groupProp.name}` : ""}
+          </button>
+          {view.group_open && (
+            <select
+              aria-label="Propriété de regroupement"
+              value={view.group_by ?? groupables[0].id}
+              onChange={(event) => onChange({ ...view, group_by: event.target.value })}
+            >
+              {groupables.map((prop) => (
+                <option key={prop.id} value={prop.id}>
+                  {prop.name}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       )}
 
@@ -152,39 +162,64 @@ export function ViewControls({ properties, view, columns, onChange }: Props) {
         </div>
       )}
 
-      {view.filters.map((filter, index) => {
-        const prop = filterable.find((p) => p.id === filter.prop) ?? TITLE_PROP;
-        return (
-          <div className="control-row" key={index}>
-            <span className="control-label">{index === 0 ? "Filtre" : "et"}</span>
-            <select
-              aria-label="Propriété filtrée"
-              value={prop.id}
-              onChange={(event) => {
-                const next = filterable.find((p) => p.id === event.target.value) ?? TITLE_PROP;
-                setFilter(index, { prop: next.id, op: filterOpsFor(next)[0], value: "" });
-              }}
-            >
-              {filterable.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-            <select aria-label="Condition" value={filter.op} onChange={(event) => setFilter(index, { ...filter, op: event.target.value as FilterOp })}>
-              {filterOpsFor(prop).map((op) => (
-                <option key={op} value={op}>
-                  {OP_LABELS[op]}
-                </option>
-              ))}
-            </select>
-            {opNeedsValue(filter.op) && <FilterValue prop={prop} filter={filter} onChange={(value, delay) => setFilter(index, { ...filter, value }, delay)} />}
-            <button type="button" className="ghost" aria-label="Retirer ce filtre" onClick={() => onChange({ ...view, filters: view.filters.filter((_, i) => i !== index) })}>
-              ✕
-            </button>
-          </div>
-        );
-      })}
+      {!view.filters_open && view.filters.length > 0 && (
+        <div className="control-row">
+          <button
+            type="button"
+            className="control-label control-fold"
+            aria-expanded={false}
+            onClick={() => onChange({ ...view, filters_open: true })}
+          >
+            <span aria-hidden="true">▸</span> Filtres ({view.filters.length}) : {filterLabels(view, properties).join(", ")}
+          </button>
+        </div>
+      )}
+
+      {view.filters_open &&
+        view.filters.map((filter, index) => {
+          const prop = filterable.find((p) => p.id === filter.prop) ?? TITLE_PROP;
+          return (
+            <div className="control-row" key={index}>
+              {index === 0 ? (
+                <button
+                  type="button"
+                  className="control-label control-fold"
+                  aria-expanded={true}
+                  onClick={() => onChange({ ...view, filters_open: false })}
+                >
+                  <span aria-hidden="true">▾</span> {view.filters.length > 1 ? `Filtres (${view.filters.length})` : "Filtre"}
+                </button>
+              ) : (
+                <span className="control-label">et</span>
+              )}
+              <select
+                aria-label="Propriété filtrée"
+                value={prop.id}
+                onChange={(event) => {
+                  const next = filterable.find((p) => p.id === event.target.value) ?? TITLE_PROP;
+                  setFilter(index, { prop: next.id, op: filterOpsFor(next)[0], value: "" });
+                }}
+              >
+                {filterable.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <select aria-label="Condition" value={filter.op} onChange={(event) => setFilter(index, { ...filter, op: event.target.value as FilterOp })}>
+                {filterOpsFor(prop).map((op) => (
+                  <option key={op} value={op}>
+                    {OP_LABELS[op]}
+                  </option>
+                ))}
+              </select>
+              {opNeedsValue(filter.op) && <FilterValue prop={prop} filter={filter} onChange={(value, delay) => setFilter(index, { ...filter, value }, delay)} />}
+              <button type="button" className="ghost" aria-label="Retirer ce filtre" onClick={() => onChange({ ...view, filters: view.filters.filter((_, i) => i !== index) })}>
+                ✕
+              </button>
+            </div>
+          );
+        })}
 
       {sorted &&
         view.sorts.map((sort, index) => (
@@ -264,7 +299,13 @@ export function ViewControls({ properties, view, columns, onChange }: Props) {
       )}
 
       <div className="control-actions">
-        <button type="button" className="ghost" onClick={() => onChange({ ...view, filters: [...view.filters, { prop: TITLE_PROP.id, op: "contains", value: "" }] })}>
+        <button
+          type="button"
+          className="ghost"
+          onClick={() =>
+            onChange({ ...view, filters_open: true, filters: [...view.filters, { prop: TITLE_PROP.id, op: "contains", value: "" }] })
+          }
+        >
           + Filtre
         </button>
         {sorted && unusedSort && (

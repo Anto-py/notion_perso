@@ -1278,6 +1278,20 @@ a {
   font-size: 0.9rem;
 }
 
+/* Étiquette cliquable d'un panneau qu'on plie : garde l'allure d'une étiquette,
+   sans le fond ni le cadre d'un bouton. */
+button.control-fold {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+button.control-fold:hover {
+  background: transparent;
+  color: var(--ink);
+}
+
 .control-actions button {
   color: var(--ink-soft);
 }

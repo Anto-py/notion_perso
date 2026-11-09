@@ -28,6 +28,7 @@ import {
   CARD_SIZE_DEFAULT,
   computeCalc,
   duplicateView,
+  filterLabels,
   LEGACY_VIEW_ID,
   linkedConfigText,
   legacyLinkedViews,
@@ -284,6 +285,31 @@ describe("vues", () => {
     );
     expect(prefillValues(view, all)).toEqual({ prop_statut: "s2", prop_tags: ["t1"], prop_lu: true });
     expect(prefillValues(sanitizeView({ filters: [{ prop: statut.id, op: "is_not", value: "s1" }] }, all), all)).toEqual({});
+  });
+
+  it("garde les panneaux ouverts par défaut et relit leur état replié", () => {
+    expect(sanitizeView({ id: "v_o" }, all)).toMatchObject({ group_open: true, filters_open: true });
+
+    const folded = sanitizeView({ id: "v_o", group_open: false, filters_open: false }, all);
+    expect(folded).toMatchObject({ group_open: false, filters_open: false });
+    expect(parseConfig({ properties: all, views: [folded] }).views[0]).toMatchObject({ group_open: false, filters_open: false });
+    expect(duplicateView([folded], folded, (prefix) => `${prefix}_x`)).toMatchObject({ group_open: false, filters_open: false });
+  });
+
+  it("nomme les propriétés filtrées pour le bandeau replié, sans doublon", () => {
+    const view = sanitizeView(
+      {
+        filters: [
+          { prop: statut.id, op: "is", value: "s1" },
+          { prop: statut.id, op: "is_not", value: "s2" },
+          { prop: note.id, op: "contains", value: "x" },
+          { prop: "title", op: "contains", value: "a" },
+        ],
+      },
+      all,
+    );
+    expect(filterLabels(view, all)).toEqual(["Statut", "Note", "Titre"]);
+    expect(filterLabels(sanitizeView({}, all), all)).toEqual([]);
   });
 });
 

@@ -84,12 +84,16 @@ const NUMERIC_CALCS: ReadonlySet<CalcOp> = new Set(["sum", "avg", "min", "max"])
 // column_widths : largeur en pixels d'une colonne, par propriété (« title »
 // pour le titre), propre à la vue et jamais au schéma. Absente, la colonne
 // reprend son calcul automatique.
+// group_open et filters_open : panneaux dépliés (vrai par défaut). Repliés,
+// leur bandeau garde le résumé de ce qui agit ; l'état est propre à la vue.
 export type View = {
   id: string;
   name: string;
   kind: ViewKind;
   group_by: string | null;
+  group_open: boolean;
   filters: Filter[];
+  filters_open: boolean;
   sorts: Sort[];
   hidden: string[];
   hidden_columns: Record<string, string[]>;
@@ -180,7 +184,9 @@ export function sanitizeView(raw: unknown, properties: readonly Property[], fall
     name: typedName || VIEW_LABELS[kind],
     kind,
     group_by: groupBy,
+    group_open: typeof view.group_open === "boolean" ? view.group_open : true,
     filters,
+    filters_open: typeof view.filters_open === "boolean" ? view.filters_open : true,
     sorts,
     hidden,
     hidden_columns: columnKeys(view.hidden_columns, properties),
@@ -197,6 +203,16 @@ export function sanitizeView(raw: unknown, properties: readonly Property[], fall
     frozen_header: typeof view.frozen_header === "boolean" ? view.frozen_header : false,
     column_widths: readColumnWidths(view.column_widths, properties),
   };
+}
+
+// Noms des propriétés filtrées, dans l'ordre et sans doublon, pour le bandeau
+// replié : « Statut, Note ».
+export function filterLabels(view: View, properties: readonly Property[]): string[] {
+  const names = view.filters.map((filter) => {
+    if (filter.prop === TITLE_PROP.id) return TITLE_PROP.name;
+    return properties.find((prop) => prop.id === filter.prop)?.name ?? TITLE_PROP.name;
+  });
+  return names.filter((name, index) => names.indexOf(name) === index);
 }
 
 // Clés de colonnes Kanban par propriété de regroupement : propriété disparue
