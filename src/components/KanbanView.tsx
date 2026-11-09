@@ -56,6 +56,7 @@ type Props = {
   allIds: string[]; // toutes les entrées de la base, masquées comprises
   onCreate: (values: Values) => void;
   onMove: (entryId: string, value: Value | null, order: string[]) => Promise<void>;
+  onRename: (entryId: string, title: string) => Promise<boolean>;
   onColumns: (patch: BoardColumnsPatch) => void;
 };
 
@@ -92,6 +93,7 @@ export function KanbanView({
   allIds,
   onCreate,
   onMove,
+  onRename,
   onColumns,
 }: Props) {
   // Toutes les colonnes, masquées comprises, dans l'ordre de la vue : un
@@ -217,6 +219,7 @@ export function KanbanView({
               hint={hint}
               collapsed={collapsed.has(columnKey(column))}
               onCreate={onCreate}
+              onRename={onRename}
               onToggle={() => toggleCollapsed(columnKey(column))}
               onHandleKey={(event) => onHandleKey(event, column)}
             />
@@ -226,7 +229,9 @@ export function KanbanView({
       <DragOverlay dropAnimation={null}>
         {dragging && (
           <div className="board-card drag-overlay-card">
-            {"card" in dragging ? <PageLabel row={dragging.card} /> : dragging.column.name}
+            <div className="board-card-head">
+              {"card" in dragging ? <PageLabel row={dragging.card} /> : dragging.column.name}
+            </div>
           </div>
         )}
       </DragOverlay>
@@ -257,11 +262,12 @@ type ColumnProps = {
   hint: Hint | null;
   collapsed: boolean;
   onCreate: (values: Values) => void;
+  onRename: (entryId: string, title: string) => Promise<boolean>;
   onToggle: () => void;
   onHandleKey: (event: KeyboardEvent) => void;
 };
 
-function BoardColumn({ column, groupProp, properties, hint, collapsed, onCreate, onToggle, onHandleKey }: ColumnProps) {
+function BoardColumn({ column, groupProp, properties, hint, collapsed, onCreate, onRename, onToggle, onHandleKey }: ColumnProps) {
   const key = columnKey(column);
   const drop = useDroppable({ id: COLUMN_PREFIX + key });
   const drag = useDraggable({ id: MOVE_PREFIX + key });
@@ -332,6 +338,7 @@ function BoardColumn({ column, groupProp, properties, hint, collapsed, onCreate,
               properties={properties}
               groupId={groupProp.id}
               hint={hint?.id === entry.id ? (hint.before ? "before" : "after") : null}
+              onRename={onRename}
             />
           ))}
         </div>

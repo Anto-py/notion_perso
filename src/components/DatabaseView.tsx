@@ -249,6 +249,18 @@ export function DatabaseView({ database, config, entries, databases, initialView
     router.push(`/page/${String(result.data.id)}`);
   }
 
+  // Titre écrit sur une carte : le PATCH de la page suffit, sans ouvrir l'entrée.
+  async function renameEntry(entryId: string, title: string): Promise<boolean> {
+    setMessage(null);
+    const result = await send(`/api/pages/${entryId}`, "PATCH", { title });
+    if (!result.ok) {
+      setMessage(result.error);
+      return false;
+    }
+    router.refresh();
+    return true;
+  }
+
   // Déplacement Kanban : valeur de groupe et ordre manuel partent dans la même
   // transaction, pour qu'une carte ne change jamais de colonne sans sa place.
   async function moveCard(entryId: string, value: Value | null, order: string[]) {
@@ -533,6 +545,7 @@ export function DatabaseView({ database, config, entries, databases, initialView
             allIds={entries.map((entry) => entry.id)}
             onCreate={createEntry}
             onMove={moveCard}
+            onRename={renameEntry}
             onColumns={(patch) => changeView(withBoardColumns(view, groupProp.id, patch))}
           />
         ) : (

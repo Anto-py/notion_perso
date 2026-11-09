@@ -27,7 +27,9 @@ function isBasesSide(parent: Placeable): boolean {
 // l'arbre), ou null si le rangement est permis. Une seule règle pour la
 // création, le déplacement, la restauration et la synchronisation.
 export function placementError(child: Placeable, parent: Placeable | null): string | null {
-  if (child.isBasesRoot) return parent ? "« Bases » reste à sa place." : null;
+  // « Bases » se déplace parmi les racines (l'ordre est une clé comme pour une
+  // page), mais ne se range jamais sous un autre élément.
+  if (child.isBasesRoot) return parent ? "« Bases » reste à la racine de l'arbre." : null;
   if (child.type === "entry") return "Une entrée vit dans sa base.";
   if (livesInBases(child.type)) {
     if (parent && isBasesSide(parent)) return null;

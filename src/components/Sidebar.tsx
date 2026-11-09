@@ -220,8 +220,7 @@ export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
                 <ul role="tree">
                   {tree.map((node) => (
                     <Fragment key={node.id}>
-                      {/* « Bases » reste en tête : pas de zone d'insertion avant lui. */}
-                      {!node.basesRoot && <TreeGap parentId={null} beforeId={node.id} depth={0} />}
+                      <TreeGap parentId={null} beforeId={node.id} depth={0} />
                       <TreeItem
                         node={node}
                         depth={0}

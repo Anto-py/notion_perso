@@ -51,9 +51,9 @@ function hrefOf(node: TreeNode): string {
 }
 
 export function TreeItem({ node, depth, activeId, expanded, onToggle, onCreate }: Props) {
-  // « Bases » ne se déplace pas ; une page ou un dossier reçoit un dépôt, le
-  // tri entre les deux est fait par placementError au lâcher.
-  const drag = useDraggable({ id: node.id, disabled: node.basesRoot });
+  // Chaque ligne se déplace, « Bases » compris : le tri à la racine, le refus
+  // d'un dépôt ailleurs, sont faits par placementError au lâcher.
+  const drag = useDraggable({ id: node.id });
   const drop = useDroppable({ id: node.id, disabled: node.type !== "page" && node.type !== "folder" });
   const [menu, setMenu] = useState(false);
   const open = expanded.has(node.id);
@@ -74,9 +74,8 @@ export function TreeItem({ node, depth, activeId, expanded, onToggle, onCreate }
         }}
         className={classes.join(" ")}
         style={{ paddingLeft: `${Math.min(depth, MAX_INDENT_DEPTH) * 14 + 4}px` }}
-        // Pas d'attributs de glisser sur « Bases » : dnd-kit y poserait
-        // aria-disabled, que le lecteur d'écran étend au lien et au « + ».
-        {...(node.basesRoot ? {} : { ...drag.attributes, ...drag.listeners })}
+        {...drag.attributes}
+        {...drag.listeners}
       >
         <button
           type="button"

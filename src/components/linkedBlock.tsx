@@ -183,6 +183,19 @@ function LinkedDatabase({ databaseId, config, onPick, onConfig }: Props) {
     });
   }
 
+  // Titre écrit sur une carte du Kanban : la page source est modifiée, puis le
+  // bloc relit la base.
+  async function renameEntry(entryId: string, title: string): Promise<boolean> {
+    setMessage(null);
+    const result = await send(`/api/pages/${entryId}`, "PATCH", { title });
+    if (!result.ok) {
+      setMessage(result.error);
+      return false;
+    }
+    reload();
+    return true;
+  }
+
   async function createEntry(values: Values = {}) {
     if (!loaded) return;
     setMessage(null);
@@ -345,6 +358,7 @@ function LinkedDatabase({ databaseId, config, onPick, onConfig }: Props) {
             allIds={loaded.entries.map((entry) => entry.id)}
             onCreate={(values) => void createEntry(values)}
             onMove={moveCard}
+            onRename={renameEntry}
             onColumns={(patch) => changeView(withBoardColumns(view, groupProp.id, patch))}
           />
         ) : (

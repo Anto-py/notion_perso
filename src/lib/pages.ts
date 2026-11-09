@@ -9,7 +9,7 @@ import { flattenToText } from "./blocks";
 import { newId } from "./ids";
 import { removeCitedEntries } from "./relation_query";
 import { emptyConfig } from "./views";
-import { orderBefore, wouldCreateCycle, type AbsentTarget, type TreeRow } from "./tree";
+import { basesHead, orderBefore, wouldCreateCycle, type AbsentTarget, type TreeRow } from "./tree";
 import { mergeWebSave, type WebFields } from "./web_save";
 
 export const TRASH_RETENTION_DAYS = 30;
@@ -24,7 +24,7 @@ const NOT_FOUND: Outcome = { ok: false, status: 404, error: "Page introuvable" }
 // leur base, pas dans la sidebar. Le Vide-cerveau y figure comme toute base,
 // dans « Bases », en plus de son épingle (étape 16).
 export async function listTreeRows(): Promise<TreeRow[]> {
-  return db
+  const rows = await db
     .select({
       id: pages.id,
       parentId: pages.parentId,
@@ -34,10 +34,21 @@ export async function listTreeRows(): Promise<TreeRow[]> {
       closed: pages.shareClosed,
       basesRoot: pages.isBasesRoot,
       inbox: pages.isInbox,
+      manualOrder: pages.manualOrder,
     })
     .from(pages)
     .where(and(isNull(pages.trashedAt), ne(pages.type, "entry")))
     .orderBy(asc(pages.manualOrder), asc(pages.createdAt));
+  return basesHead(rows).map((row) => ({
+    id: row.id,
+    parentId: row.parentId,
+    type: row.type,
+    title: row.title,
+    icon: row.icon,
+    closed: row.closed,
+    basesRoot: row.basesRoot,
+    inbox: row.inbox,
+  }));
 }
 
 // Cibles de blocs-liens absentes de l'arbre, en une requête : une page vivante

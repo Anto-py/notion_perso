@@ -2,7 +2,7 @@
 // importé par le serveur (contrôle du déplacement) comme par le navigateur
 // (refus immédiat pendant le glisser-déposer).
 import type { PageKind } from "./bases";
-import { keyBetween } from "./order_key";
+import { FIRST_KEY, keyBetween } from "./order_key";
 import { fold } from "./property_schema";
 
 export type TreeRow = {
@@ -23,7 +23,7 @@ export type TreeNode = TreeRow & { children: TreeNode[] };
 
 // Les lignes arrivent déjà triées : l'ordre des frères est conservé. Une page
 // dont le parent est absent de la liste (en corbeille) remonte à la racine,
-// pour ne jamais disparaître de la sidebar. « Bases » passe en tête.
+// pour ne jamais disparaître de la sidebar.
 export function buildTree(rows: TreeRow[]): TreeNode[] {
   const nodes = new Map(rows.map((row) => [row.id, { ...row, children: [] as TreeNode[] }]));
   const roots: TreeNode[] = [];
@@ -32,9 +32,20 @@ export function buildTree(rows: TreeRow[]): TreeNode[] {
     if (parent) parent.children.push(node);
     else roots.push(node);
   }
-  const head = roots.findIndex((node) => node.basesRoot);
-  if (head > 0) roots.unshift(...roots.splice(head, 1));
   return roots;
+}
+
+// « Bases » garde la tête de l'arbre tant qu'on ne l'a pas déplacé : la
+// migration lui laisse la clé d'ordre par défaut (`FIRST_KEY`). Un glisser
+// n'écrit cette clé qu'en tête de liste, où la mise en tête est sans effet ;
+// dès qu'une autre clé lui est écrite, ou qu'une ligne a été rangée devant lui
+// (clé plus petite), sa place suit l'ordre manuel. Appelé par `listTreeRows`.
+export function basesHead<T extends TreeRow & { manualOrder: string }>(rows: T[]): T[] {
+  const index = rows.findIndex((row) => row.basesRoot);
+  if (index < 0 || rows[index].manualOrder !== FIRST_KEY) return rows;
+  const behind = rows.some((row) => row.parentId === null && !row.basesRoot && row.manualOrder < FIRST_KEY);
+  if (behind || index === 0) return rows;
+  return [rows[index], ...rows.slice(0, index), ...rows.slice(index + 1)];
 }
 
 // Zones d'insertion du glisser (entre deux lignes) : l'identifiant porte le

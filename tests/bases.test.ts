@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BASES_ROOT_ID, fallbackParent, placementError, publishError, trashError } from "@/lib/bases";
-import { ancestorRows, buildTree, linkChoices, type TreeRow } from "@/lib/tree";
+import { FIRST_KEY } from "@/lib/order_key";
+import { ancestorRows, basesHead, buildTree, linkChoices, type TreeRow } from "@/lib/tree";
 
 const root = { type: "folder" as const, isBasesRoot: true };
 const folder = { type: "folder" as const };
@@ -28,7 +29,7 @@ describe("placementError", () => {
 
   it("laisse « Bases » à la racine et les entrées dans leur base", () => {
     expect(placementError(root, null)).toBeNull();
-    expect(placementError(root, folder)).toBe("« Bases » reste à sa place.");
+    expect(placementError(root, folder)).toBe("« Bases » reste à la racine de l'arbre.");
     expect(placementError({ type: "entry" }, page)).toBe("Une entrée vit dans sa base.");
   });
 
@@ -73,8 +74,8 @@ const rows: TreeRow[] = [
 ];
 
 describe("arbre avec « Bases »", () => {
-  it("met « Bases » en tête de l'arbre", () => {
-    expect(buildTree(rows).map((node) => node.id)).toEqual([BASES_ROOT_ID, "Veille"]);
+  it("garde l'ordre reçu, la mise en tête revenant à basesHead", () => {
+    expect(buildTree(rows).map((node) => node.id)).toEqual(["Veille", BASES_ROOT_ID]);
   });
 
   it("donne le fil d'une base, de la racine au parent", () => {
@@ -86,5 +87,28 @@ describe("arbre avec « Bases »", () => {
     const choices = linkChoices(rows, "Veille", "");
     expect(choices.map((choice) => choice.row.id)).toEqual(["Séquences", "Vide-cerveau"]);
     expect(choices[0].path).toEqual(["Bases", "Cours"]);
+  });
+});
+
+describe("basesHead", () => {
+  type Ordered = TreeRow & { manualOrder: string };
+  const at = (id: string, parentId: string | null, manualOrder: string, extra: Partial<TreeRow> = {}): Ordered => ({
+    ...row(id, parentId, "page", extra),
+    manualOrder,
+  });
+
+  it("remonte « Bases » en tête tant qu'il garde la clé par défaut", () => {
+    const ordered = [at("Veille", null, FIRST_KEY), at(BASES_ROOT_ID, null, FIRST_KEY, { basesRoot: true })];
+    expect(basesHead(ordered).map((line) => line.id)).toEqual([BASES_ROOT_ID, "Veille"]);
+  });
+
+  it("respecte une clé écrite par un déplacement", () => {
+    const ordered = [at("Veille", null, FIRST_KEY), at(BASES_ROOT_ID, null, "a5", { basesRoot: true })];
+    expect(basesHead(ordered).map((line) => line.id)).toEqual(["Veille", BASES_ROOT_ID]);
+  });
+
+  it("ne remonte pas devant une ligne déjà rangée avant lui", () => {
+    const ordered = [at("Veille", null, "Zz"), at(BASES_ROOT_ID, null, FIRST_KEY, { basesRoot: true })];
+    expect(basesHead(ordered).map((line) => line.id)).toEqual(["Veille", BASES_ROOT_ID]);
   });
 });
