@@ -20,7 +20,7 @@ import {
 import { cardImage } from "@/lib/views";
 import { PageIcon, PageLabel } from "./PageIcon";
 import { ValueView, propIcon } from "./propertyUi";
-import { FilterValue } from "./ViewControls";
+import { CopyUrlButton } from "./CopyUrlButton";import { FilterValue } from "./ViewControls";
 import { SortButton, ariaSort, sortDir } from "./SortHeader";
 
 export function PublicDatabaseView({ data }: { data: PublicDatabaseData }) {
@@ -257,11 +257,18 @@ function PublicTable({
                   <PageLabel row={entry} mediaBase={mediaBase} />
                 </Link>
               </td>
-              {columns.map((prop) => (
-                <td key={prop.id}>
-                  <ValueView prop={prop} value={entry.values[prop.id]} links={entry.links?.[prop.id]} link={link} mediaBase={mediaBase} />
-                </td>
-              ))}
+              {columns.map((prop) => {
+                // Seule une cellule Lien reçoit le bouton : le texte affiché
+                // peut être un nom de domaine, l'adresse complète se copie là.
+                const value = entry.values[prop.id];
+                const url = prop.type === "url" && typeof value === "string" ? value.trim() : "";
+                return (
+                  <td key={prop.id} className={url ? "cell-url" : undefined}>
+                    <ValueView prop={prop} value={value} links={entry.links?.[prop.id]} link={link} mediaBase={mediaBase} />
+                    {url && <CopyUrlButton url={url} />}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>

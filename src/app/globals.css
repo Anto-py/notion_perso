@@ -3372,6 +3372,59 @@ mark.hit {
   font-weight: 500;
 }
 
+/* Cellule Lien : le bouton de copie se pose au bord droit, muet au repos pour
+   ne pas couvrir l'adresse, visible au survol ou au focus clavier. Sur un
+   écran tactile, où le survol n'existe pas, il reste affiché. */
+.public-table td.cell-url {
+  position: relative;
+}
+
+.copy-url {
+  position: absolute;
+  top: 50%;
+  right: 0.35rem;
+  transform: translateY(-50%);
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-inner);
+  background: var(--bg);
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  line-height: 1.3;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.public-table td.cell-url:hover .copy-url,
+.public-table td.cell-url:focus-within .copy-url,
+.copy-url:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.copy-url:hover {
+  color: var(--ink);
+  border-color: var(--ink-soft);
+}
+
+.copy-url[data-state="copied"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.copy-url[data-state="failed"] {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+@media (hover: none) {
+  .public-table td.cell-url .copy-url {
+    opacity: 0.75;
+    pointer-events: auto;
+  }
+}
+
 .public-footer {
   display: flex;
   flex-direction: column;
