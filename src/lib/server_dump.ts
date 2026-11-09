@@ -1,7 +1,8 @@
 // Copie du serveur (palier f de l'étape 12, SPECS « Copie du serveur ») : l'app
 // Mac recopie le dernier dump nocturne que Coolify laisse sur le VPS, le relit
-// dans la base jetable de la restauration d'essai, et en garde sept dans ses
-// sauvegardes, où il s'ouvre et se récupère comme les autres. App ouverte
+// dans la base jetable de la restauration d'essai, et le range dans ses
+// sauvegardes (vingt au total avec les autres), où il s'ouvre et se récupère
+// comme les autres. App ouverte
 // seulement : au démarrage, puis toutes les 6 h. Inerte sans BACKUP_DIR ni
 // SERVER_DUMP_HOST (VPS, développement). Rien ne s'écrit sur le VPS : un ls et
 // une copie, par la clé SSH posée dans app.conf.
@@ -9,7 +10,7 @@ import { execFile } from "node:child_process";
 import { rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import { BACKUPS_KEPT, serverCopyAlert, serverCopyDue, serverCopyName, serverDumpDate, type ServerCopy } from "./backup_rules";
+import { excessBackups, serverCopyAlert, serverCopyDue, serverCopyName, serverDumpDate, type ServerCopy } from "./backup_rules";
 import { checkDump, failureMessage } from "./backup_trial";
 import { backupDir, listBackups, type BackupEntry } from "./backups";
 import { getSetting, setSetting } from "./settings";
@@ -116,7 +117,9 @@ async function attemptCopy(nowMs: number): Promise<ServerCopy | null> {
     return record({ at, remote, result: "unreadable", error: check.error });
   }
   await rename(partial, target);
-  for (const old of (await serverCopies()).slice(BACKUPS_KEPT.server)) {
+  // Quota global, toutes catégories : une copie serveur peut chasser une
+  // quotidienne plus ancienne qu'elle.
+  for (const old of excessBackups(await listBackups())) {
     await rm(path.join(/*turbopackIgnore: true*/ dir, old.name), { force: true });
   }
   return record({ at, remote, result: "copied" });

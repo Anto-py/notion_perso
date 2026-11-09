@@ -26,13 +26,13 @@
 #
 # Sauvegardes (SPECS.md, « Sauvegardes, par le lanceur ») : un dump de la base
 # locale au premier lancement du jour et avant chaque mise à jour, serveur
-# arrêté, donc avant toute migration locale ; 7 quotidiennes et 3 d'avant mise
-# à jour gardées. Pas de migration sans dump : un dump raté reporte la mise à
-# jour. Synchronisation suspendue et version neuve : une fenêtre demande
-# l'accord, la version actuelle étant gardée par défaut. Le serveur recopie de
-# lui-même le dump nocturne du VPS dans le même dossier (serveur_*.dmp, 7
-# gardées, lib/server_dump.ts) quand les trois réglages NOTION_APP_VPS_* sont
-# posés.
+# arrêté, donc avant toute migration locale ; 20 sauvegardes au total, toutes
+# catégories confondues, les plus anciennes effacées. Pas de migration sans
+# dump : un dump raté reporte la mise à jour. Synchronisation suspendue et
+# version neuve : une fenêtre demande l'accord, la version actuelle étant
+# gardée par défaut. Le serveur recopie de lui-même le dump nocturne du VPS
+# dans le même dossier (serveur_*.dmp, lib/server_dump.ts, même quota global)
+# quand les trois réglages NOTION_APP_VPS_* sont posés.
 #
 # Superviseur : le lanceur garde le serveur en enfant. Un serveur qui sort en
 # 75 demande une bascule (versions/.demande : « maj <commit> » ou « secours ») ;
@@ -259,17 +259,21 @@ sauvegarder() {
   fi
 }
 
-# tourner <motif> <nombre> : garde les plus récentes par la date du nom (ses
-# deux derniers champs), l'ordre alphabétique rangeant les avant_maj par commit.
-tourner() {
-  find "$sauvegardes" -maxdepth 1 -type f -name "$1" \
-    | awk -F_ '{ print $(NF-1) "_" $NF "\t" $0 }' | sort -r | tail -n +"$(($2 + 1))" | cut -f2- \
+# tourner_total <nombre> : garde les plus récentes, toutes catégories
+# confondues (quotidiennes, avant mise à jour, copies du serveur), par la date
+# du nom (ses deux derniers champs) ; l'ordre alphabétique rangerait les
+# avant_maj par commit. Les dumps manuels d'avant migration ne portent pas ces
+# préfixes et restent hors rotation.
+tourner_total() {
+  find "$sauvegardes" -maxdepth 1 -type f \
+    \( -name 'quotidienne_*.dmp' -o -name 'avant_maj_*.dmp' -o -name 'serveur_*.dmp' \) \
+    | awk -F_ '{ print $(NF-1) "_" $NF "\t" $0 }' | sort -r | tail -n +"$(($1 + 1))" | cut -f2- \
     | while IFS= read -r ancienne; do rm -f "$ancienne"; done
 }
 
 if base_migree && ! compgen -G "$sauvegardes/quotidienne_$(date +%Y%m%d)_*.dmp" >/dev/null; then
   if sauvegarder quotidienne; then
-    tourner "quotidienne_*.dmp" 7
+    tourner_total 20
   else
     notifier "Sauvegarde du jour impossible (journal/lancer.log)"
     alerte_sauvegarde=daily_failed
@@ -321,7 +325,7 @@ basculer() {
   depuis="$(readlink "$courante" 2>/dev/null || true)"
   if [ "${2:-}" != sans_sauvegarde ] && base_migree; then
     sauvegarder "avant_maj_${vers:0:7}" || return 1
-    tourner "avant_maj_*.dmp" 3
+    tourner_total 20
   fi
   ln -sfn "$vers" "$courante"
   if [ -n "$depuis" ] && [ "$depuis" != "$vers" ]; then echo "$depuis" > "$versions/.secours"; fi

@@ -384,6 +384,33 @@ a {
   gap: 0.4rem;
 }
 
+/* Réglages › Sauvegardes : choix dans un menu déroulant, puis ouvrir ou
+   effacer. */
+.backup-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.8rem;
+  margin-top: 0.6rem;
+}
+
+.backup-picker label {
+  font-weight: 600;
+}
+
+.backup-picker select {
+  flex: 1 1 16rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.backup-delete {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 /* Réglages › Synchronisation : le motif d'une suspension automatique, puis
    « Suspendre » ou « Reprendre » au-dessus du seuil. */
 .settings-alert {

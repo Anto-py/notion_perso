@@ -45,9 +45,16 @@ export function backupMotive({ kind, commit }: Pick<BackupName, "kind" | "commit
   return `Avant mise à jour vers ${commit}`;
 }
 
-// Nombre gardé : par le lanceur pour les dumps du Mac (rotation dans
-// scripts/notion_lancer.sh), par lib/server_dump.ts pour les copies du serveur.
-export const BACKUPS_KEPT = { daily: 7, update: 3, server: 7 } as const;
+// Nombre gardé, toutes catégories confondues (quotidiennes, avant mise à jour,
+// copies du serveur) : les plus anciennes s'effacent. Les dumps manuels
+// d'avant migration ne portent pas ces noms et restent hors rotation.
+// Appliqué par scripts/notion_lancer.sh (tourner_total) et lib/server_dump.ts.
+export const BACKUPS_KEPT_TOTAL = 20;
+
+// Sauvegardes au-delà du quota, la plus ancienne d'abord.
+export function excessBackups<T extends { at: Date }>(entries: readonly T[], keep = BACKUPS_KEPT_TOTAL): T[] {
+  return sortBackups(entries).slice(keep);
+}
 
 // Un média effacé par la synchronisation ou le nettoyage passe 30 jours en
 // quarantaine, pour qu'une page reprise d'une sauvegarde retrouve ses images.

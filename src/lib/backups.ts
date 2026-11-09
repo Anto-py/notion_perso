@@ -2,7 +2,7 @@
 // dans BACKUP_DIR (scripts/notion_lancer.sh), le serveur les liste et les
 // ouvre en lecture seule (palier d de l'étape 12).
 import { execFile } from "node:child_process";
-import { readdir, stat } from "node:fs/promises";
+import { readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -119,6 +119,17 @@ export async function closeBackup(): Promise<void> {
   await closeBackupDb();
   if (dbName) await tool("dropdb", ["--if-exists", "--force", dbName]).catch(() => undefined);
   await setSetting("backup.open", null);
+}
+
+// Effacer une sauvegarde choisie. Le nom doit être un vrai dump de rotation :
+// les dumps manuels d'avant migration, hors liste, ne s'effacent pas d'ici.
+// Si c'est la sauvegarde ouverte, sa base de copie est déposée d'abord.
+export async function deleteBackup(name: string): Promise<void> {
+  const dir = backupDir();
+  if (!dir || !parseBackupName(name)) throw new Error("Sauvegarde inconnue");
+  const open = await readOpenBackup();
+  if (open?.name === name) await closeBackup();
+  await rm(path.join(/*turbopackIgnore: true*/ dir, name), { force: true });
 }
 
 // La sauvegarde ouverte, si son fichier est encore là. La rotation du lanceur

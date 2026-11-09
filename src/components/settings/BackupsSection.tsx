@@ -3,10 +3,9 @@
 // avec date, taille et motif, de quoi les ouvrir en lecture seule, l'état de
 // la dernière copie et le résultat de la restauration d'essai.
 import Link from "next/link";
-import { backupMotive, BACKUPS_KEPT, type BackupTrial, type OpenBackup, type ServerCopy } from "@/lib/backup_rules";
+import { BACKUPS_KEPT_TOTAL, type BackupTrial, type OpenBackup, type ServerCopy } from "@/lib/backup_rules";
 import type { BackupEntry } from "@/lib/backups";
-import { formatBytes } from "@/lib/sync_status";
-import { OpenBackupButton } from "./OpenBackupButton";
+import { BackupPicker } from "./BackupPicker";
 import { TrialReport } from "./TrialReport";
 
 const DATE = new Intl.DateTimeFormat("fr-BE", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Brussels" });
@@ -28,10 +27,11 @@ export function BackupsSection({
     <section id="sauvegardes" className="settings-section">
       <h2>Sauvegardes</h2>
       <p className="hint">
-        Une copie de la base locale à chaque premier lancement du jour et avant chaque mise à jour. Les{" "}
-        {BACKUPS_KEPT.daily} dernières quotidiennes et les {BACKUPS_KEPT.update} dernières d&apos;avant mise à jour sont
-        gardées. Le dump nocturne du serveur est recopié une fois par jour, app ouverte, et ses{" "}
-        {BACKUPS_KEPT.server} dernières copies sont gardées. Les images effacées passent 30 jours en quarantaine.
+        Une copie de la base locale à chaque premier lancement du jour et avant chaque mise à jour ; le dump nocturne du
+        serveur est recopié une fois par jour, app ouverte. Les {BACKUPS_KEPT_TOTAL} sauvegardes les plus récentes,
+        toutes catégories confondues, sont gardées : les plus anciennes s&apos;effacent. Les dumps manuels d&apos;avant
+        migration restent hors de ce compte. Choisis une sauvegarde dans la liste pour l&apos;ouvrir ou l&apos;effacer.
+        Les images effacées passent 30 jours en quarantaine.
       </p>
       {dir && <ServerCopyState {...server} />}
       {open && (
@@ -44,17 +44,7 @@ export function BackupsSection({
       ) : backups.length === 0 ? (
         <p className="hint">Aucune sauvegarde pour l&apos;instant.</p>
       ) : (
-        <ul className="settings-list">
-          {backups.map((backup) => (
-            <li key={backup.name}>
-              <span className="settings-list-name">{DATE.format(backup.at)}</span>
-              <span className="hint">
-                {backupMotive(backup)} · {formatBytes(backup.size)}
-              </span>
-              <OpenBackupButton name={backup.name} />
-            </li>
-          ))}
-        </ul>
+        <BackupPicker backups={backups} />
       )}
       {dir && <TrialReport trial={trial} />}
     </section>

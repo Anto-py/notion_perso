@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   backupDatabaseName,
   backupMotive,
+  excessBackups,
   parseBackupAlert,
   parseBackupName,
   parseBackupTrial,
@@ -65,6 +66,22 @@ describe("sortBackups", () => {
       "quotidienne_20261101_0800.dmp",
       "avant_maj_fff0000_20261030_1000.dmp",
     ]);
+  });
+});
+
+describe("excessBackups", () => {
+  it("rend les plus anciennes au-delà de vingt, toutes catégories confondues", () => {
+    const entries = Array.from({ length: 22 }, (_, i) => ({
+      at: new Date(Date.UTC(2026, 10, 1, 0, i)),
+      name: `s${i}`,
+    }));
+    expect(excessBackups(entries).map((e) => e.name)).toEqual(["s1", "s0"]);
+    expect(excessBackups(entries, 20)).toHaveLength(2);
+  });
+
+  it("ne rend rien tant que le quota n'est pas dépassé", () => {
+    const entries = [{ at: new Date("2026-11-01T08:00:00Z"), name: "a" }];
+    expect(excessBackups(entries)).toEqual([]);
   });
 });
 
