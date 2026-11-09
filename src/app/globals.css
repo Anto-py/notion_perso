@@ -1857,6 +1857,64 @@ a {
   padding: 0 0.4rem;
 }
 
+/* Replier tient à droite, le « + » le suit. */
+.board-fold {
+  margin-left: auto;
+  padding: 0 0.3rem;
+  color: var(--ink-soft);
+}
+
+.board-fold ~ .board-add {
+  margin-left: 0;
+}
+
+.board-column:hover .drag-handle {
+  opacity: 1;
+}
+
+.board-column .drag-handle {
+  padding: 0 0.1rem;
+}
+
+/* Colonne repliée : bande étroite, titre à la verticale, toujours cible de
+   dépôt ; ses cartes ne sont pas rendues. */
+.board-column.collapsed {
+  flex: 0 0 2.6rem;
+  align-items: center;
+  min-height: 12rem;
+  padding: 0.5rem 0.2rem;
+}
+
+.board-column.collapsed .board-column-head {
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.board-column.collapsed .board-fold {
+  margin-left: 0;
+}
+
+.board-column-vertical {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  writing-mode: vertical-rl;
+  white-space: nowrap;
+}
+
+/* Trait d'insertion d'une colonne tirée : à gauche ou à droite de la cible. */
+.board-column.drop-before {
+  box-shadow: -3px 0 0 var(--accent);
+}
+
+.board-column.drop-after {
+  box-shadow: 3px 0 0 var(--accent);
+}
+
+.board-column.dragging {
+  opacity: 0.4;
+}
+
 .board-cards {
   display: flex;
   flex-direction: column;

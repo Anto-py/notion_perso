@@ -219,6 +219,21 @@ export type Column = { key: string | null; name: string; color: OptionColor | nu
 // les clés sont des chaînes (null n'en est pas une).
 export const NO_COLUMN = "__none__";
 
+// Clé d'une colonne telle que les réglages de vue la rangent.
+export function columnKey(column: Column): string {
+  return column.key ?? NO_COLUMN;
+}
+
+// Colonnes dans l'ordre propre à une vue : celles que la liste nomme, dans
+// son ordre, puis les autres (option créée depuis, combinaison apparue) dans
+// l'ordre de groupEntries. Une liste vide rend l'ordre de groupEntries.
+export function arrangeColumns(columns: readonly Column[], order: readonly string[]): Column[] {
+  const rank = new Map(order.map((key, index) => [key, index]));
+  const named = columns.filter((column) => rank.has(columnKey(column)));
+  named.sort((a, b) => (rank.get(columnKey(a)) ?? 0) - (rank.get(columnKey(b)) ?? 0));
+  return [...named, ...columns.filter((column) => !rank.has(columnKey(column)))];
+}
+
 // « Statut » → « Sans statut » ; un sigle (« TVA ») garde sa casse.
 function withoutLabel(name: string): string {
   const lower = name.length > 1 && name[1] === name[1].toLowerCase() ? name[0].toLowerCase() + name.slice(1) : name;

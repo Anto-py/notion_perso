@@ -30,6 +30,7 @@ import {
   pickView,
   prefillValues,
   sanitizeViews,
+  withBoardColumns,
   type CalcOp,
   type DbConfig,
   type View,
@@ -337,11 +338,14 @@ function LinkedDatabase({ databaseId, config, onPick, onConfig }: Props) {
           <KanbanView
             groupProp={groupProp}
             properties={shown}
+            columnOrder={view.column_order[groupProp.id] ?? []}
             hiddenKeys={view.hidden_columns[groupProp.id] ?? []}
+            collapsedKeys={view.collapsed_columns[groupProp.id] ?? []}
             entries={visible}
             allIds={loaded.entries.map((entry) => entry.id)}
             onCreate={(values) => void createEntry(values)}
             onMove={moveCard}
+            onColumns={(patch) => changeView(withBoardColumns(view, groupProp.id, patch))}
           />
         ) : (
           <p className="hint">Le Kanban groupe les entrées par une propriété à valeurs discrètes.</p>

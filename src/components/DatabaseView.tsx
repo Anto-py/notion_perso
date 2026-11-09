@@ -26,7 +26,7 @@ import {
   type Value,
   type Values,
 } from "@/lib/properties";
-import { pickView, prefillValues, type CalcOp, type DbConfig, type View } from "@/lib/views";
+import { pickView, prefillValues, withBoardColumns, type CalcOp, type DbConfig, type View } from "@/lib/views";
 import { IconPicker } from "./IconPicker";
 import { CoverPicker } from "./CoverPicker";
 import { KanbanView } from "./KanbanView";
@@ -518,11 +518,14 @@ export function DatabaseView({ database, config, entries, databases, initialView
           <KanbanView
             groupProp={groupProp}
             properties={properties.filter((prop) => !view.hidden.includes(prop.id))}
+            columnOrder={view.column_order[groupProp.id] ?? []}
             hiddenKeys={view.hidden_columns[groupProp.id] ?? []}
+            collapsedKeys={view.collapsed_columns[groupProp.id] ?? []}
             entries={visible}
             allIds={entries.map((entry) => entry.id)}
             onCreate={createEntry}
             onMove={moveCard}
+            onColumns={(patch) => changeView(withBoardColumns(view, groupProp.id, patch))}
           />
         ) : (
           <div className="board-invite">

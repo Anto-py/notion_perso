@@ -73,6 +73,9 @@ const NUMERIC_CALCS: ReadonlySet<CalcOp> = new Set(["sum", "avg", "min", "max"])
 // propriétés absentes de la vue (colonnes, champs des cartes, valeurs de la
 // liste et de la galerie), toujours modifiables dans l'entrée.
 // hidden_columns : colonnes du Kanban masquées, par propriété de regroupement.
+// column_order : ordre des colonnes du Kanban propre à la vue, par propriété
+// de regroupement (le schéma n'en est pas touché). collapsed_columns :
+// colonnes repliées, titre visible et dépôt permis, cartes cachées.
 // calcs : calcul en pied de colonne, par propriété (« title » pour le titre).
 // card_size, show_title, calendar_scale et date_prop ne servent qu'aux vues
 // Galerie et Calendrier, mais sont relus pour toute vue : changer de type ne
@@ -87,6 +90,8 @@ export type View = {
   sorts: Sort[];
   hidden: string[];
   hidden_columns: Record<string, string[]>;
+  column_order: Record<string, string[]>;
+  collapsed_columns: Record<string, string[]>;
   calcs: Record<string, CalcOp>;
   card_size: CardSize;
   show_title: boolean;
@@ -144,13 +149,6 @@ export function sanitizeView(raw: unknown, properties: readonly Property[], fall
     (item, index, all): item is string => typeof item === "string" && all.indexOf(item) === index && properties.some((prop) => prop.id === item),
   );
 
-  const hiddenColumns: Record<string, string[]> = {};
-  if (isRecord(view.hidden_columns)) {
-    for (const [propId, keys] of Object.entries(view.hidden_columns)) {
-      if (!properties.some((prop) => prop.id === propId) || !Array.isArray(keys)) continue;
-      hiddenColumns[propId] = keys.filter((key, index, all): key is string => typeof key === "string" && all.indexOf(key) === index);
-    }
-  }
 
   const calcs: Record<string, CalcOp> = {};
   if (isRecord(view.calcs)) {
@@ -173,7 +171,9 @@ export function sanitizeView(raw: unknown, properties: readonly Property[], fall
     filters,
     sorts,
     hidden,
-    hidden_columns: hiddenColumns,
+    hidden_columns: columnKeys(view.hidden_columns, properties),
+    column_order: columnKeys(view.column_order, properties),
+    collapsed_columns: columnKeys(view.collapsed_columns, properties),
     calcs,
     card_size: (CARD_SIZES as readonly unknown[]).includes(view.card_size) ? (view.card_size as CardSize) : CARD_SIZE_DEFAULT,
     show_title: typeof view.show_title === "boolean" ? view.show_title : true,
@@ -183,6 +183,33 @@ export function sanitizeView(raw: unknown, properties: readonly Property[], fall
     date_prop: dateProp,
     frozen_first_column: typeof view.frozen_first_column === "boolean" ? view.frozen_first_column : false,
     frozen_header: typeof view.frozen_header === "boolean" ? view.frozen_header : false,
+  };
+}
+
+// Clés de colonnes Kanban par propriété de regroupement : propriété disparue
+// écartée, doublons et valeurs non textuelles retirés. Une clé d'option
+// supprimée peut rester, elle ne désigne plus aucune colonne et reste muette.
+function columnKeys(raw: unknown, properties: readonly Property[]): Record<string, string[]> {
+  const result: Record<string, string[]> = {};
+  if (!isRecord(raw)) return result;
+  for (const [propId, keys] of Object.entries(raw)) {
+    if (!properties.some((prop) => prop.id === propId) || !Array.isArray(keys)) continue;
+    result[propId] = keys.filter((key, index, all): key is string => typeof key === "string" && all.indexOf(key) === index);
+  }
+  return result;
+}
+
+// Réglage des colonnes du Kanban pour une propriété de regroupement : ordre,
+// colonnes masquées ou repliées. Les autres propriétés gardent les leurs.
+export type BoardColumnsPatch = { order?: string[]; hidden?: string[]; collapsed?: string[] };
+
+export function withBoardColumns(view: View, propId: string, patch: BoardColumnsPatch): View {
+  const set = (current: Record<string, string[]>, keys: string[] | undefined) => (keys ? { ...current, [propId]: keys } : current);
+  return {
+    ...view,
+    column_order: set(view.column_order, patch.order),
+    hidden_columns: set(view.hidden_columns, patch.hidden),
+    collapsed_columns: set(view.collapsed_columns, patch.collapsed),
   };
 }
 

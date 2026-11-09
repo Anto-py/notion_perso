@@ -4,6 +4,7 @@
 // après un temps de calme.
 import { useEffect, useState } from "react";
 import {
+  arrangeColumns,
   isGroupableType,
   isOptionType,
   isTimeType,
@@ -273,7 +274,7 @@ export function ViewControls({ properties, view, columns, onChange, onReorderPro
       {view.kind === "board" && groupProp && boardColumnsOpen && (
         <div className="control-row" role="group" aria-label="Colonnes du Kanban">
           <span className="control-label">Colonnes</span>
-          {columns.map((column) => {
+          {arrangeColumns(columns, view.column_order[groupProp.id] ?? []).map((column) => {
             const key = column.key ?? NO_COLUMN;
             return (
               <label key={key} className="column-toggle">

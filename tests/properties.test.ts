@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { keyFromIndex } from "@/lib/order_key";
 import {
+  arrangeColumns,
   boardOrder,
   changeType,
+  columnKey,
   convertValue,
   countLosses,
   defaultSelectOptions,
@@ -24,7 +26,7 @@ import {
   type Property,
   type Values,
 } from "@/lib/properties";
-import { parseConfig, sanitizeView } from "@/lib/views";
+import { parseConfig, sanitizeView, withBoardColumns } from "@/lib/views";
 
 const tags: Property = {
   id: "prop_tags",
@@ -130,6 +132,24 @@ describe("sanitizeView", () => {
     const view = sanitizeView({ hidden_columns: { prop_statut: ["s1", "s1", 7], prop_inconnue: ["x"] } }, veille);
     expect(view.hidden_columns).toEqual({ prop_statut: ["s1"] });
     expect(sanitizeView({}, veille).hidden_columns).toEqual({});
+  });
+
+  it("garde l'ordre et les colonnes repliées du Kanban par propriété de regroupement", () => {
+    const view = sanitizeView(
+      { column_order: { prop_statut: ["s3", "__none__", "s3", 4], prop_inconnue: ["x"] }, collapsed_columns: { prop_statut: ["s1"], prop_statut2: "s1" } },
+      veille,
+    );
+    expect(view.column_order).toEqual({ prop_statut: ["s3", "__none__"] });
+    expect(view.collapsed_columns).toEqual({ prop_statut: ["s1"] });
+    expect(sanitizeView({}, veille)).toMatchObject({ column_order: {}, collapsed_columns: {} });
+  });
+
+  it("règle les colonnes d'une propriété de regroupement sans toucher aux autres", () => {
+    const view = sanitizeView({ hidden_columns: { prop_statut: ["s1"] }, column_order: { prop_lu: ["true", "false"] } }, veille);
+    const next = withBoardColumns(view, "prop_statut", { order: ["s2", "s1"], collapsed: ["s3"] });
+    expect(next.column_order).toEqual({ prop_lu: ["true", "false"], prop_statut: ["s2", "s1"] });
+    expect(next.collapsed_columns).toEqual({ prop_statut: ["s3"] });
+    expect(next.hidden_columns).toEqual({ prop_statut: ["s1"] });
   });
 });
 
@@ -293,6 +313,26 @@ describe("groupEntries", () => {
     expect(columns.map((column) => column.name)).toEqual(["Non coché", "Coché"]);
     expect(columns.map((column) => column.entries.map((e) => e.id))).toEqual([["y"], ["x"]]);
     expect(columns.map((column) => column.value)).toEqual([null, true]);
+  });
+});
+
+describe("arrangeColumns", () => {
+  const columns = groupEntries([entry("x", { prop_statut: "s2" })], statut);
+
+  it("rend l'ordre du schéma sans réglage de la vue", () => {
+    expect(arrangeColumns(columns, []).map(columnKey)).toEqual(["__none__", "s1", "s2", "s3"]);
+  });
+
+  it("suit l'ordre de la vue, puis range en fin ce qu'il ne nomme pas", () => {
+    expect(arrangeColumns(columns, ["s3", "__none__", "s1"]).map(columnKey)).toEqual(["s3", "__none__", "s1", "s2"]);
+  });
+
+  it("ignore une clé qui ne désigne plus aucune colonne", () => {
+    expect(arrangeColumns(columns, ["s_supprimee", "s2"]).map(columnKey)).toEqual(["s2", "__none__", "s1", "s3"]);
+  });
+
+  it("garde les cartes de chaque colonne", () => {
+    expect(arrangeColumns(columns, ["s2"])[0].entries.map((e) => e.id)).toEqual(["x"]);
   });
 });
 
