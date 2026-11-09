@@ -11,7 +11,7 @@ import type { Page } from "@/lib/pages";
 import { matchesFilters, normalizeValues, sortEntries, withTimes, type EntryRow, type LinkRef, type Property, type Values } from "@/lib/properties";
 import { crumbTrail } from "@/lib/publication";
 import { publicDatabaseData, type PublicDatabaseData } from "@/lib/public_view";
-import { parseLinkedConfig, pickView, type View } from "@/lib/views";
+import { linkedViews, parseLinkedConfig, pickView, type View } from "@/lib/views";
 import { PageCover } from "./PageCover";
 import { PublicDatabaseView } from "./PublicDatabaseView";
 import { PublicLinkedIslands, type LinkedIsland } from "./PublicLinkedIslands";
@@ -163,8 +163,9 @@ async function linkedBlockHtml(
   const base = await source.getPage(databaseId);
   if (!base || base.trashedAt || base.type !== "database") return closed;
   if (reach && !reach.node(base.id)) return closed;
-  const { properties } = configOf(base);
-  const view = pickView(parseLinkedConfig(config, properties).views);
+  const { properties, views: baseViews } = configOf(base);
+  const linked = parseLinkedConfig(config);
+  const view = pickView(linkedViews(baseViews, linked, properties), linked.active);
   const entries = sortEntries(
     (await source.listEntries(base.id))
       .filter((entry) => matchesFilters(entry, view.filters, properties))

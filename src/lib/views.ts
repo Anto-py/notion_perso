@@ -352,11 +352,17 @@ export function prefillValues(view: View, properties: readonly Property[]): Valu
 
 // --- Vue liée -------------------------------------------------------------
 //
-// Un bloc « linked » montre une base existante avec des vues qui lui sont
-// propres : elles vivent dans le bloc, sous forme de texte JSON, jamais dans
-// la base source. Ses filtres et tris ne touchent donc pas ceux de la base.
+// Un bloc « linked » montre une base existante. Ses vues sont celles de la
+// base : les onglets, leurs noms et leur ordre viennent d'elle, et le bloc ne
+// garde que des surcharges locales, par vue. Une surcharge posée dans le bloc
+// l'emporte pour ce bloc ; « Revenir à la base » l'efface. Une configuration
+// écrite avant l'héritage (liste `views` copiée) est ignorée : le bloc repart
+// de la base.
 
-export type LinkedConfig = { views: View[]; active: string };
+// Champs qu'une vue liée peut surcharger. L'identifiant, le nom et le type
+// restent ceux de la base : les onglets du bloc sont ceux de la base.
+export type ViewOverride = Partial<Omit<View, "id" | "name" | "kind">>;
+export type LinkedConfig = { active: string | null; overrides: Record<string, ViewOverride> };
 
 function configRecord(raw: unknown): Record<string, unknown> | null {
   if (typeof raw === "string") {
@@ -371,17 +377,56 @@ function configRecord(raw: unknown): Record<string, unknown> | null {
   return isRecord(raw) ? raw : null;
 }
 
-// Lecture tolérante : une configuration absente, illisible ou vidée par une
-// propriété supprimée retombe sur une vue Tableau.
-export function parseLinkedConfig(raw: unknown, properties: readonly Property[]): LinkedConfig {
+// Lecture tolérante : texte vide, illisible ou ancien format donnent un bloc
+// qui suit la base, sans surcharge.
+export function parseLinkedConfig(raw: unknown): LinkedConfig {
   const record = configRecord(raw);
-  const views = sanitizeViews(record?.views, properties);
-  return { views, active: pickView(views, typeof record?.active === "string" ? record.active : null).id };
+  const overrides: Record<string, ViewOverride> = {};
+  if (isRecord(record?.overrides)) {
+    for (const [viewId, patch] of Object.entries(record.overrides)) {
+      if (isRecord(patch)) overrides[viewId] = patch as ViewOverride;
+    }
+  }
+  return { active: typeof record?.active === "string" ? record.active : null, overrides };
 }
 
 // Texte rangé dans la propriété du bloc.
 export function linkedConfigText(config: LinkedConfig): string {
   return JSON.stringify(config);
+}
+
+// Vues montrées par le bloc : celles de la base, chacune avec sa surcharge
+// locale relue contre les propriétés du moment. Une surcharge qui vise une vue
+// disparue ne sert plus. Le nom et l'identifiant restent ceux de la base.
+export function linkedViews(baseViews: readonly View[], config: LinkedConfig, properties: readonly Property[]): View[] {
+  return baseViews.map((base) => {
+    const patch = config.overrides[base.id];
+    if (!patch) return base;
+    return sanitizeView({ ...base, ...patch, id: base.id, name: base.name, kind: base.kind }, properties, base.id);
+  });
+}
+
+// Champs par lesquels une vue réglée dans le bloc s'écarte de celle de la base.
+// Vide, la vue suit la base : la surcharge est alors retirée.
+export function viewOverride(base: View, next: View): ViewOverride {
+  const patch: Record<string, unknown> = {};
+  for (const key of Object.keys(base)) {
+    if (key === "id" || key === "name" || key === "kind") continue;
+    const value = (next as Record<string, unknown>)[key];
+    if (JSON.stringify(value) !== JSON.stringify((base as Record<string, unknown>)[key])) patch[key] = value;
+  }
+  return patch as ViewOverride;
+}
+
+export function withoutLinkedOverride(config: LinkedConfig, viewId: string): LinkedConfig {
+  const overrides = { ...config.overrides };
+  delete overrides[viewId];
+  return { ...config, overrides };
+}
+
+export function withLinkedOverride(config: LinkedConfig, viewId: string, patch: ViewOverride): LinkedConfig {
+  if (Object.keys(patch).length === 0) return withoutLinkedOverride(config, viewId);
+  return { ...config, overrides: { ...config.overrides, [viewId]: patch } };
 }
 
 // --- Galerie --------------------------------------------------------------

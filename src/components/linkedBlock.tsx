@@ -26,14 +26,18 @@ import {
 } from "@/lib/properties";
 import {
   linkedConfigText,
+  linkedViews,
   parseLinkedConfig,
   pickView,
   prefillValues,
-  sanitizeViews,
+  viewOverride,
   withBoardColumns,
   withColumnWidth,
+  withLinkedOverride,
+  withoutLinkedOverride,
   type CalcOp,
   type DbConfig,
+  type LinkedConfig,
   type View,
 } from "@/lib/views";
 import { CalendarView } from "./CalendarView";
@@ -87,8 +91,10 @@ function LinkedDatabase({ databaseId, config, onPick, onConfig }: Props) {
   // Saisies en avance sur le serveur, comme dans DatabaseView.
   const [edits, setEdits] = useState<Record<string, Values>>({});
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  // Les vues de la base ont-elles déjà été copiées dans le bloc ?
-  const seeded = useRef(false);
+  // Dernière configuration voulue, avant que le bloc ne l'ait enregistrée : une
+  // frappe de filtre puis un tri ne doivent pas se perdre l'un l'autre.
+  const pending = useRef<LinkedConfig | null>(null);
+  const root = useRef<HTMLDivElement | null>(null);
   useEffect(() => () => clearTimeout(timer.current), []);
 
   // La base, sa configuration et ses entrées : relues à chaque écriture, sans
@@ -119,40 +125,70 @@ function LinkedDatabase({ databaseId, config, onPick, onConfig }: Props) {
     };
   }, [databaseId, version]);
 
+  // Revenir sur la page après avoir changé la base ailleurs : la relire, sauf
+  // si une saisie du bloc a le focus, pour ne pas effacer un brouillon.
+  useEffect(() => {
+    function refresh() {
+      if (document.visibilityState === "hidden") return;
+      const active = document.activeElement;
+      if (root.current && active instanceof HTMLElement && root.current.contains(active)) return;
+      reload();
+    }
+    window.addEventListener("focus", refresh);
+    window.addEventListener("pageshow", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("pageshow", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [reload]);
+
   const properties = useMemo(() => loaded?.config.properties ?? [], [loaded]);
-  const linked = useMemo(() => parseLinkedConfig(config, properties), [config, properties]);
-  // Avant que la configuration copiée ne soit enregistrée dans le bloc, les
-  // vues montrées sont celles de la base, pour que le bloc s'ouvre déjà rempli.
-  const views = config.trim() || !loaded ? linked.views : sanitizeViews(loaded.config.views, properties);
+  const linked = useMemo(() => parseLinkedConfig(config), [config]);
+  const baseViews = loaded?.config.views ?? [];
+  // Les vues montrées sont celles de la base, chacune avec la surcharge que le
+  // bloc porte pour elle. Aucun onglet local : la base fait référence.
+  const views = useMemo(() => linkedViews(baseViews, linked, properties), [baseViews, linked, properties]);
   const view = pickView(views, activeId || linked.active);
 
-  // Une première ouverture copie les vues de la base dans le bloc : elles lui
-  // appartiennent ensuite, et la base ne bouge plus. Le garde évite de réécrire
-  // la configuration à chaque rendu tant que la propriété n'a pas suivi.
-  useEffect(() => {
-    if (!loaded || config.trim() || seeded.current) return;
-    seeded.current = true;
-    const views = sanitizeViews(loaded.config.views, properties);
-    onConfig(linkedConfigText({ views, active: views[0].id }));
-  }, [loaded, config, properties, onConfig]);
+  function current(): LinkedConfig {
+    return pending.current ?? linked;
+  }
 
-  function persist(next: View[], active = view.id, delay = 0) {
+  function persist(next: LinkedConfig, delay = 0) {
+    pending.current = next;
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => onConfig(linkedConfigText({ views: next, active: pickView(next, active).id })), delay);
+    timer.current = setTimeout(() => {
+      if (pending.current === next) pending.current = null;
+      onConfig(linkedConfigText(next));
+    }, delay);
   }
 
   // Choisir un onglet, et enregistrer ce choix dans le bloc.
-  function selectView(id: string, next: View[] = views) {
+  function selectView(id: string) {
     setActiveId(id);
-    persist(next, id);
+    persist({ ...current(), active: id });
   }
 
+  // Un réglage du bloc devient une surcharge de la vue, comparée à celle de la
+  // base ; s'il rejoint la base, la surcharge disparaît. Seuls les champs que
+  // ce geste vient de changer sont repris : une modification encore en attente
+  // d'enregistrement n'est pas écrasée par le rendu précédent.
   function changeView(next: View, delay = 0) {
-    persist(
-      views.map((item) => (item.id === next.id ? next : item)),
-      next.id,
-      delay,
-    );
+    const base = baseViews.find((item) => item.id === next.id);
+    if (!base) return;
+    const config = current();
+    // La vue que vient de lire le panneau, et celle que la configuration en
+    // attente montre déjà : l'écart entre les deux est le geste de l'utilisateur.
+    const rendered = views.find((item) => item.id === next.id) ?? base;
+    const shown = linkedViews(baseViews, config, properties).find((item) => item.id === next.id) ?? base;
+    const merged = { ...shown, ...viewOverride(rendered, next) };
+    persist(withLinkedOverride(config, next.id, viewOverride(base, merged)), delay);
+  }
+
+  function resetView() {
+    persist(withoutLinkedOverride(current(), view.id));
   }
 
   function changeCalc(propId: string, op: CalcOp | null) {
@@ -273,7 +309,7 @@ function LinkedDatabase({ databaseId, config, onPick, onConfig }: Props) {
   const shown = properties.filter((prop) => !view.hidden.includes(prop.id));
 
   return (
-    <div className="linked-block" contentEditable={false}>
+    <div className="linked-block" ref={root} contentEditable={false}>
       <div className="linked-bar">
         <Link href={`/db/${loaded.database.id}`} className="linked-title">
           <PageLabel row={{ ...loaded.database, type: "database" }} />
@@ -282,6 +318,11 @@ function LinkedDatabase({ databaseId, config, onPick, onConfig }: Props) {
           <span className="badge" role="status">
             {hidden} {hidden > 1 ? "entrées masquées" : "entrée masquée"} par les filtres
           </span>
+        )}
+        {linked.overrides[view.id] && (
+          <button type="button" className="ghost linked-reset" onClick={resetView}>
+            Réglages locaux · Revenir à la base
+          </button>
         )}
         <Link href={`/db/${loaded.database.id}`} className="linked-open">
           Ouvrir dans Bases ↗
@@ -292,16 +333,7 @@ function LinkedDatabase({ databaseId, config, onPick, onConfig }: Props) {
           {message}
         </p>
       )}
-      <ViewTabs
-        views={views}
-        activeId={view.id}
-        properties={properties}
-        onSelect={selectView}
-        onChange={(next, nextActive) => {
-          const kept = next.some((item) => item.id === view.id) ? view.id : next[0].id;
-          selectView(nextActive ?? kept, next);
-        }}
-      />
+      <ViewTabs views={views} activeId={view.id} properties={properties} onSelect={selectView} editable={false} />
       <ViewControls properties={properties} view={view} columns={boardColumns} onChange={changeView} />
       {view.kind === "table" && (
         <TableView

@@ -30,6 +30,7 @@ import {
   duplicateView,
   LEGACY_VIEW_ID,
   linkedConfigText,
+  linkedViews,
   newView,
   parseConfig,
   parseLinkedConfig,
@@ -38,7 +39,10 @@ import {
   sanitizeView,
   sanitizeViews,
   VIEW_LABELS,
+  viewOverride,
   withColumnWidth,
+  withLinkedOverride,
+  withoutLinkedOverride,
 } from "@/lib/views";
 
 const duree: Property = { id: "prop_duree", name: "Durée", type: "number", format: "number" };
@@ -444,46 +448,87 @@ describe("calculs", () => {
 });
 
 describe("vue liée", () => {
-  it("retombe sur une vue Tableau quand la configuration du bloc est vide", () => {
-    const linked = parseLinkedConfig("", [duree]);
-    expect(linked.views).toHaveLength(1);
-    expect(linked.views[0].kind).toBe("table");
-    expect(linked.active).toBe(linked.views[0].id);
+  const baseViews = [
+    sanitizeView({ id: "view_table", name: "Tableau", kind: "table" }, all),
+    sanitizeView({ id: "view_liste", name: "Liste", kind: "list" }, all),
+  ];
+
+  it("part de la base, sans surcharge, quand la configuration est vide", () => {
+    const linked = parseLinkedConfig("");
+    expect(linked).toEqual({ active: null, overrides: {} });
+    const views = linkedViews(baseViews, linked, all);
+    expect(views.map((view) => view.id)).toEqual(["view_table", "view_liste"]);
+    expect(views[0].name).toBe("Tableau");
   });
 
-  it("relit une configuration écrite par le bloc, onglet actif compris", () => {
+  it("ignore une configuration d'avant l'héritage (vues copiées)", () => {
+    const linked = parseLinkedConfig(JSON.stringify({ views: [{ id: "view_copiee" }], active: "view_copiee" }));
+    expect(linked.overrides).toEqual({});
+    expect(linked.active).toBe("view_copiee");
+    expect(linkedViews(baseViews, linked, all).map((view) => view.id)).toEqual(["view_table", "view_liste"]);
+  });
+
+  it("applique une surcharge sans changer le nom, le type ni l'identifiant de la base", () => {
     const linked = parseLinkedConfig(
       JSON.stringify({
-        views: [
-          { id: "view_semaine", name: "Cette semaine", kind: "list" },
-          { id: "view_tout", name: "Tout", kind: "table" },
-        ],
-        active: "view_tout",
+        overrides: {
+          view_table: {
+            name: "Nom local",
+            kind: "list",
+            hidden: ["prop_note"],
+            sorts: [{ prop: "prop_prix", dir: "desc" }],
+            column_widths: { prop_note: 200 },
+          },
+        },
+        active: "view_table",
       }),
-      [duree],
     );
-    expect(linked.views.map((view) => view.id)).toEqual(["view_semaine", "view_tout"]);
-    expect(linked.active).toBe("view_tout");
-    expect(parseLinkedConfig(JSON.stringify({ views: [{ id: "view_a" }], active: "disparu" }), []).active).toBe("view_a");
+    const [view] = linkedViews(baseViews, linked, all);
+    expect(view).toMatchObject({
+      id: "view_table",
+      name: "Tableau",
+      kind: "table",
+      hidden: ["prop_note"],
+      sorts: [{ prop: "prop_prix", dir: "desc" }],
+      column_widths: { prop_note: 200 },
+    });
   });
 
-  it("écarte un filtre qui vise une propriété absente de la base source", () => {
+  it("écarte une surcharge qui vise une vue disparue et nettoie un réglage invalide", () => {
     const linked = parseLinkedConfig(
-      JSON.stringify({ views: [{ id: "view_a", filters: [{ prop: "prop_inconnue", op: "is_empty" }] }] }),
-      [duree],
+      JSON.stringify({
+        overrides: {
+          view_absente: { hidden: ["prop_note"] },
+          view_liste: { hidden: ["prop_inconnue"], card_size: "large" },
+        },
+      }),
     );
-    expect(linked.views[0].filters).toEqual([]);
+    const views = linkedViews(baseViews, linked, all);
+    expect(views).toHaveLength(2);
+    expect(views[1].hidden).toEqual([]);
+    expect(views[1].card_size).toBe("large");
   });
 
-  it("tolère un texte illisible sans lever", () => {
-    expect(parseLinkedConfig("{pas du json", [duree]).views).toHaveLength(1);
-    expect(parseLinkedConfig("null", [duree]).views).toHaveLength(1);
+  it("isole les champs qui s'écartent de la base, sans identifiant, nom ni type", () => {
+    const base = baseViews[0];
+    const next = { ...base, name: "autre nom", kind: "list" as const, hidden: ["prop_note"], column_widths: { prop_note: 240 } };
+    expect(viewOverride(base, next)).toEqual({ hidden: ["prop_note"], column_widths: { prop_note: 240 } });
+    expect(viewOverride(base, { ...base, name: "encore", kind: "list" })).toEqual({});
+  });
+
+  it("pose et retire une surcharge, la retirant quand elle rejoint la base", () => {
+    const base = baseViews[0];
+    let config = withLinkedOverride({ active: null, overrides: {} }, base.id, { hidden: ["prop_note"] });
+    expect(config.overrides[base.id]).toEqual({ hidden: ["prop_note"] });
+    expect(withoutLinkedOverride(config, base.id).overrides).toEqual({});
+    config = withLinkedOverride(config, base.id, {});
+    expect(config.overrides).toEqual({});
   });
 
   it("fait l'aller-retour par le texte du bloc", () => {
-    const linked = parseLinkedConfig("", [duree]);
-    expect(parseLinkedConfig(linkedConfigText({ ...linked, active: linked.views[0].id }), [duree])).toMatchObject({
-      active: linked.views[0].id,
-    });
+    const config = { active: "view_liste", overrides: { view_liste: { hidden: ["prop_note"] } } };
+    expect(parseLinkedConfig(linkedConfigText(config))).toEqual(config);
+    expect(parseLinkedConfig("{pas du json")).toEqual({ active: null, overrides: {} });
+    expect(parseLinkedConfig("null")).toEqual({ active: null, overrides: {} });
   });
 });

@@ -26,10 +26,13 @@ type Props = {
   activeId: string;
   properties: Property[];
   onSelect: (id: string) => void;
-  onChange: (views: View[], activeId?: string) => void;
+  onChange?: (views: View[], activeId?: string) => void;
+  // Faux dans une vue liée : les onglets sont ceux de la base, on ne les crée,
+  // renomme, duplique, déplace ni supprime pas.
+  editable?: boolean;
 };
 
-export function ViewTabs({ views, activeId, properties, onSelect, onChange }: Props) {
+export function ViewTabs({ views, activeId, properties, onSelect, onChange, editable = true }: Props) {
   const [menu, setMenu] = useState<"view" | "new" | null>(null);
   const [renaming, setRenaming] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -60,7 +63,7 @@ export function ViewTabs({ views, activeId, properties, onSelect, onChange }: Pr
   }, [menu]);
 
   function replace(next: View) {
-    onChange(views.map((view) => (view.id === next.id ? next : view)));
+    onChange?.(views.map((view) => (view.id === next.id ? next : view)));
   }
 
   function reorder(movedId: string, place: { before: string } | { after: string }) {
@@ -69,11 +72,11 @@ export function ViewTabs({ views, activeId, properties, onSelect, onChange }: Pr
       movedId,
       place,
     );
-    onChange(ids.map((id) => views.find((view) => view.id === id)!));
+    onChange?.(ids.map((id) => views.find((view) => view.id === id)!));
   }
 
   function onDragEnd({ active: dragged, over }: DragEndEvent) {
-    if (!over || dragged.id === over.id) return;
+    if (!editable || !over || dragged.id === over.id) return;
     const from = views.findIndex((view) => view.id === dragged.id);
     const to = views.findIndex((view) => view.id === over.id);
     reorder(String(dragged.id), from < to ? { after: String(over.id) } : { before: String(over.id) });
@@ -82,7 +85,7 @@ export function ViewTabs({ views, activeId, properties, onSelect, onChange }: Pr
   function create(kind: ViewKind) {
     const view = newView(views, kind, properties);
     setMenu(null);
-    onChange([...views, view], view.id);
+    onChange?.([...views, view], view.id);
   }
 
   return (
@@ -94,6 +97,7 @@ export function ViewTabs({ views, activeId, properties, onSelect, onChange }: Pr
               key={view.id}
               view={view}
               selected={view.id === active.id}
+              editable={editable}
               onSelect={() => {
                 setMenu(null);
                 onSelect(view.id);
@@ -104,7 +108,7 @@ export function ViewTabs({ views, activeId, properties, onSelect, onChange }: Pr
               }}
             />
           ))}
-          {views.length < VIEW_LIMITS.views && (
+          {editable && views.length < VIEW_LIMITS.views && (
             <button type="button" className="ghost view-tab-add" aria-label="Nouvelle vue" aria-expanded={menu === "new"} onClick={() => setMenu(menu === "new" ? null : "new")}>
               +
             </button>
@@ -112,7 +116,7 @@ export function ViewTabs({ views, activeId, properties, onSelect, onChange }: Pr
         </div>
       </DndContext>
 
-      {menu === "new" && (
+      {editable && menu === "new" && (
         <div className="view-menu" role="menu" aria-label="Type de la nouvelle vue">
           {VIEW_KINDS.map((kind) => (
             <button key={kind} type="button" role="menuitem" className="ghost" onClick={() => create(kind)}>
@@ -122,7 +126,7 @@ export function ViewTabs({ views, activeId, properties, onSelect, onChange }: Pr
         </div>
       )}
 
-      {menu === "view" && (
+      {editable && menu === "view" && (
         <div className="view-menu" role="menu" aria-label={`Vue ${active.name}`}>
           {renaming ? (
             <CommitInput
@@ -163,7 +167,7 @@ export function ViewTabs({ views, activeId, properties, onSelect, onChange }: Pr
               onClick={() => {
                 const copy = duplicateView(views, active);
                 setMenu(null);
-                onChange([...views.slice(0, index + 1), copy, ...views.slice(index + 1)], copy.id);
+                onChange?.([...views.slice(0, index + 1), copy, ...views.slice(index + 1)], copy.id);
               }}
             >
               Dupliquer
@@ -188,7 +192,7 @@ export function ViewTabs({ views, activeId, properties, onSelect, onChange }: Pr
             onClick={() => {
               const rest = views.filter((view) => view.id !== active.id);
               setMenu(null);
-              onChange(rest, rest[Math.max(0, index - 1)].id);
+              onChange?.(rest, rest[Math.max(0, index - 1)].id);
             }}
           >
             Supprimer
@@ -199,9 +203,21 @@ export function ViewTabs({ views, activeId, properties, onSelect, onChange }: Pr
   );
 }
 
-function Tab({ view, selected, onSelect, onMenu }: { view: View; selected: boolean; onSelect: () => void; onMenu: () => void }) {
-  const drag = useDraggable({ id: view.id });
-  const drop = useDroppable({ id: view.id });
+function Tab({
+  view,
+  selected,
+  editable,
+  onSelect,
+  onMenu,
+}: {
+  view: View;
+  selected: boolean;
+  editable: boolean;
+  onSelect: () => void;
+  onMenu: () => void;
+}) {
+  const drag = useDraggable({ id: view.id, disabled: !editable });
+  const drop = useDroppable({ id: view.id, disabled: !editable });
   const classes = ["view-tab"];
   if (selected) classes.push("selected");
   if (drag.isDragging) classes.push("dragging");
@@ -214,13 +230,19 @@ function Tab({ view, selected, onSelect, onMenu }: { view: View; selected: boole
         drop.setNodeRef(element);
       }}
     >
-      <button type="button" {...drag.attributes} {...drag.listeners} role="tab" aria-selected={selected} onClick={onSelect}>
+      <button
+        {...(editable ? { ...drag.attributes, ...drag.listeners } : {})}
+        type="button"
+        role="tab"
+        aria-selected={selected}
+        onClick={onSelect}
+      >
         <span className="view-tab-icon" aria-hidden="true">
           {VIEW_ICONS[view.kind]}
         </span>
         {view.name}
       </button>
-      {selected && (
+      {selected && editable && (
         <button type="button" className="ghost view-tab-more" aria-label={`Options de la vue ${view.name}`} onClick={onMenu}>
           ⋯
         </button>
