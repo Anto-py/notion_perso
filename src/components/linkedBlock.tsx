@@ -31,6 +31,7 @@ import {
   prefillValues,
   sanitizeViews,
   withBoardColumns,
+  withColumnWidth,
   type CalcOp,
   type DbConfig,
   type View,
@@ -313,6 +314,8 @@ function LinkedDatabase({ databaseId, config, onPick, onConfig }: Props) {
           onMoveEntry={moveEntry}
           frozenFirstColumn={view.frozen_first_column}
           frozenHeader={view.frozen_header}
+          columnWidths={view.column_widths}
+          onColumnWidth={(propId, width, delay) => changeView(withColumnWidth(view, propId, width), delay)}
           onCreate={() => void createEntry()}
           onSave={saveValue}
           onCreateOption={createOption}

@@ -27,9 +27,10 @@ import {
   type DragOverEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { useState, type KeyboardEvent } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import { TITLE_PROP, type EntryRow, type OrderPlace, type Property, type Sort, type Value } from "@/lib/properties";
 import { CALC_LABELS, calcOpsFor, calcText, computeCalc, type CalcOp } from "@/lib/views";
+import { ColumnResizer } from "./ColumnResizer";
 import { ExpandableCell } from "./ExpandableCell";
 import { PageLabel } from "./PageIcon";
 import { PropertyInput } from "./PropertyInput";
@@ -52,6 +53,10 @@ type Props = {
   onMoveEntry: (entryId: string, place: OrderPlace) => void;
   frozenFirstColumn: boolean;
   frozenHeader: boolean;
+  // Largeurs réglées à la main, propres à la vue, par propriété (« title »
+  // pour le titre). Une colonne absente reprend son calcul automatique.
+  columnWidths: Record<string, number>;
+  onColumnWidth: (propId: string, width: number, delay?: number) => void;
   onCreate: () => void;
   onSave: (entryId: string, propId: string, value: Value | null) => void;
   onCreateOption: (prop: Property, name: string) => Promise<string | null>;
@@ -82,6 +87,8 @@ export function TableView({
   onMoveEntry,
   frozenFirstColumn,
   frozenHeader,
+  columnWidths,
+  onColumnWidth,
   onCreate,
   onSave,
   onCreateOption,
@@ -95,6 +102,54 @@ export function TableView({
   const broken = entries[0]?.brokenRollups ?? [];
   const [dragging, setDragging] = useState<{ label: string; column: boolean } | null>(null);
   const [hint, setHint] = useState<Hint | null>(null);
+  // Largeur vivante pendant un glissement : elle s'affiche sans écrire, et
+  // seule la valeur du relâchement part au serveur.
+  const [preview, setPreview] = useState<{ propId: string; width: number } | null>(null);
+  const tableRef = useRef<HTMLTableElement | null>(null);
+
+  const widthOf = (propId: string) => (preview?.propId === propId ? preview.width : columnWidths[propId]);
+  // Le passage en table fixe dès la première largeur posée est ce qui rend la
+  // valeur exacte : en largeur automatique, le contenu peut l'emporter.
+  const fixed = preview !== null || Object.keys(columnWidths).length > 0;
+
+  function previewWidth(propId: string, width: number | null) {
+    setPreview(width === null ? null : { propId, width });
+  }
+
+  // Largeur qui montre la colonne entière : on mesure le contenu réel en
+  // disposant le tableau en max-content le temps d'une lecture, puis on
+  // restaure les styles avant que React ne repeigne. scrollWidth ne convient
+  // pas : il renvoie la largeur déjà contrainte de la cellule, pas celle du
+  // contenu.
+  function fitWidth(index: number): number | null {
+    const table = tableRef.current;
+    const col = table?.querySelectorAll("col")[index];
+    if (!table || !col) return null;
+    const style = table.style;
+    const savedLayout = style.tableLayout;
+    const savedWidth = style.width;
+    const savedCol = col.style.width;
+    const wasFixed = table.classList.contains("col-fixed");
+    // La poignée dépasse de 4 px à droite de l'en-tête : masquée, elle ne
+    // gonfle pas la mesure du contenu.
+    const handle = table.rows[0]?.cells[index]?.querySelector<HTMLElement>(".col-resize");
+    const savedDisplay = handle?.style.display;
+    if (handle) handle.style.display = "none";
+    table.classList.add("col-fixed");
+    style.tableLayout = "auto";
+    style.width = "max-content";
+    col.style.width = "";
+    const cell = table.rows[0]?.cells[index];
+    // scrollWidth rattrape ce que le contenu de l'en-tête déborde (icône de
+    // tri), que le rectangle de la cellule ne compte pas.
+    const measured = cell ? Math.max(Math.ceil(cell.getBoundingClientRect().width), cell.scrollWidth) : 0;
+    style.tableLayout = savedLayout;
+    style.width = savedWidth;
+    col.style.width = savedCol;
+    if (handle) handle.style.display = savedDisplay ?? "";
+    if (!wasFixed) table.classList.remove("col-fixed");
+    return measured > 0 ? measured + 2 : null;
+  }
 
   // Même motif que le Kanban : un léger déplacement à la souris, un appui
   // maintenu au doigt pour laisser défiler. MouseSensor, jamais PointerSensor.
@@ -162,21 +217,39 @@ export function TableView({
     >
       <div className="table-block">
         <div className={wrapClass}>
-          <table className="db-table">
+          <table ref={tableRef} className={fixed ? "db-table col-fixed" : "db-table"}>
+            <colgroup>
+              <col style={widthOf(TITLE_PROP.id) ? { width: `${widthOf(TITLE_PROP.id)}px` } : undefined} />
+              {properties.map((prop) => (
+                <col key={prop.id} style={widthOf(prop.id) ? { width: `${widthOf(prop.id)}px` } : undefined} />
+              ))}
+            </colgroup>
             <thead>
               <tr>
                 <th scope="col" aria-sort={ariaSort(sortDir(sorts, TITLE_PROP.id))}>
                   <SortButton label="Titre" icon="Aa" dir={sortDir(sorts, TITLE_PROP.id)} onCycle={() => onCycleSort(TITLE_PROP.id)} />
+                  <ColumnResizer
+                    label="Titre"
+                    width={widthOf(TITLE_PROP.id)}
+                    onResize={(value, delay) => onColumnWidth(TITLE_PROP.id, value, delay)}
+                    onPreview={(value) => previewWidth(TITLE_PROP.id, value)}
+                    onAutoFit={() => fitWidth(0)}
+                  />
                 </th>
-                {properties.map((prop) => (
+                {properties.map((prop, index) => (
                   <ColumnHead
                     key={prop.id}
                     prop={prop}
+                    index={index + 1}
+                    width={widthOf(prop.id)}
                     broken={broken.includes(prop.id)}
                     dir={sortDir(sorts, prop.id)}
                     hint={hint}
                     movable={!!onReorderProperty}
                     onCycle={() => onCycleSort(prop.id)}
+                    onColumnWidth={onColumnWidth}
+                    onPreview={previewWidth}
+                    onAutoFit={fitWidth}
                   />
                 ))}
               </tr>
@@ -239,18 +312,28 @@ export function TableView({
 // le tri).
 function ColumnHead({
   prop,
+  index,
+  width,
   broken,
   dir,
   hint,
   movable,
   onCycle,
+  onColumnWidth,
+  onPreview,
+  onAutoFit,
 }: {
   prop: Property;
+  index: number;
+  width: number | undefined;
   broken: boolean;
   dir: Sort["dir"] | null;
   hint: Hint | null;
   movable: boolean;
   onCycle: () => void;
+  onColumnWidth: (propId: string, width: number, delay?: number) => void;
+  onPreview: (propId: string, width: number | null) => void;
+  onAutoFit: (index: number) => number | null;
 }) {
   const drag = useDraggable({ id: COL + prop.id, disabled: !movable });
   const drop = useDroppable({ id: COL + prop.id, disabled: !movable });
@@ -276,6 +359,13 @@ function ColumnHead({
           ⚠
         </span>
       )}
+      <ColumnResizer
+        label={prop.name}
+        width={width}
+        onResize={(value, delay) => onColumnWidth(prop.id, value, delay)}
+        onPreview={(value) => onPreview(prop.id, value)}
+        onAutoFit={() => onAutoFit(index)}
+      />
     </th>
   );
 }

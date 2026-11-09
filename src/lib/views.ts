@@ -81,6 +81,9 @@ const NUMERIC_CALCS: ReadonlySet<CalcOp> = new Set(["sum", "avg", "min", "max"])
 // Galerie et Calendrier, mais sont relus pour toute vue : changer de type ne
 // les perd pas. frozen_first_column et frozen_header ne servent qu'au tableau
 // (editable et public), relus de même pour survivre à un changement de type.
+// column_widths : largeur en pixels d'une colonne, par propriété (« title »
+// pour le titre), propre à la vue et jamais au schéma. Absente, la colonne
+// reprend son calcul automatique.
 export type View = {
   id: string;
   name: string;
@@ -99,8 +102,17 @@ export type View = {
   date_prop: string | null;
   frozen_first_column: boolean;
   frozen_header: boolean;
+  column_widths: Record<string, number>;
 };
 export type DbConfig = { properties: Property[]; views: View[] };
+
+// Bornes d'une largeur de colonne : une valeur venue du navigateur ne peut ni
+// écraser une colonne ni déborder sans fin.
+export const COLUMN_WIDTH_LIMITS = { min: 60, max: 800 } as const;
+
+export function clampColumnWidth(width: number): number {
+  return Math.min(COLUMN_WIDTH_LIMITS.max, Math.max(COLUMN_WIDTH_LIMITS.min, Math.round(width)));
+}
 
 export const VIEW_LIMITS = { views: 20, name: 100 };
 // Id de la vue unique d'une configuration écrite avant l'étape 8 : fixe, pour
@@ -183,6 +195,7 @@ export function sanitizeView(raw: unknown, properties: readonly Property[], fall
     date_prop: dateProp,
     frozen_first_column: typeof view.frozen_first_column === "boolean" ? view.frozen_first_column : false,
     frozen_header: typeof view.frozen_header === "boolean" ? view.frozen_header : false,
+    column_widths: readColumnWidths(view.column_widths, properties),
   };
 }
 
@@ -197,6 +210,28 @@ function columnKeys(raw: unknown, properties: readonly Property[]): Record<strin
     result[propId] = keys.filter((key, index, all): key is string => typeof key === "string" && all.indexOf(key) === index);
   }
   return result;
+}
+
+// Largeurs de colonnes : propriété disparue, valeur non numérique ou non finie
+// écartée ; la largeur est ramenée dans les bornes et arrondie. « title »
+// désigne la colonne du titre, qui n'est pas dans les propriétés.
+function readColumnWidths(raw: unknown, properties: readonly Property[]): Record<string, number> {
+  const result: Record<string, number> = {};
+  if (!isRecord(raw)) return result;
+  const known = new Set([TITLE_PROP.id, ...properties.map((prop) => prop.id)]);
+  for (const [propId, value] of Object.entries(raw)) {
+    if (!known.has(propId) || typeof value !== "number" || !Number.isFinite(value)) continue;
+    result[propId] = clampColumnWidth(value);
+  }
+  return result;
+}
+
+// Largeur d'une colonne : null rend la colonne à son calcul automatique.
+export function withColumnWidth(view: View, propId: string, width: number | null): View {
+  const column_widths = { ...view.column_widths };
+  if (width === null) delete column_widths[propId];
+  else column_widths[propId] = clampColumnWidth(width);
+  return { ...view, column_widths };
 }
 
 // Réglage des colonnes du Kanban pour une propriété de regroupement : ordre,

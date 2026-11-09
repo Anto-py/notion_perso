@@ -38,6 +38,7 @@ import {
   sanitizeView,
   sanitizeViews,
   VIEW_LABELS,
+  withColumnWidth,
 } from "@/lib/views";
 
 const duree: Property = { id: "prop_duree", name: "Durée", type: "number", format: "number" };
@@ -322,6 +323,47 @@ describe("figeage", () => {
       frozen_header: true,
     });
     expect(duplicateView([frozen], frozen).frozen_header).toBe(true);
+  });
+});
+
+describe("largeurs de colonnes", () => {
+  it("part de rien et lit les largeurs connues, bornées et arrondies", () => {
+    expect(sanitizeView({ id: "v_l" }, all).column_widths).toEqual({});
+    expect(
+      sanitizeView(
+        {
+          id: "v_l",
+          column_widths: { title: 240, prop_note: 180.6, prop_disparue: 200, prop_lu: "large", prop_prix: 1, prop_duree: 5_000 },
+        },
+        all,
+      ).column_widths,
+    ).toEqual({ title: 240, prop_note: 181, prop_prix: 60, prop_duree: 800 });
+  });
+
+  it("écarte une valeur non finie", () => {
+    expect(sanitizeView({ id: "v_l", column_widths: { prop_note: Number.NaN, prop_prix: Number.POSITIVE_INFINITY } }, all).column_widths).toEqual({});
+  });
+
+  it("garde les largeurs en changeant de type, en dupliquant et en relisant la configuration", () => {
+    const vue = sanitizeView({ id: "v_l", kind: "table", column_widths: { title: 200, prop_note: 140 } }, all);
+    expect(sanitizeView({ ...vue, kind: "gallery" }, all, vue.id).column_widths).toEqual({ title: 200, prop_note: 140 });
+    expect(duplicateView([vue], vue).column_widths).toEqual({ title: 200, prop_note: 140 });
+    expect(parseConfig({ properties: all, views: [vue] }).views[0].column_widths).toEqual({ title: 200, prop_note: 140 });
+  });
+
+  it("pose une largeur, la borne, la retire sans toucher aux autres", () => {
+    const vue = sanitizeView({ id: "v_l" }, all);
+    const posee = withColumnWidth(vue, "prop_note", 300);
+    expect(posee.column_widths).toEqual({ prop_note: 300 });
+    expect(withColumnWidth(posee, "prop_prix", 10).column_widths).toEqual({ prop_note: 300, prop_prix: 60 });
+    expect(withColumnWidth(posee, "prop_note", null).column_widths).toEqual({});
+    // La vue d'origine n'est pas modifiée.
+    expect(vue.column_widths).toEqual({});
+  });
+
+  it("perd la largeur d'une propriété supprimée", () => {
+    const vue = sanitizeView({ id: "v_l", column_widths: { prop_note: 200, prop_disparue: 160 } }, [note, statut]);
+    expect(vue.column_widths).toEqual({ prop_note: 200 });
   });
 });
 

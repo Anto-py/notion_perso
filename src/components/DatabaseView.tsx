@@ -26,7 +26,7 @@ import {
   type Value,
   type Values,
 } from "@/lib/properties";
-import { pickView, prefillValues, withBoardColumns, type CalcOp, type DbConfig, type View } from "@/lib/views";
+import { pickView, prefillValues, withBoardColumns, withColumnWidth, type CalcOp, type DbConfig, type View } from "@/lib/views";
 import { IconPicker } from "./IconPicker";
 import { CoverPicker } from "./CoverPicker";
 import { KanbanView } from "./KanbanView";
@@ -490,6 +490,8 @@ export function DatabaseView({ database, config, entries, databases, initialView
           onMoveEntry={moveEntry}
           frozenFirstColumn={view.frozen_first_column}
           frozenHeader={view.frozen_header}
+          columnWidths={view.column_widths}
+          onColumnWidth={(propId, width, delay) => changeView(withColumnWidth(view, propId, width), delay)}
           onCreate={() => createEntry()}
           onSave={saveValue}
           onCreateOption={createOption}
