@@ -7,6 +7,7 @@ import {
   arrangeColumns,
   isGroupableType,
   isOptionType,
+  isSimpleType,
   isTimeType,
   filterOpsFor,
   isDateProp,
@@ -19,7 +20,6 @@ import {
   type Column,
   type Filter,
   type FilterOp,
-  type OrderPlace,
   type Property,
   type SelectOption,
   type Sort,
@@ -32,20 +32,21 @@ type Props = {
   view: View;
   columns: Column[];
   onChange: (view: View, delay?: number) => void;
-  // Réordonnancement du schéma, commun à la base : équivalent clavier du
-  // glisser de l'en-tête et seul moyen de bouger une colonne masquée.
-  onReorderProperty?: (propId: string, place: OrderPlace) => void;
 };
 
 const TYPING_DELAY = 500;
 
-export function ViewControls({ properties, view, columns, onChange, onReorderProperty }: Props) {
+export function ViewControls({ properties, view, columns, onChange }: Props) {
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [boardColumnsOpen, setBoardColumnsOpen] = useState(false);
   const [frozenOpen, setFrozenOpen] = useState(false);
   const frozenCount = [view.frozen_first_column, view.frozen_header].filter(Boolean).length;
   const filterable = [TITLE_PROP, ...properties];
   const groupables = properties.filter((prop) => isGroupableType(prop.type));
+  // Le tableau, la liste et la galerie ne montrent que les propriétés simples ;
+  // les cartes du Kanban gardent la liste complète, Relation et Cumul comprises.
+  const simpleProperties = properties.filter((prop) => isSimpleType(prop.type));
+  const toggleable = view.kind === "board" ? properties : simpleProperties;
   const dateProps = properties.filter((prop) => prop.type === "date");
   const groupProp = groupables.find((prop) => prop.id === view.group_by) ?? groupables[0];
   const hiddenColumnKeys = new Set(groupProp ? (view.hidden_columns[groupProp.id] ?? []) : []);
@@ -226,43 +227,15 @@ export function ViewControls({ properties, view, columns, onChange, onReorderPro
         </div>
       )}
 
-      {columnsOpen && properties.length > 0 && (
+      {columnsOpen && toggleable.length > 0 && (
         <div className="control-row" role="group" aria-label={fieldsLabel}>
           <span className="control-label">{view.kind === "table" ? "Colonnes" : "Champs"}</span>
-          {properties.map((prop, index) => (
+          {toggleable.map((prop) => (
             <span key={prop.id} className="column-item">
               <label className="column-toggle">
                 <input type="checkbox" checked={!view.hidden.includes(prop.id)} onChange={(event) => setShown(prop.id, event.target.checked)} />
                 {prop.name}
               </label>
-              {onReorderProperty && (
-                <>
-                  <button
-                    type="button"
-                    className="ghost mini"
-                    aria-label={`Déplacer ${prop.name} vers la gauche`}
-                    disabled={index === 0}
-                    onClick={() => {
-                      const target = properties[index - 1];
-                      if (target) onReorderProperty(prop.id, { before: target.id });
-                    }}
-                  >
-                    ←
-                  </button>
-                  <button
-                    type="button"
-                    className="ghost mini"
-                    aria-label={`Déplacer ${prop.name} vers la droite`}
-                    disabled={index === properties.length - 1}
-                    onClick={() => {
-                      const target = properties[index + 1];
-                      if (target) onReorderProperty(prop.id, { after: target.id });
-                    }}
-                  >
-                    →
-                  </button>
-                </>
-              )}
             </span>
           ))}
           {view.kind === "board" && groupProp && (
@@ -311,7 +284,7 @@ export function ViewControls({ properties, view, columns, onChange, onReorderPro
             {frozenCount > 0 && ` (${frozenCount})`}
           </button>
         )}
-        {properties.length > 0 && (
+        {toggleable.length > 0 && (
           <button type="button" className="ghost" aria-expanded={columnsOpen} onClick={() => setColumnsOpen(!columnsOpen)}>
             {fieldsLabel}
             {view.hidden.length > 0 &&

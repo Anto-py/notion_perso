@@ -9,6 +9,7 @@ import {
   countLosses,
   defaultSelectOptions,
   groupEntries,
+  isSimpleType,
   matchesFilters,
   migrateValues,
   moveInOrder,
@@ -65,6 +66,17 @@ const entry = (title: string, values: Values, extra: Partial<EntryRow> = {}): En
   createdAt: "2026-10-01T10:00:00.000Z",
   updatedAt: "2026-10-01T10:00:00.000Z",
   ...extra,
+});
+
+describe("propriétés simples", () => {
+  it("écarte les types calculés et liés", () => {
+    for (const type of ["text", "number", "url", "date", "select", "multiselect", "checkbox"] as const) {
+      expect(isSimpleType(type)).toBe(true);
+    }
+    for (const type of ["created_time", "updated_time", "relation", "rollup"] as const) {
+      expect(isSimpleType(type)).toBe(false);
+    }
+  });
 });
 
 describe("validateProperties", () => {

@@ -465,7 +465,7 @@ export function DatabaseView({ database, config, entries, databases, initialView
       )}
       {schemaOpen && <PropertySchemaEditor properties={properties} valuesList={valuesList} databases={databases} onChange={(next) => saveProperties(next)} />}
 
-      <ViewControls properties={properties} view={view} columns={boardColumns} onChange={changeView} onReorderProperty={reorderProperty} />
+      <ViewControls properties={properties} view={view} columns={boardColumns} onChange={changeView} />
       {view.kind === "table" && (
         <TableView
           properties={properties.filter((prop) => !view.hidden.includes(prop.id))}

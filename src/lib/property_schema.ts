@@ -37,6 +37,12 @@ export function isTimeType(type: PropertyType): boolean {
   return type === "created_time" || type === "updated_time";
 }
 
+// Propriétés simples : ni Relation ni Cumul, ni les dates système. Elles seules
+// figurent dans la liste des colonnes cochables d'une vue.
+export function isSimpleType(type: PropertyType): boolean {
+  return type !== "relation" && type !== "rollup" && !isTimeType(type);
+}
+
 export const NUMBER_FORMATS = ["number", "euro", "percent"] as const;
 export type NumberFormat = (typeof NUMBER_FORMATS)[number];
 export const FORMAT_LABELS: Record<NumberFormat, string> = { number: "Nombre", euro: "Euro", percent: "Pourcentage" };
