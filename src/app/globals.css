@@ -477,6 +477,33 @@ a {
   padding: 0.5rem 1.2rem;
 }
 
+/* Réglages › Adresse du site : l'adresse en clair et son bouton toujours
+   visible, contrairement à la cellule d'un tableau public. */
+.settings-address {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0 0 0.4rem;
+}
+
+.settings-address code {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-inner);
+  background: var(--bg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.95rem;
+  word-break: break-all;
+}
+
+.settings-copy .copy-url {
+  position: static;
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .settings-logout {
   margin-top: 1rem;
   padding-top: 0.8rem;

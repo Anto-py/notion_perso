@@ -3,6 +3,7 @@ import { AccountSection } from "@/components/settings/AccountSection";
 import { BackupsSection } from "@/components/settings/BackupsSection";
 import { DevicesSection } from "@/components/settings/DevicesSection";
 import { PublicViewSection } from "@/components/settings/PublicViewSection";
+import { SiteAddress } from "@/components/settings/SiteAddress";
 import { SyncSection } from "@/components/settings/SyncSection";
 import { VersionSection } from "@/components/settings/VersionSection";
 import { canSwitchVersion } from "@/lib/app_version";
@@ -31,9 +32,14 @@ export default function SettingsPage() {
 
 async function SettingsData() {
   const user = await getCurrentUser();
-  const sections = sectionsFor(currentInstance());
+  const instance = currentInstance();
+  const sections = sectionsFor(instance);
   return (
     <>
+      {/* L'adresse web de l'installation : sur le Mac, celle du site distant
+          (`SYNC_REMOTE_URL`), jamais localhost ; sur l'instance web, l'origine
+          de la page. */}
+      <SiteAddress webAddress={instance === "mac" ? (syncConfig()?.remote ?? "") : ""} />
       {sections.map((section) => (
         <Section key={section} section={section} username={user.username} />
       ))}
