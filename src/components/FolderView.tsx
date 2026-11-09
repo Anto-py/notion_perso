@@ -10,6 +10,7 @@ import { CommitInput } from "./CommitInput";
 import { IconPicker } from "./IconPicker";
 import { PageLabel } from "./PageIcon";
 import { send } from "./request";
+import { useTabMeta } from "./tabs_store";
 
 export type Crumb = { id: string; title: string; icon: string | null; type: string };
 
@@ -39,6 +40,7 @@ type Props = {
 
 export function FolderView({ folder, trail, items, basesInside }: Props) {
   const router = useRouter();
+  useTabMeta(`/page/${folder.id}`, folder.title, folder.icon, "folder");
   const [message, setMessage] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
 

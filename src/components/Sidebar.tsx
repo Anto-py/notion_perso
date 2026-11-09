@@ -18,7 +18,7 @@ import {
 } from "@dnd-kit/core";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { placementError } from "@/lib/bases";
 import { ancestorsOf, buildTree, GAP_PREFIX, parseGapId, wouldCreateCycle, type TreeRow } from "@/lib/tree";
 import { AUTHOR_NAME, CV_URL } from "@/lib/branding";
@@ -26,6 +26,7 @@ import { formatClock } from "@/lib/sync_status";
 import { PageLabel } from "./PageIcon";
 import { SearchBar } from "./SearchBar";
 import { SyncStatus } from "./SyncStatus";
+import { setTreeMeta } from "./tabs_store";
 import { TreeGap, TreeItem } from "./TreeItem";
 
 export const ROOT_DROP_ID = "__racine__";
@@ -49,10 +50,23 @@ type Props = {
 export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
   const router = useRouter();
   const pathname = usePathname();
-  const activeId = /^\/(page|db)\//.test(pathname) ? decodeURIComponent(pathname.split("/")[2]) : null;
+  // Le pathname diffère entre le HTML prérendu et le navigateur : le lire après
+  // le montage évite un écart d'hydratation, que React ne rattrape pas.
+  const [shownPathname, setShownPathname] = useState<string | null>(null);
+  useEffect(() => {
+    // Après le montage : le premier rendu reste identique au HTML du serveur.
+    const timer = setTimeout(() => setShownPathname(pathname), 0);
+    return () => clearTimeout(timer);
+  }, [pathname]);
+  const activeId =
+    shownPathname && /^\/(page|db)\//.test(shownPathname) ? decodeURIComponent(shownPathname.split("/")[2]) : null;
 
   const tree = useMemo(() => buildTree(rows), [rows]);
   const parentOf = useMemo(() => new Map(rows.map((row) => [row.id, row.parentId])), [rows]);
+
+  // Titres et icônes des onglets : l'arbre les fournit, y compris aux onglets
+  // inactifs. Une entrée de base, absente de l'arbre, les publie elle-même.
+  useEffect(() => setTreeMeta(rows), [rows]);
 
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [shownFor, setShownFor] = useState<string | null>(null);
@@ -175,7 +189,7 @@ export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
               + Nouvelle base
             </button>
           </div>
-          <Link href="/inbox" className={pathname === "/inbox" ? "inbox-link active" : "inbox-link"}>
+          <Link href="/inbox" className={shownPathname === "/inbox" ? "inbox-link active" : "inbox-link"}>
             <span>Vide-cerveau</span>
             {inboxCount > 0 && (
               <span className="inbox-count" aria-label={`${inboxCount} à traiter`}>
@@ -229,13 +243,13 @@ export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
           </DndContext>
         </SearchBar>
         <div className="sidebar-footer">
-          <Link href="/import" className={pathname === "/import" ? "active" : undefined}>
+          <Link href="/import" className={shownPathname === "/import" ? "active" : undefined}>
             Importer
           </Link>
-          <Link href="/trash" className={pathname === "/trash" ? "active" : undefined}>
+          <Link href="/trash" className={shownPathname === "/trash" ? "active" : undefined}>
             Corbeille
           </Link>
-          <Link href="/reglages" className={pathname === "/reglages" ? "active" : undefined}>
+          <Link href="/reglages" className={shownPathname === "/reglages" ? "active" : undefined}>
             Réglages
           </Link>
           <form method="post" action="/api/auth/logout">

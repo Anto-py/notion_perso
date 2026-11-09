@@ -16,6 +16,7 @@ import { PageLabel } from "./PageIcon";
 import { PropertyPanel } from "./PropertyPanel";
 import { SharePanel } from "./SharePanel";
 import { usePagePending } from "./SyncStatus";
+import { useTabMeta } from "./tabs_store";
 import { useAutosave, type RemotePage } from "./useAutosave";
 import { useSearchHighlight } from "./useSearchHighlight";
 import { useSubpages } from "./useSubpages";
@@ -69,11 +70,18 @@ export function PageView({ page, entry, directory, absent }: Props) {
   // Page relue au retour sur l'onglet : titre, icône et bandeau repartent de
   // cette version (key), le corps se pose sans recréer l'éditeur.
   const [shown, setShown] = useState({ generation: 0, title: page.title, icon: page.icon, cover: page.cover, coverPosition: page.coverPosition });
+  // Libellé de l'onglet : la page, ou l'entrée de base absente de l'arbre.
+  const [tabTitle, setTabTitle] = useState(page.title);
+  const [tabIcon, setTabIcon] = useState(page.icon);
+  useTabMeta(`/page/${page.id}`, tabTitle, tabIcon, page.type);
   const { status, queue, cancel, savedCount } = useAutosave(page.id, {
     initial: { rev: page.rev, title: page.title, body: page.body },
     // Un titre enregistré change la sidebar, rendue par le serveur.
     onSaved: (patch) => {
-      if (patch.title !== undefined) router.refresh();
+      if (patch.title !== undefined) {
+        setTabTitle(patch.title);
+        router.refresh();
+      }
     },
     // Le serveur a fusionné ce qui était parti avec une version venue
     // d'ailleurs ; les frappes tapées pendant l'aller-retour s'y reposent.
@@ -84,6 +92,8 @@ export function PageView({ page, entry, directory, absent }: Props) {
     },
     onRemote: (remote: RemotePage) => {
       editor.current?.replace(remote.body);
+      setTabTitle(remote.title);
+      setTabIcon(remote.icon);
       setShown((current) => ({
         generation: current.generation + 1,
         title: remote.title,

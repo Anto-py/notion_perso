@@ -1,6 +1,9 @@
+import { connection } from "next/server";
 import { Suspense } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { SyncStatusProvider } from "@/components/SyncStatus";
+import { TabBar } from "@/components/TabBar";
+import { TabsBridge } from "@/components/TabsBridge";
 import { canAccess } from "@/lib/access";
 import { getCurrentUser } from "@/lib/auth";
 import { AUTHOR_NAME } from "@/lib/branding";
@@ -18,7 +21,14 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
         <Suspense fallback={<SidebarSkeleton />}>
           <SidebarData />
         </Suspense>
-        <div className="app-main">{children}</div>
+        <div className="app-main">
+          {/* usePathname lit une donnée d'URL : avec cacheComponents, elle ne
+              se prérend qu'à l'intérieur d'une frontière Suspense. */}
+          <Suspense fallback={<div className="tabs" aria-hidden="true" />}>
+            <TabsShell />
+          </Suspense>
+          {children}
+        </div>
       </SyncStatusProvider>
     </div>
   );
@@ -48,5 +58,17 @@ function SidebarSkeleton() {
       <div className="skeleton" />
       <div className="skeleton short" />
     </aside>
+  );
+}
+
+// La barre lit usePathname : elle ne se prérend qu'à la requête, comme la
+// sidebar qui lit la session. Le repli garde la hauteur de la barre.
+async function TabsShell() {
+  await connection();
+  return (
+    <>
+      <TabsBridge />
+      <TabBar />
+    </>
   );
 }

@@ -40,6 +40,7 @@ import { send } from "./request";
 import { SharePanel } from "./SharePanel";
 import { TableView } from "./TableView";
 import { usePagePending } from "./SyncStatus";
+import { useTabMeta } from "./tabs_store";
 import { useAutosave } from "./useAutosave";
 import { ViewControls } from "./ViewControls";
 import { ViewTabs } from "./ViewTabs";
@@ -84,12 +85,19 @@ export function DatabaseView({ database, config, entries, databases, initialView
   const router = useRouter();
   // Titre relu au retour sur l'onglet, s'il a changé ailleurs (key).
   const [shownTitle, setShownTitle] = useState({ generation: 0, title: database.title });
+  // Libellé de l'onglet, tenu à jour par la même sauvegarde.
+  const [tabTitle, setTabTitle] = useState(database.title);
+  useTabMeta(`/db/${database.id}`, tabTitle, database.icon, "database");
   const { status, queue, cancel, savedCount } = useAutosave(database.id, {
     initial: { rev: database.rev, title: database.title, body: [] },
     onSaved: (patch) => {
-      if (patch.title !== undefined) router.refresh();
+      if (patch.title !== undefined) {
+        setTabTitle(patch.title);
+        router.refresh();
+      }
     },
     onRemote: (remote) => {
+      setTabTitle(remote.title);
       setShownTitle((current) => ({ generation: current.generation + 1, title: remote.title }));
       router.refresh();
     },

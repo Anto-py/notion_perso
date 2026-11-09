@@ -179,6 +179,111 @@ a {
   min-width: 0;
 }
 
+/* --- Onglets --------------------------------------------------------------
+   Barre collante en haut de la zone de contenu. La fenêtre défile, pas la
+   barre : elle reste visible, la page glisse dessous. */
+
+.tabs {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 2.7rem;
+  padding: 0.35rem 0.6rem 0.4rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 15rem;
+  border: 1px solid transparent;
+  border-radius: var(--r-inner);
+  color: var(--ink-soft);
+}
+
+.tab.active {
+  background: var(--bg-side);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.tab.dragging {
+  opacity: 0.35;
+}
+
+.tab.drop-before {
+  box-shadow: -2px 0 0 var(--accent);
+}
+
+.tab.drop-after {
+  box-shadow: 2px 0 0 var(--accent);
+}
+
+.tab-link {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0.3rem 0.4rem 0.3rem 0.6rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.tab-title {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tab-close {
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  background: transparent;
+  color: inherit;
+  opacity: 0;
+}
+
+.tab:hover .tab-close,
+.tab.active .tab-close,
+.tab-close:focus-visible {
+  opacity: 1;
+}
+
+.tab-close:hover {
+  background: var(--hover);
+}
+
+.tab-new {
+  flex: 0 0 auto;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-inner);
+  padding: 0.3rem 0.6rem;
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.tab-new:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.tab-overlay {
+  background: var(--bg-side);
+  border-color: var(--line);
+  color: var(--ink);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.12);
+}
+
 .sidebar {
   width: var(--sidebar-width);
   flex-shrink: 0;
@@ -2673,6 +2778,15 @@ mark.hit {
     background: var(--bg);
   }
 
+  /* La barre passe à droite du bouton « Menu », fixe au-dessus d'elle. */
+  .tabs {
+    padding-left: 3.9rem;
+  }
+
+  .tab {
+    max-width: 10rem;
+  }
+
   .sidebar {
     position: fixed;
     inset: 0 auto 0 0;
@@ -2690,6 +2804,12 @@ mark.hit {
 
   .page {
     padding: 3.2rem 1rem 4rem;
+  }
+
+  /* La barre d'onglets occupe déjà le haut : le bouton « Menu » n'a plus à
+     creuser un vide dans la page. */
+  .app-main .page {
+    padding-top: 0.5rem;
   }
 
   .page-title {
