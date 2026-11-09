@@ -277,6 +277,41 @@ a {
   color: var(--ink);
 }
 
+/* Bascule de la barre latérale, à gauche de la barre d'onglets sur ordinateur.
+   Le mobile garde son bouton « Menu », dans la barre elle-même. */
+.sidebar-toggle {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  flex: 0 0 auto;
+  border: none;
+  background: var(--bg);
+  padding: 0.3rem 0.5rem;
+  color: var(--ink-soft);
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.sidebar-toggle:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+/* Barre masquée par le réglage de l'appareil : le mobile garde son panneau
+   coulissant, commandé par « Menu ». */
+@media (min-width: 761px) {
+  :root[data-sidebar="hidden"] .sidebar {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .sidebar-toggle,
+  .sidebar-resizer {
+    display: none;
+  }
+}
+
 .tab-overlay {
   background: var(--bg-side);
   border-color: var(--line);
@@ -1465,7 +1500,8 @@ button.control-fold:hover {
    sélection de texte ; au doigt, touch-action: none empêche la page de défiler.
    Le tableau passe en disposition fixe dès qu'une largeur est posée, seule
    façon que la valeur demandée l'emporte sur le contenu. */
-.col-resize {
+.col-resize,
+.sidebar-resizer {
   position: absolute;
   top: 0;
   right: -4px;
@@ -1475,7 +1511,8 @@ button.control-fold:hover {
   touch-action: none;
 }
 
-.col-resize::after {
+.col-resize::after,
+.sidebar-resizer::after {
   content: "";
   position: absolute;
   top: 20%;
@@ -1488,16 +1525,20 @@ button.control-fold:hover {
 }
 
 .db-table th:hover .col-resize::after,
-.col-resize:focus-visible::after {
+.col-resize:focus-visible::after,
+.sidebar-resizer:hover::after,
+.sidebar-resizer:focus-visible::after {
   opacity: 0.5;
 }
 
-.col-resize:focus-visible {
+.col-resize:focus-visible,
+.sidebar-resizer:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
 
-body.col-resizing {
+body.col-resizing,
+body.sidebar-resizing {
   cursor: col-resize;
   user-select: none;
 }

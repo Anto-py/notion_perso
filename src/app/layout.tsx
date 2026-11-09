@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Oswald } from "next/font/google";
+import { SIDEBAR_BOOT } from "@/lib/sidebar";
 import { ServiceWorker } from "@/components/ServiceWorker";
 import "./globals.css";
 
@@ -33,6 +34,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     // des extensions (LanguageTool : data-lt-installed) écrivent avant React.
     <html lang="fr" className={`${inter.variable} ${oswald.variable}`} suppressHydrationWarning>
       <body>
+        {/* Applique la largeur et le masquage de la barre avant la peinture,
+            pour qu'un réglage replié ne fasse pas apparaître la barre une
+            fraction de seconde à chaque chargement. */}
+        <script dangerouslySetInnerHTML={{ __html: SIDEBAR_BOOT }} />
         {children}
         <ServiceWorker />
       </body>

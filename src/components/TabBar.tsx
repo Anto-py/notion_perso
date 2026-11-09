@@ -21,6 +21,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 import { appPathname, dropIndex, type Tab } from "@/lib/tabs";
 import { PageIcon } from "./PageIcon";
+import {
+  getServerSnapshot as sidebarServerSnapshot,
+  getSnapshot as sidebarSnapshot,
+  subscribe as sidebarSubscribe,
+  toggleSidebar,
+} from "./sidebar_store";
 import { close, getServerSnapshot, getSnapshot, open, reorder, subscribe } from "./tabs_store";
 
 type Drop = { href: string; after: boolean } | null;
@@ -36,6 +42,7 @@ export function TabBar() {
   const router = useRouter();
   const pathname = usePathname();
   const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const sidebar = useSyncExternalStore(sidebarSubscribe, sidebarSnapshot, sidebarServerSnapshot);
   const [dragging, setDragging] = useState<Tab | null>(null);
   const [drop, setDrop] = useState<Drop>(null);
   const sensors = useSensors(
@@ -92,6 +99,17 @@ export function TabBar() {
       }}
     >
       <nav className="tabs" aria-label="Onglets ouverts">
+        <button
+          type="button"
+          className="sidebar-toggle"
+          aria-label={sidebar.hidden ? "Afficher la barre latérale" : "Masquer la barre latérale"}
+          aria-expanded={!sidebar.hidden}
+          aria-controls="barre-laterale"
+          title={sidebar.hidden ? "Afficher la barre latérale" : "Masquer la barre latérale"}
+          onClick={toggleSidebar}
+        >
+          ☰
+        </button>
         {state.ready &&
           state.tabs.map((tab) => (
             <TabItem key={tab.href} tab={tab} active={tab.href === current} drop={drop} onClose={() => shut(tab.href)} />

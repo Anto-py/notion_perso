@@ -25,6 +25,8 @@ import { AUTHOR_NAME, CV_URL } from "@/lib/branding";
 import { formatClock } from "@/lib/sync_status";
 import { PageLabel } from "./PageIcon";
 import { SearchBar } from "./SearchBar";
+import { SidebarResizer } from "./SidebarResizer";
+import { hydrateSidebar } from "./sidebar_store";
 import { SyncStatus } from "./SyncStatus";
 import { setTreeMeta } from "./tabs_store";
 import { TreeGap, TreeItem } from "./TreeItem";
@@ -67,6 +69,12 @@ export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
   // Titres et icônes des onglets : l'arbre les fournit, y compris aux onglets
   // inactifs. Une entrée de base, absente de l'arbre, les publie elle-même.
   useEffect(() => setTreeMeta(rows), [rows]);
+
+  // Reprise du réglage d'appareil ; le script posé avant peinture a déjà
+  // appliqué la largeur et le masquage au document.
+  useEffect(() => {
+    hydrateSidebar();
+  }, []);
 
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [shownFor, setShownFor] = useState<string | null>(null);
@@ -176,7 +184,7 @@ export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
       <button type="button" className="menu-toggle" aria-expanded={mobileOpen} onClick={() => setMobileOpen(!mobileOpen)}>
         {mobileOpen ? "Fermer" : "Menu"}
       </button>
-      <aside className={mobileOpen ? "sidebar open" : "sidebar"}>
+      <aside id="barre-laterale" className={mobileOpen ? "sidebar open" : "sidebar"}>
         <a href={CV_URL} className="sidebar-home" target="_blank" rel="noopener noreferrer">
           {AUTHOR_NAME}
         </a>
@@ -260,6 +268,7 @@ export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
           {macSyncedAt && <p className="sync-mac">Mac synchronisé à {formatClock(new Date(macSyncedAt))}</p>}
           <SyncStatus />
         </div>
+        <SidebarResizer />
       </aside>
     </>
   );
