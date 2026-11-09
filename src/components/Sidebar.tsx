@@ -7,25 +7,36 @@ import {
   DragOverlay,
   MouseSensor,
   TouchSensor,
+  pointerWithin,
+  rectIntersection,
   useDroppable,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { placementError } from "@/lib/bases";
-import { ancestorsOf, buildTree, wouldCreateCycle, type TreeRow } from "@/lib/tree";
+import { ancestorsOf, buildTree, GAP_PREFIX, parseGapId, wouldCreateCycle, type TreeRow } from "@/lib/tree";
 import { AUTHOR_NAME, CV_URL } from "@/lib/branding";
 import { formatClock } from "@/lib/sync_status";
 import { PageLabel } from "./PageIcon";
 import { SearchBar } from "./SearchBar";
 import { SyncStatus } from "./SyncStatus";
-import { TreeItem } from "./TreeItem";
+import { TreeGap, TreeItem } from "./TreeItem";
 
 export const ROOT_DROP_ID = "__racine__";
+
+// Le pointeur choisit d'abord une zone d'insertion quand il est dedans ; sinon
+// la ligne survolée décide, comme avant.
+const collisionDetection: CollisionDetection = (args) => {
+  const gaps = args.droppableContainers.filter((container) => String(container.id).startsWith(GAP_PREFIX));
+  const inGap = pointerWithin({ ...args, droppableContainers: gaps });
+  return inGap.length > 0 ? inGap : rectIntersection(args);
+};
 
 type Props = {
   rows: TreeRow[];
@@ -105,12 +116,10 @@ export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
     setDragging(rows.find((row) => row.id === event.active.id) ?? null);
   }
 
-  async function onDragEnd({ active, over }: DragEndEvent) {
-    setDragging(null);
-    if (!over || over.id === active.id) return;
-    const pageId = String(active.id);
-    const target = over.id === ROOT_DROP_ID ? null : String(over.id);
-    if (target === (parentOf.get(pageId) ?? null)) return;
+  // target : nouveau parent ; before absent, la page garde sa clé d'ordre
+  // (dépôt sur une ligne), before null la met en fin de liste, sinon devant
+  // cette sœur (zone d'insertion).
+  async function relocate(pageId: string, target: string | null, before?: string | null) {
     const moved = rows.find((row) => row.id === pageId);
     const parent = target ? rows.find((row) => row.id === target) : undefined;
     // Même règle que le serveur (lib/bases.ts) : une page n'entre pas dans
@@ -125,10 +134,27 @@ export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
       setMessage("Une page ne peut pas aller sous elle-même ni sous l'une de ses sous-pages.");
       return;
     }
-    if (await post(`/api/pages/${pageId}/move`, { parentId: target })) {
+    const body = before === undefined ? { parentId: target } : { parentId: target, before };
+    if (await post(`/api/pages/${pageId}/move`, body)) {
       if (target && !expanded.has(target)) setExpanded(new Set([...expanded, target]));
       router.refresh();
     }
+  }
+
+  async function onDragEnd({ active, over }: DragEndEvent) {
+    setDragging(null);
+    if (!over || over.id === active.id) return;
+    const pageId = String(active.id);
+    const gap = parseGapId(String(over.id));
+    if (gap) {
+      // Déposer une page devant elle-même ne fait rien.
+      if (gap.beforeId === pageId) return;
+      await relocate(pageId, gap.parentId, gap.beforeId);
+      return;
+    }
+    const target = over.id === ROOT_DROP_ID ? null : String(over.id);
+    if (target === (parentOf.get(pageId) ?? null)) return;
+    await relocate(pageId, target);
   }
 
   return (
@@ -165,23 +191,34 @@ export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
           {/* id explicite : l'identifiant d'accessibilité de dnd-kit est sinon
               tiré d'un compteur global, différent au rendu serveur et au rendu
               client, d'où un avertissement d'hydratation. */}
-          <DndContext id="tree-dnd" sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
-            <nav className="tree" aria-label="Pages">
+          <DndContext
+            id="tree-dnd"
+            sensors={sensors}
+            collisionDetection={collisionDetection}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            onDragCancel={() => setDragging(null)}
+          >
+            <nav className={dragging ? "tree dragging" : "tree"} aria-label="Pages">
               {tree.length === 0 ? (
                 <p className="tree-empty">Aucune page.</p>
               ) : (
                 <ul role="tree">
                   {tree.map((node) => (
-                    <TreeItem
-                      key={node.id}
-                      node={node}
-                      depth={0}
-                      activeId={activeId}
-                      expanded={expanded}
-                      onToggle={toggle}
-                      onCreate={(type, parentId) => void createPage(type, parentId)}
-                    />
+                    <Fragment key={node.id}>
+                      {/* « Bases » reste en tête : pas de zone d'insertion avant lui. */}
+                      {!node.basesRoot && <TreeGap parentId={null} beforeId={node.id} depth={0} />}
+                      <TreeItem
+                        node={node}
+                        depth={0}
+                        activeId={activeId}
+                        expanded={expanded}
+                        onToggle={toggle}
+                        onCreate={(type, parentId) => void createPage(type, parentId)}
+                      />
+                    </Fragment>
                   ))}
+                  <TreeGap parentId={null} beforeId={null} depth={0} />
                 </ul>
               )}
               {dragging?.type === "page" && <RootDropZone />}

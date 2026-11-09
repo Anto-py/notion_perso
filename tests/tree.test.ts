@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ancestorsOf, buildTree, linkChoices, wouldCreateCycle, type TreeRow } from "@/lib/tree";
+import { ancestorsOf, buildTree, gapId, linkChoices, orderBefore, parseGapId, wouldCreateCycle, type TreeRow } from "@/lib/tree";
 
 const row = (id: string, parentId: string | null): TreeRow => ({ id, parentId, type: "page", title: id, icon: null, closed: false });
 
@@ -10,6 +10,33 @@ const parentOf = new Map<string, string | null>([
   ["c", "b"],
   ["d", null],
 ]);
+
+describe("zones d'insertion", () => {
+  it("encode et relit le parent et la ligne de référence", () => {
+    expect(parseGapId(gapId("a", "b"))).toEqual({ parentId: "a", beforeId: "b" });
+    expect(parseGapId(gapId(null, null))).toEqual({ parentId: null, beforeId: null });
+    expect(parseGapId(gapId(null, "c"))).toEqual({ parentId: null, beforeId: "c" });
+    expect(parseGapId("pg_1")).toBeNull();
+  });
+
+  it("rend une clé devant la ligne visée, ou en fin de liste", () => {
+    const siblings = [
+      { id: "a", manualOrder: "a0" },
+      { id: "b", manualOrder: "a1" },
+      { id: "c", manualOrder: "a2" },
+    ];
+    const first = orderBefore(siblings, "a");
+    const middle = orderBefore(siblings, "c");
+    const end = orderBefore(siblings, null);
+    expect(first < "a0").toBe(true);
+    expect(middle > "a1" && middle < "a2").toBe(true);
+    expect(end > "a2").toBe(true);
+  });
+
+  it("refuse une ligne de référence absente", () => {
+    expect(() => orderBefore([{ id: "a", manualOrder: "a0" }], "x")).toThrow();
+  });
+});
 
 describe("buildTree", () => {
   it("imbrique les enfants sous leur parent en gardant l'ordre reçu", () => {

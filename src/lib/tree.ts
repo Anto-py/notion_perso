@@ -2,6 +2,7 @@
 // importé par le serveur (contrôle du déplacement) comme par le navigateur
 // (refus immédiat pendant le glisser-déposer).
 import type { PageKind } from "./bases";
+import { keyBetween } from "./order_key";
 import { fold } from "./property_schema";
 
 export type TreeRow = {
@@ -34,6 +35,34 @@ export function buildTree(rows: TreeRow[]): TreeNode[] {
   const head = roots.findIndex((node) => node.basesRoot);
   if (head > 0) roots.unshift(...roots.splice(head, 1));
   return roots;
+}
+
+// Zones d'insertion du glisser (entre deux lignes) : l'identifiant porte le
+// parent d'accueil et la ligne devant laquelle insérer, null signifiant la fin
+// de la liste. Les identifiants de page ne contiennent pas « : ».
+export const GAP_PREFIX = "__gap__";
+
+export function gapId(parentId: string | null, beforeId: string | null): string {
+  return `${GAP_PREFIX}${parentId ?? ""}:${beforeId ?? ""}`;
+}
+
+export function parseGapId(id: string): { parentId: string | null; beforeId: string | null } | null {
+  if (!id.startsWith(GAP_PREFIX)) return null;
+  const rest = id.slice(GAP_PREFIX.length);
+  const cut = rest.indexOf(":");
+  if (cut === -1) return null;
+  const parent = rest.slice(0, cut);
+  const before = rest.slice(cut + 1);
+  return { parentId: parent || null, beforeId: before || null };
+}
+
+// Clé d'ordre d'une insertion devant beforeId (null : à la fin), dans une
+// liste de frères déjà triée. La page déplacée doit en être exclue.
+export function orderBefore(siblings: readonly { id: string; manualOrder: string }[], beforeId: string | null): string {
+  const index = beforeId ? siblings.findIndex((row) => row.id === beforeId) : -1;
+  if (beforeId && index === -1) throw new Error("Ligne de référence introuvable");
+  const at = index === -1 ? siblings.length : index;
+  return keyBetween(siblings[at - 1]?.manualOrder ?? null, siblings[at]?.manualOrder ?? null);
 }
 
 // Placer pageId sous newParentId crée-t-il une boucle ? Oui si le nouveau

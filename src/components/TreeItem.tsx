@@ -5,8 +5,8 @@
 // crée une base ou un dossier (étape 16).
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import Link from "next/link";
-import { useState } from "react";
-import type { TreeNode } from "@/lib/tree";
+import { Fragment, useState } from "react";
+import { gapId, type TreeNode } from "@/lib/tree";
 import { PageLabel } from "./PageIcon";
 
 // Au-delà, l'indentation cesse de croître : l'arbre reste lisible.
@@ -20,6 +20,30 @@ type Props = {
   onToggle: (id: string) => void;
   onCreate: (type: "database" | "folder", parentId: string) => void;
 };
+
+// Zone d'insertion entre deux lignes : déposer ici range la page devant
+// beforeId (null : en fin de liste), chez parentId. Invisible au repos ; seule
+// une bande de 10 px centrée sur la frontière capte le pointeur.
+export function TreeGap({
+  parentId,
+  beforeId,
+  depth,
+}: {
+  parentId: string | null;
+  beforeId: string | null;
+  depth: number;
+}) {
+  const drop = useDroppable({ id: gapId(parentId, beforeId) });
+  return (
+    <li role="none" className="tree-gap-item">
+      <div
+        ref={(element) => drop.setNodeRef(element)}
+        className={drop.isOver ? "tree-gap over" : "tree-gap"}
+        style={{ marginLeft: `${Math.min(depth, MAX_INDENT_DEPTH) * 14 + 4}px` }}
+      />
+    </li>
+  );
+}
 
 function hrefOf(node: TreeNode): string {
   if (node.inbox) return "/inbox";
@@ -105,16 +129,19 @@ export function TreeItem({ node, depth, activeId, expanded, onToggle, onCreate }
       {open && hasChildren && (
         <ul role="group">
           {node.children.map((child) => (
-            <TreeItem
-              key={child.id}
-              node={child}
-              depth={depth + 1}
-              activeId={activeId}
-              expanded={expanded}
-              onToggle={onToggle}
-              onCreate={onCreate}
-            />
+            <Fragment key={child.id}>
+              <TreeGap parentId={node.id} beforeId={child.id} depth={depth + 1} />
+              <TreeItem
+                node={child}
+                depth={depth + 1}
+                activeId={activeId}
+                expanded={expanded}
+                onToggle={onToggle}
+                onCreate={onCreate}
+              />
+            </Fragment>
           ))}
+          <TreeGap parentId={node.id} beforeId={null} depth={depth + 1} />
         </ul>
       )}
     </li>

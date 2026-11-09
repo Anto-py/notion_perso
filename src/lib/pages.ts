@@ -9,7 +9,7 @@ import { flattenToText } from "./blocks";
 import { newId } from "./ids";
 import { removeCitedEntries } from "./relation_query";
 import { emptyConfig } from "./views";
-import { wouldCreateCycle, type AbsentTarget, type TreeRow } from "./tree";
+import { orderBefore, wouldCreateCycle, type AbsentTarget, type TreeRow } from "./tree";
 import { mergeWebSave, type WebFields } from "./web_save";
 
 export const TRASH_RETENTION_DAYS = 30;
@@ -186,8 +186,10 @@ export async function updatePage(id: string, patch: PagePatch, check?: SaveCheck
 }
 
 // Reparentage. newParentId null : la page remonte à la racine de l'arbre ;
-// une base ou un dossier ne quitte jamais « Bases ».
-export async function movePage(id: string, newParentId: string | null): Promise<Outcome> {
+// une base ou un dossier ne quitte jamais « Bases ». beforeId (facultatif)
+// insère la page devant cette sœur, null la met en fin de liste ; absent, la
+// page garde sa clé d'ordre et se range selon elle.
+export async function movePage(id: string, newParentId: string | null, beforeId?: string | null): Promise<Outcome> {
   const page = await getPage(id);
   if (!page || page.trashedAt || page.type === "entry") return NOT_FOUND;
   const check = await checkParent(page, newParentId);
@@ -197,7 +199,26 @@ export async function movePage(id: string, newParentId: string | null): Promise<
   if (wouldCreateCycle(parentOf, id, newParentId)) {
     return { ok: false, status: 409, error: "Une page ne peut pas aller sous elle-même ni sous l'une de ses sous-pages" };
   }
-  await db.update(pages).set({ parentId: newParentId }).where(eq(pages.id, id));
+  const set: { parentId: string | null; manualOrder?: string } = { parentId: newParentId };
+  if (beforeId !== undefined) {
+    const siblings = await db
+      .select({ id: pages.id, manualOrder: pages.manualOrder })
+      .from(pages)
+      .where(
+        and(
+          newParentId ? eq(pages.parentId, newParentId) : isNull(pages.parentId),
+          isNull(pages.trashedAt),
+          ne(pages.type, "entry"),
+          ne(pages.id, id),
+        ),
+      )
+      .orderBy(asc(pages.manualOrder), asc(pages.createdAt));
+    if (beforeId && !siblings.some((row) => row.id === beforeId)) {
+      return { ok: false, status: 409, error: "Ligne de référence introuvable" };
+    }
+    set.manualOrder = orderBefore(siblings, beforeId);
+  }
+  await db.update(pages).set(set).where(eq(pages.id, id));
   return { ok: true };
 }
 
