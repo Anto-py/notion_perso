@@ -10,6 +10,7 @@ import { getDefaultReactSlashMenuItems, SuggestionMenuController, useCreateBlock
 import { useEffect, useRef } from "react";
 import { columnStructure } from "@/lib/blocks";
 import { checkUpload } from "@/lib/upload_rules";
+import { useEdgeScroll } from "./use_edge_scroll";
 import { planBlockRuns } from "@/lib/web_save";
 import { youtubeId } from "@/lib/youtube";
 import { columnBlock, columnListBlock } from "./columnsBlock";
@@ -224,6 +225,8 @@ export default function Editor({ pageId, initialBody, onCreateChild, onChange, o
   // uploadFile n'est appelé qu'après la création de l'éditeur : la ref est
   // alors remplie (effet ci-dessous).
   const editorRef = useRef<EditorInstance | null>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
+  useEdgeScroll(hostRef);
   const editor = useCreateBlockNote({
     schema,
     dictionary: fr,
@@ -261,12 +264,14 @@ export default function Editor({ pageId, initialBody, onCreateChild, onChange, o
   }, [editor, onReady]);
 
   return (
-    <BlockNoteView editor={editor} theme="light" slashMenu={false} onChange={() => onChange(editor.document)}>
-      <SuggestionMenuController
-        triggerCharacter="/"
-        getItems={async (query) => filterSuggestionItems(slashItems(editor, pageId, onCreateChild), query)}
-      />
-    </BlockNoteView>
+    <div ref={hostRef}>
+      <BlockNoteView editor={editor} theme="light" slashMenu={false} onChange={() => onChange(editor.document)}>
+        <SuggestionMenuController
+          triggerCharacter="/"
+          getItems={async (query) => filterSuggestionItems(slashItems(editor, pageId, onCreateChild), query)}
+        />
+      </BlockNoteView>
+    </div>
   );
 }
 
