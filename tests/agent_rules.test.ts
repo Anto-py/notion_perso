@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { checkTokenName, MODEL_MAX, parseBearer, parseModel, publicOrigin, touchDue } from "@/lib/agent_rules";
+import {
+  checkTokenName,
+  isRequestAction,
+  MODEL_MAX,
+  parseBearer,
+  parseModel,
+  publicOrigin,
+  requestActionLabel,
+  requestDecision,
+  requestLogAction,
+  touchDue,
+} from "@/lib/agent_rules";
 
 describe("parseBearer", () => {
   it("lit un jeton base64url", () => {
@@ -42,6 +53,29 @@ describe("checkTokenName", () => {
     expect(checkTokenName("   ")).toHaveProperty("error");
     expect(checkTokenName("x".repeat(61))).toHaveProperty("error");
     expect(checkTokenName(42)).toHaveProperty("error");
+  });
+});
+
+describe("demandes de validation", () => {
+  it("n'accepte que publication et purge", () => {
+    expect(isRequestAction("publish")).toBe(true);
+    expect(isRequestAction("purge")).toBe(true);
+    expect(isRequestAction("unpublish")).toBe(false);
+    expect(isRequestAction(null)).toBe(false);
+  });
+
+  it("lit une décision, refuse le reste", () => {
+    expect(requestDecision("accepted")).toBe("accepted");
+    expect(requestDecision("refused")).toBe("refused");
+    expect(requestDecision("peut-être")).toBeNull();
+    expect(requestDecision(undefined)).toBeNull();
+  });
+
+  it("nomme la demande pour Réglages et le journal", () => {
+    expect(requestActionLabel("publish")).toBe("Publier");
+    expect(requestActionLabel("purge")).toBe("Purger");
+    expect(requestLogAction("publish")).toBe("publication");
+    expect(requestLogAction("purge")).toBe("purge");
   });
 });
 

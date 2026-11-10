@@ -6,6 +6,8 @@
 // sont ici, sans quoi une barre oblique resterait dans le texte relu.
 import { mentionProps } from "./mention.ts";
 import {
+  TYPE_LABELS,
+  isOptionType,
   isSimpleType,
   normalizeValue,
   optionById,
@@ -321,8 +323,23 @@ function cellText(prop: Property, value: unknown): string {
   return valueText(prop, value);
 }
 
-// Une base se lit en tableau : titre (lien vers l'id de l'entrée), puis ses
-// propriétés simples dans l'ordre du schéma.
+// Schéma de la base en tête : noms, types, options des Sélections, propriétés
+// calculées marquées. C'est ce que l'agent lit avant d'écrire une entrée.
+function schemaSection(properties: readonly Property[]): string[] {
+  if (!properties.length) return [];
+  const lines = properties.map((prop) => {
+    const readOnly = prop.type === "created_time" || prop.type === "updated_time" || prop.type === "rollup";
+    const options =
+      isOptionType(prop.type) && prop.options?.length
+        ? ` : ${prop.options.map((option) => option.name).join(", ")}`
+        : "";
+    return `- ${prop.name} (${TYPE_LABELS[prop.type]}${readOnly ? ", lecture seule" : ""})${options}`;
+  });
+  return ["## Propriétés", "", ...lines, ""];
+}
+
+// Une base se lit en schéma puis en tableau : titre (lien vers l'id de
+// l'entrée), puis ses propriétés simples dans l'ordre du schéma.
 export function databaseToMarkdown(properties: readonly Property[], entries: readonly EntryRow[]): string {
   const columns = properties.filter((prop) => isSimpleType(prop.type));
   const escapeCell = (text: string) => text.replace(/\|/g, "\\|").replace(/\n/g, " ").trim();
@@ -335,7 +352,7 @@ export function databaseToMarkdown(properties: readonly Property[], entries: rea
   ];
   const lines = tableMarkdown(rows);
   if (!entries.length) lines.push("", "Aucune entrée.");
-  return `${lines.join("\n")}\n`;
+  return `${[...schemaSection(properties), ...lines].join("\n")}\n`;
 }
 
 // --- Front matter d'une entrée ---------------------------------------------------

@@ -9,6 +9,15 @@ import { send } from "../request";
 
 type Token = { id: string; name: string; createdAt: string; lastUsedAt: string | null; revokedAt: string | null };
 type Entry = { id: string; at: string; tokenName: string | null; model: string | null; action: string; pageTitle: string | null };
+type Request = {
+  id: string;
+  action: "publish" | "purge";
+  pageId: string;
+  pageTitle: string | null;
+  tokenName: string | null;
+  model: string | null;
+  createdAt: string;
+};
 
 const DATE = new Intl.DateTimeFormat("fr-BE", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/Brussels" });
 const SERVICE = "notion-perso-agent";
@@ -17,12 +26,13 @@ function keychainCommand(token: string): string {
   return `security add-generic-password -U -a np -s ${SERVICE} -w '${token}'`;
 }
 
-export function AgentSection({ tokens, log }: { tokens: Token[]; log: Entry[] }) {
+export function AgentSection({ tokens, log, requests }: { tokens: Token[]; log: Entry[]; requests: Request[] }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState<{ name: string; token: string } | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [deciding, setDeciding] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   async function create(event: React.FormEvent) {
@@ -48,6 +58,17 @@ export function AgentSection({ tokens, log }: { tokens: Token[]; log: Entry[] })
       setMessage(result.error);
       return;
     }
+    router.refresh();
+  }
+
+  async function decide(id: string, decision: "accepted" | "refused") {
+    setDeciding(id);
+    setMessage(null);
+    const result = await send(`/api/acces_agent/requests/${encodeURIComponent(id)}`, "POST", { decision });
+    setDeciding(null);
+    if (!result.ok) setMessage(result.error);
+    // Le geste a pu s'exécuter avant de fermer la demande : relire dans tous
+    // les cas.
     router.refresh();
   }
 
@@ -124,6 +145,35 @@ export function AgentSection({ tokens, log }: { tokens: Token[]; log: Entry[] })
                   )}
                 </span>
               )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <h3>Demandes en attente</h3>
+      <p className="hint">
+        Publication et suppression définitive passent par ici : l&apos;agent dépose la demande, rien n&apos;est fait avant votre décision.
+      </p>
+      {requests.length === 0 ? (
+        <p>Aucune demande.</p>
+      ) : (
+        <ul className="settings-list agent-requests">
+          {requests.map((demand) => (
+            <li key={demand.id}>
+              <span className="settings-list-name">{demand.action === "publish" ? "Publier" : "Purger"}</span>
+              <span>{demand.pageTitle ?? demand.pageId}</span>
+              <span className="hint">
+                {demand.tokenName ?? "jeton supprimé"}
+                {demand.model ? ` · ${demand.model}` : ""} · {DATE.format(new Date(demand.createdAt))}
+              </span>
+              <span className="settings-list-actions">
+                <button type="button" disabled={deciding === demand.id} onClick={() => decide(demand.id, "accepted")}>
+                  Valider
+                </button>
+                <button type="button" className="ghost" disabled={deciding === demand.id} onClick={() => decide(demand.id, "refused")}>
+                  Refuser
+                </button>
+              </span>
             </li>
           ))}
         </ul>

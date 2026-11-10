@@ -10,7 +10,7 @@ import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import { pages } from "@/db/schema";
-import { appendOrphans, flattenToText } from "./blocks";
+import { appendAtEnd, appendOrphans, flattenToText } from "./blocks";
 import { newId } from "./ids";
 import { isOrderKey, keyBetween, rekey } from "./order_key";
 import type { Outcome, Page } from "./pages";
@@ -459,15 +459,34 @@ export async function updateDatabase(id: string, patch: DatabasePatch): Promise<
 }
 
 // Nouvelle entrée, en fin d'ordre manuel, avec d'éventuelles valeurs de départ
-// (la colonne Kanban où l'on a cliqué « + »).
-export async function createEntry(dbId: string, raw: Record<string, unknown>, title?: string): Promise<Outcome & { id?: string }> {
+// (la colonne Kanban où l'on a cliqué « + »). init sert à l'agent (palier d) :
+// un schéma auquel il a ajouté une option et le corps converti, écrits dans la
+// même transaction que l'entrée.
+export type EntryInit = { properties?: Property[]; body?: readonly unknown[] };
+
+export async function createEntry(
+  dbId: string,
+  raw: Record<string, unknown>,
+  title?: string,
+  init: EntryInit = {},
+): Promise<Outcome & { id?: string }> {
   return db.transaction(async (tx) => {
     const config = await lockDatabase(tx, dbId);
     if (!config) return NOT_FOUND;
-    const error = checkValues(config.properties, raw) ?? (await checkRelationTargets(tx, config.properties, raw));
+    const properties = init.properties ?? config.properties;
+    const error = checkValues(properties, raw) ?? (await checkRelationTargets(tx, properties, raw));
     if (error) return { ok: false, status: 400, error } as const;
-    const values = normalizeValues(config.properties, raw);
+    // Le schéma seulement après validation : un refus ne laisse aucune option
+    // derrière lui.
+    if (init.properties) {
+      await tx
+        .update(pages)
+        .set({ dbConfig: { ...config, properties, views: sanitizeViews(config.views, properties) } })
+        .where(eq(pages.id, dbId));
+    }
+    const values = normalizeValues(properties, raw);
     const manualOrder = await keyAfterLast(tx, dbId);
+    const body = init.body?.length ? appendAtEnd(null, init.body) : undefined;
     const id = newId("pg");
     await tx.insert(pages).values({
       id,
@@ -476,8 +495,9 @@ export async function createEntry(dbId: string, raw: Record<string, unknown>, ti
       // Le sélecteur d'une relation crée l'entrée attendue sous le titre tapé.
       title: (title ?? "").trim().slice(0, 500),
       propertyValues: values,
-      valuesText: valuesToText(config.properties, values),
+      valuesText: valuesToText(properties, values),
       manualOrder,
+      ...(body ? { body, bodyText: flattenToText(body) } : {}),
     });
     return { ok: true, id } as const;
   });
@@ -551,8 +571,9 @@ export async function moveEntry(id: string, targetDbId: string): Promise<Outcome
 // entrées de la base dans le nouvel ordre manuel ; celles qui manquent (créées
 // dans un autre onglet) gardent leur rang relatif, à la suite. Les deux
 // partent dans la même transaction : déposer une carte dans une autre colonne
-// change sa valeur et sa place d'un seul geste.
-export type EntryPatch = { values?: Record<string, unknown>; order?: string[] };
+// change sa valeur et sa place d'un seul geste. properties : schéma auquel
+// l'agent a ajouté une option (palier d), écrit avec les valeurs.
+export type EntryPatch = { values?: Record<string, unknown>; order?: string[]; properties?: Property[] };
 
 export async function updateEntry(id: string, patch: EntryPatch): Promise<Outcome> {
   return db.transaction(async (tx) => {
@@ -577,6 +598,7 @@ export async function updateEntry(id: string, patch: EntryPatch): Promise<Outcom
     }
     const config = configs.get(found.dbId);
     if (!config) return NOT_FOUND;
+    const properties = patch.properties ?? config.properties;
 
     let order: Map<string, string> | null = null;
     if (patch.order) {
@@ -598,11 +620,19 @@ export async function updateEntry(id: string, patch: EntryPatch): Promise<Outcom
       // les entrées qui déclarent la relation (plus bas).
       const plain: Record<string, unknown> = { ...patch.values };
       for (const twin of twins) delete plain[twin.id];
-      const error = checkValues(config.properties, plain) ?? (await checkRelationTargets(tx, config.properties, plain));
+      const error = checkValues(properties, plain) ?? (await checkRelationTargets(tx, properties, plain));
       if (error) return { ok: false, status: 400, error } as const;
       for (const twin of twins) {
         const targetError = await checkRelationTargets(tx, [twin], { [twin.id]: patch.values![twin.id] });
         if (targetError) return { ok: false, status: 400, error: targetError } as const;
+      }
+      // Les options neuves s'écrivent après validation, dans la même
+      // transaction que les valeurs : un refus ne laisse aucune option.
+      if (patch.properties) {
+        await tx
+          .update(pages)
+          .set({ dbConfig: { ...config, properties, views: sanitizeViews(config.views, properties) } })
+          .where(eq(pages.id, found.dbId));
       }
       const [entry] = await tx.select({ propertyValues: pages.propertyValues }).from(pages).where(eq(pages.id, id));
       const merged: Record<string, unknown> = { ...asValues(entry?.propertyValues) };
@@ -610,10 +640,10 @@ export async function updateEntry(id: string, patch: EntryPatch): Promise<Outcom
         if (value === null) delete merged[key];
         else merged[key] = value;
       }
-      const values = normalizeValues(config.properties, merged);
+      const values = normalizeValues(properties, merged);
       await tx
         .update(pages)
-        .set({ propertyValues: values, valuesText: valuesToText(config.properties, values) })
+        .set({ propertyValues: values, valuesText: valuesToText(properties, values) })
         .where(eq(pages.id, id));
       for (const twin of twins) {
         const wanted = normalizeValue(twin, patch.values![twin.id]);

@@ -295,6 +295,17 @@ describe("databaseToMarkdown", () => {
     ]);
     expect(md).toBe(
       [
+        "## Propriétés",
+        "",
+        "- Statut (Sélection) : À faire, Fait",
+        "- Étiquettes (Sélection multiple) : école, IA",
+        "- Échéance (Date)",
+        "- Urgent (Case à cocher)",
+        "- Durée (Nombre)",
+        "- Note (Texte)",
+        "- Projet (Relation)",
+        "- Créé le (Créé le, lecture seule)",
+        "",
         "| Titre | Statut | Étiquettes | Échéance | Urgent | Durée | Note |",
         "| --- | --- | --- | --- | --- | --- | --- |",
         "| [Rédiger \\| relire](pg_e1) | À faire | école, IA | 2026-11-12 | oui | 1,5 |   |",
@@ -305,7 +316,11 @@ describe("databaseToMarkdown", () => {
   });
 
   it("dit qu'une base est vide", () => {
-    expect(databaseToMarkdown([STATUS], [])).toBe("| Titre | Statut |\n| --- | --- |\n\nAucune entrée.\n");
+    expect(databaseToMarkdown([STATUS], [])).toBe(
+      ["## Propriétés", "", "- Statut (Sélection) : À faire, Fait", "", "| Titre | Statut |", "| --- | --- |", "", "Aucune entrée.", ""].join(
+        "\n",
+      ),
+    );
   });
 });
 

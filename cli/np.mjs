@@ -11,11 +11,11 @@
 // validation.
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 
 const DEFAULT_SERVER = "https://notion.antoninbareau.eu";
 const KEYCHAIN_SERVICE = "notion-perso-agent";
-const VALUE_OPTIONS = new Set(["--vers", "--modele", "--serveur", "--sous", "--titre", "--nombre"]);
+const VALUE_OPTIONS = new Set(["--vers", "--medias", "--modele", "--serveur", "--sous", "--titre", "--nombre"]);
 const FLAG_OPTIONS = new Set(["--json", "--aide", "-h", "--help"]);
 
 const HELP = `np, accès agent à notion_perso
@@ -23,21 +23,30 @@ const HELP = `np, accès agent à notion_perso
 Lecture
   np chercher <mots…>                  pages qui contiennent ces mots (chemin, id, extrait)
   np lister [chemin|id]                enfants d'une page, entrées d'une base ; racines sans argument
-  np lire <chemin|id> [--vers fichier] page en Markdown (base : tableau ; entrée : front matter des valeurs)
+  np lire <chemin|id> [--vers fichier] [--medias dossier]
+                                       page en Markdown (base : schéma puis tableau ; entrée : front matter
+                                       des valeurs) ; --medias télécharge les images et PDF cités
   np vide-cerveau --vers <dossier>     copie datée du Vide-cerveau, sans rien y supprimer
 
 Écriture (jamais de remplacement : on ajoute en bas)
   np creer <fichier.md|-> [--sous chemin|id] [--titre t]   nouvelle page (titre : --titre, sinon le premier « # », sinon le nom du fichier)
   np ajouter <chemin|id> <fichier.md|->                     ajoute le Markdown au bas de la page
+  np entree <base> <fichier.md|->                           nouvelle entrée : propriétés du front matter, titre du « # », corps du reste
+  np modifier <entrée> Nom=valeur …                         valeurs d'une entrée (Sélection par nom, Date AAAA-MM-JJ,
+                                                            Case oui/non, Relation par titres, Nom= pour effacer)
   np renommer <chemin|id> <titre…>
   np deplacer <chemin|id> <destination|/>                   « / » : racine de l'arbre
   np icone <chemin|id> <emoji|aucune>
   np corbeille <chemin|id>
   np restaurer <id>                                         une page en corbeille n'a plus de chemin : son id
-  np depublier <chemin|id>
+  np publier <chemin|id>                                    demande de publication, validée dans Réglages › Agent
+  np purger <id>                                            demande de suppression définitive (page en corbeille)
+  np depublier <chemin|id>                                  dépublie aussitôt
   np journal [--nombre n]                                   dernières écritures des agents
 
-Le front matter d'un fichier est ignoré. Conversions et éléments ignorés sont signalés sur stderr.
+Le front matter d'un fichier est ignoré, sauf pour « np entree ». Conversions et éléments ignorés
+sont signalés sur stderr. Une image ou un PDF seul sur sa ligne, chemin local, est téléversé avant
+l'envoi du corps ; un type refusé reste un lien texte signalé.
 
 Chemin : titres séparés par « / », sans accents ni casse (« Projets/Linux »). Un chemin
 qui ne part pas d'une racine vaut pour la fin d'un chemin (« To Do »). « \\/ » dans un titre.
@@ -90,24 +99,53 @@ function client(options) {
   const server = (options.serveur || process.env.NP_SERVEUR || DEFAULT_SERVER).replace(/\/+$/, "");
   const model = options.modele || process.env.NP_AGENT_MODELE || "";
   const token = readToken();
-  return async function call(path, method = "GET", body = undefined) {
+  const auth = () => {
     const headers = { Authorization: `Bearer ${token}` };
     if (model) headers["X-Agent-Model"] = model;
-    if (body !== undefined) headers["Content-Type"] = "application/json";
-    let response;
+    return headers;
+  };
+  const send = async (path, init) => {
     try {
-      response = await fetch(`${server}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+      return await fetch(`${server}${path}`, init);
     } catch (error) {
       throw new Exit(1, `Serveur injoignable (${server}) : ${error.cause?.code ?? error.message}`);
     }
-    const data = await response.json().catch(() => ({}));
-    if (response.ok) return data;
+  };
+  const refuse = (response, data) => {
     let message = data.error || `Réponse ${response.status}`;
     if (Array.isArray(data.candidates)) {
       message += ", précisez le chemin ou donnez l'id :\n" + data.candidates.map((c) => `  ${c.path}  (${c.type}, ${c.id})`).join("\n");
     }
-    throw new Exit(1, message);
+    return new Exit(1, message);
   };
+
+  // JSON : la forme de toutes les routes sauf le téléversement et le
+  // téléchargement d'un média.
+  const call = async (path, method = "GET", body = undefined) => {
+    const headers = auth();
+    if (body !== undefined) headers["Content-Type"] = "application/json";
+    const response = await send(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    const data = await response.json().catch(() => ({}));
+    if (response.ok) return data;
+    throw refuse(response, data);
+  };
+
+  // Multipart : le navigateur (Node) pose lui-même la frontière.
+  call.form = async (path, form) => {
+    const response = await send(path, { method: "POST", headers: auth(), body: form });
+    const data = await response.json().catch(() => ({}));
+    if (response.ok) return data;
+    throw refuse(response, data);
+  };
+
+  // Octets bruts d'un média.
+  call.raw = async (path) => {
+    const response = await send(path, { headers: auth() });
+    if (response.ok) return response;
+    throw refuse(response, await response.json().catch(() => ({})));
+  };
+
+  return call;
 }
 
 // Même forme que lib/page_path.ts, looksLikeId.
@@ -145,13 +183,148 @@ function freeName(dir, base) {
   return join(dir, name);
 }
 
-// Fichier ou entrée standard (« - »).
+// Fichier ou entrée standard : « - », ou rien du tout quand l'entrée est piped.
 function readSource(source) {
-  if (!source) throw usage("Fichier Markdown attendu (ou « - » pour l'entrée standard)");
-  if (source === "-") return { text: readFileSync(0, "utf8"), name: null };
+  if (!source || source === "-") {
+    if (!source && process.stdin.isTTY) throw usage("Fichier Markdown attendu (ou « - » pour l'entrée standard)");
+    return { text: readFileSync(0, "utf8"), name: null, dir: process.cwd() };
+  }
   const file = resolve(source);
   if (!existsSync(file) || !statSync(file).isFile()) throw usage(`${file} n'est pas un fichier.`);
-  return { text: readFileSync(file, "utf8"), name: basename(file).replace(/\.md$/i, "") };
+  return { text: readFileSync(file, "utf8"), name: basename(file).replace(/\.md$/i, ""), dir: dirname(file) };
+}
+
+// Types admis par lib/upload_rules.ts, extension vers type MIME. Le serveur
+// revérifie ; ici c'est ce qui permet de composer le multipart.
+const MEDIA_MIME = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  avif: "image/avif",
+  pdf: "application/pdf",
+};
+
+function mediaMime(file) {
+  const ext = file.split(".").pop()?.toLowerCase() ?? "";
+  return MEDIA_MIME[ext] ?? null;
+}
+
+// Une image ou un PDF seul sur sa ligne, dont la cible est un chemin local :
+// ce que `np` téléverse avant l'envoi du corps. Un lien ordinaire vers un PDF
+// compte aussi, une image distante ou déjà téléversée non.
+function mediaLines(markdown) {
+  const found = [];
+  markdown.split(/\r?\n/).forEach((line, index) => {
+    const match = /^(\s*)(!?)\[([^\]]*)\]\(([^)\s]+)\)(\s*)$/.exec(line);
+    if (!match) return;
+    const [, indent, bang, label, href, tail] = match;
+    if (/^(?:[a-z][a-z0-9+.-]*:|\/|#)/i.test(href)) return;
+    if (!bang && !/\.pdf(?:[?#]|$)/i.test(href)) return;
+    found.push({ index, indent, bang, label, href, tail });
+  });
+  return found;
+}
+
+// Téléverse chaque média local et réécrit son lien. Une erreur du serveur
+// interrompt avant que le corps ne parte : rien n'est écrit. Un fichier absent
+// ou d'un type refusé reste un lien texte, et le dit.
+async function uploadLocalMedia(call, markdown, baseDir, pageId) {
+  const entries = mediaLines(markdown);
+  if (!entries.length) return { markdown, uploaded: 0 };
+  const lines = markdown.split(/\r?\n/);
+  let uploaded = 0;
+  for (const entry of entries) {
+    let path = entry.href.split(/[?#]/)[0];
+    try {
+      path = decodeURIComponent(path);
+    } catch {
+      // Un % isolé reste tel quel.
+    }
+    const file = resolve(baseDir, path);
+    if (!existsSync(file) || !statSync(file).isFile()) {
+      process.stderr.write(`Média introuvable, laissé en lien : ${entry.href}\n`);
+      continue;
+    }
+    const mime = mediaMime(file);
+    if (!mime) {
+      process.stderr.write(`Format refusé, laissé en lien : ${entry.href}\n`);
+      continue;
+    }
+    const form = new FormData();
+    form.append("file", new File([readFileSync(file)], basename(file), { type: mime }));
+    if (pageId) form.append("pageId", pageId);
+    const data = await call.form("/api/agent/media", form);
+    lines[entry.index] = `${entry.indent}${entry.bang}[${entry.label}](${data.url})${entry.tail}`;
+    process.stderr.write(`Téléversé : ${entry.href} → ${data.url}\n`);
+    uploaded++;
+  }
+  return { markdown: lines.join("\n"), uploaded };
+}
+
+// Médias cités par la page, adresse absolue ou relative.
+const MEDIA_URL = /(?:https?:\/\/[^\s/)]+)?\/api\/media\/(up_[A-Za-z0-9_-]{16}\.[a-z0-9]+)/g;
+
+// `np lire --medias` : chaque média cité est retéléchargé dans le dossier, et
+// le lien réécrit vers le fichier local, relatif au Markdown écrit ou au
+// dossier courant.
+async function downloadMedia(call, markdown, dir, baseDir) {
+  const names = [...new Set([...markdown.matchAll(MEDIA_URL)].map((match) => match[1]))];
+  if (!names.length) return markdown;
+  const local = new Map();
+  for (const name of names) {
+    const response = await call.raw(`/api/agent/media/${encodeURIComponent(name)}`);
+    const bytes = Buffer.from(await response.arrayBuffer());
+    const file = join(dir, name);
+    writeFileSync(file, bytes);
+    local.set(name, relative(baseDir, file) || name);
+    process.stderr.write(`Téléchargé : ${name} (${bytes.length} octets)\n`);
+  }
+  return markdown.replace(MEDIA_URL, (match, name) => local.get(name) ?? match);
+}
+
+// YAML simple du front matter : scalaires (guillemets doubles relus) et listes
+// en « - item ». Une clé sans valeur ni liste est ignorée.
+function frontScalar(text) {
+  const trimmed = text.trim();
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    const inner = trimmed.slice(1, -1).trim();
+    return inner === "" ? [] : inner.split(",").map((item) => frontScalar(item));
+  }
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      return trimmed.slice(1, -1);
+    }
+  }
+  return trimmed;
+}
+
+function parseFrontMatter(text) {
+  const match = /^﻿?---\r?\n([\s\S]*?)\r?\n---[ \t]*(\r?\n|$)/.exec(text);
+  if (!match) return { values: {}, rest: text };
+  const values = {};
+  let key = null;
+  for (const raw of match[1].split(/\r?\n/)) {
+    const line = raw.replace(/\s+$/, "");
+    if (!line.trim() || line.trim().startsWith("#")) continue;
+    const item = /^\s*-\s*(.*)$/.exec(line);
+    if (item && key !== null) {
+      if (!Array.isArray(values[key])) values[key] = [];
+      values[key].push(frontScalar(item[1]));
+      continue;
+    }
+    const pair = /^("(?:[^"\\]|\\.)*"|[^:]+):\s*(.*)$/.exec(line);
+    if (!pair) continue;
+    key = frontScalar(pair[1]);
+    values[key] = pair[2].trim() === "" ? [] : frontScalar(pair[2]);
+  }
+  for (const [name, value] of Object.entries(values)) {
+    if (Array.isArray(value) && value.length === 0) delete values[name];
+  }
+  return { values, rest: text.slice(match[0].length) };
 }
 
 // Le front matter d'une note du vault n'a pas sa place dans une page : il est
@@ -202,15 +375,21 @@ const COMMANDS = {
 
   async lire(call, args, options) {
     const target = args.join(" ").trim();
-    if (!target) throw usage("np lire <chemin|id> [--vers fichier]");
+    if (!target) throw usage("np lire <chemin|id> [--vers fichier] [--medias dossier]");
+    const file = options.vers ? resolve(options.vers) : null;
+    if (file && existsSync(file)) throw usage(`${file} existe déjà : np n'écrase aucun fichier.`);
     const id = await resolveId(call, target);
     const page = await call(`/api/agent/pages/${encodeURIComponent(id)}?format=md`);
     if (page.trashed) process.stderr.write(`Attention : « ${page.path} » est en corbeille.\n`);
-    if (options.json) return print(JSON.stringify(page, null, 2));
-    if (!options.vers) return print(page.markdown);
-    const file = resolve(options.vers);
-    if (existsSync(file)) throw usage(`${file} existe déjà : np n'écrase aucun fichier.`);
-    writeFileSync(file, page.markdown);
+    let markdown = page.markdown;
+    if (options.medias) {
+      const dir = resolve(options.medias);
+      if (!existsSync(dir) || !statSync(dir).isDirectory()) throw usage(`${dir} n'est pas un dossier existant.`);
+      markdown = await downloadMedia(call, markdown, dir, file ? dirname(file) : process.cwd());
+    }
+    if (options.json) return print(JSON.stringify({ ...page, markdown }, null, 2));
+    if (!file) return print(markdown);
+    writeFileSync(file, markdown);
     print(`${page.path} écrit dans ${file}`);
   },
 
@@ -219,7 +398,8 @@ const COMMANDS = {
     const { title, rest } = takeTitle(stripFrontMatter(source.text));
     const parentId = options.sous ? await resolveId(call, options.sous) : null;
     const name = options.titre ?? title ?? (source.name ? source.name.replace(/_/g, " ") : "");
-    const result = await call("/api/agent/pages", "POST", { parentId, title: name, markdown: rest });
+    const prepared = await uploadLocalMedia(call, rest, source.dir, null);
+    const result = await call("/api/agent/pages", "POST", { parentId, title: name, markdown: prepared.markdown });
     report(result);
     if (options.json) return print(JSON.stringify(result, null, 2));
     print(`Page créée : « ${name || "Sans titre"} » (${result.id}), ${result.blocks} bloc(s).`);
@@ -228,11 +408,46 @@ const COMMANDS = {
   async ajouter(call, args, options) {
     if (args.length < 2) throw usage("np ajouter <chemin|id> <fichier.md|->");
     const id = await resolveId(call, args.slice(0, -1).join(" "));
-    const markdown = stripFrontMatter(readSource(args.at(-1)).text);
-    const result = await call(`/api/agent/pages/${encodeURIComponent(id)}/append`, "POST", { markdown });
+    const source = readSource(args.at(-1));
+    const prepared = await uploadLocalMedia(call, stripFrontMatter(source.text), source.dir, id);
+    const result = await call(`/api/agent/pages/${encodeURIComponent(id)}/append`, "POST", { markdown: prepared.markdown });
     report(result);
     if (options.json) return print(JSON.stringify(result, null, 2));
     print(`${result.blocks} bloc(s) ajouté(s) au bas de ${id}.`);
+  },
+
+  async entree(call, args, options) {
+    if (!args.length) throw usage("np entree <base> <fichier.md|->");
+    const base = await resolveId(call, args[0]);
+    const source = readSource(args[1]);
+    const { values, rest } = parseFrontMatter(source.text);
+    const heading = takeTitle(rest);
+    const name = options.titre ?? heading.title ?? (source.name ? source.name.replace(/_/g, " ") : "");
+    const prepared = await uploadLocalMedia(call, heading.rest, source.dir, null);
+    const result = await call(`/api/agent/databases/${encodeURIComponent(base)}/entries`, "POST", {
+      title: name,
+      values,
+      markdown: prepared.markdown,
+    });
+    report(result);
+    if (options.json) return print(JSON.stringify(result, null, 2));
+    const created = result.created?.length ? ` Options créées : ${result.created.join(" ; ")}.` : "";
+    print(`Entrée créée : « ${name || "Sans titre"} » (${result.id}), ${result.blocks} bloc(s).${created}`);
+  },
+
+  async modifier(call, args, options) {
+    if (args.length < 2) throw usage("np modifier <entrée> Nom=valeur …");
+    const id = await resolveId(call, args[0]);
+    const values = {};
+    for (const pair of args.slice(1)) {
+      const at = pair.indexOf("=");
+      if (at < 1) throw usage(`Valeur attendue sous la forme Nom=valeur : « ${pair} »`);
+      values[pair.slice(0, at).trim()] = pair.slice(at + 1).trim();
+    }
+    const result = await call(`/api/agent/entries/${encodeURIComponent(id)}`, "PATCH", { values });
+    if (options.json) return print(JSON.stringify(result, null, 2));
+    const created = result.created?.length ? ` Options créées : ${result.created.join(" ; ")}.` : "";
+    print(`${id} modifiée (${Object.keys(values).join(", ")}).${created}`);
   },
 
   async renommer(call, args) {
@@ -272,6 +487,25 @@ const COMMANDS = {
     print(`${id} restaurée.`);
   },
 
+  async publier(call, args) {
+    const id = await target(call, args, "np publier <chemin|id>");
+    const result = await call(`/api/agent/pages/${encodeURIComponent(id)}/publish`, "POST", {});
+    if (result.pending) {
+      throw new Exit(3, `Publication en attente de validation dans Réglages › Agent (demande ${result.request}).`);
+    }
+    print(`${id} publiée.`);
+  },
+
+  async purger(call, args) {
+    const id = (args[0] ?? "").trim();
+    if (!looksLikeId(id)) throw usage("np purger <id> : une page en corbeille n'a plus de chemin, donnez son id.");
+    const result = await call(`/api/agent/pages/${encodeURIComponent(id)}/purge`, "POST", {});
+    if (result.pending) {
+      throw new Exit(3, `Purge en attente de validation dans Réglages › Agent (demande ${result.request}).`);
+    }
+    print(`${id} purgée.`);
+  },
+
   async depublier(call, args) {
     const id = await target(call, args, "np depublier <chemin|id>");
     const result = await call(`/api/agent/pages/${encodeURIComponent(id)}/unpublish`, "POST", {});
@@ -283,12 +517,22 @@ const COMMANDS = {
     if (!Number.isInteger(limit) || limit < 1) throw usage("--nombre attend un entier positif");
     const data = await call(`/api/agent/log?limit=${limit}`);
     if (options.json) return print(JSON.stringify(data, null, 2));
-    if (!data.entries.length) return print("Journal vide.");
-    print(
-      data.entries
-        .map((e) => `${new Date(e.at).toLocaleString("fr-BE", { timeZone: "Europe/Brussels", dateStyle: "short", timeStyle: "short" })}  ${e.action}  « ${e.pageTitle || "Sans titre"} »  (${e.model || "modèle non déclaré"}, ${e.tokenName || "jeton supprimé"})`)
-        .join("\n"),
-    );
+    const requests = data.requests ?? [];
+    if (!data.entries.length && !requests.length) return print("Journal vide.");
+    if (data.entries.length) {
+      print(
+        data.entries
+          .map((e) => `${new Date(e.at).toLocaleString("fr-BE", { timeZone: "Europe/Brussels", dateStyle: "short", timeStyle: "short" })}  ${e.action}  « ${e.pageTitle || "Sans titre"} »  (${e.model || "modèle non déclaré"}, ${e.tokenName || "jeton supprimé"})`)
+          .join("\n"),
+      );
+    }
+    if (requests.length) {
+      const lines = requests.map(
+        (r) =>
+          `  ${r.action === "publish" ? "Publier" : "Purger"}  « ${r.pageTitle || "Sans titre"} »  (${r.id}, ${r.tokenName || "jeton supprimé"}${r.model ? `, ${r.model}` : ""})`,
+      );
+      print(`${data.entries.length ? "\n" : ""}En attente de validation :\n${lines.join("\n")}`);
+    }
   },
 
   async "vide-cerveau"(call, args, options) {

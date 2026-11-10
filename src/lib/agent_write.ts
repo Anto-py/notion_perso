@@ -3,13 +3,15 @@
 // avec liens et médias résolus contre la base. Les gestes eux-mêmes passent
 // par les fonctions de l'éditeur (createPage, appendBlocks, updatePage,
 // movePage…) dans les routes, qui journalisent chacun.
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import { media } from "@/db/schema";
+import { media, pages } from "@/db/schema";
 import { pathRows } from "./agent_read";
+import { toList, type AgentValues, type RelationAnswers } from "./agent_values";
 import { internalLinkId } from "./blocks";
 import { markdownToBlocks, type MarkdownContext, type ResolvedLink } from "./notion-markdown";
 import { looksLikeId, resolvePath, type PathRow } from "./page_path";
+import { fold, type Property } from "./properties";
 import { isStoredName } from "./upload_rules";
 
 export const MARKDOWN_MAX = 1_000_000;
@@ -69,6 +71,46 @@ const AGENT_WORDING: Record<string, string> = {
   "image absente de l'archive": "image locale non téléversée, gardée en texte",
   "fichier absent de l'archive": "fichier local non téléversé, gardé en texte",
 };
+
+// Titres d'entrées cités par une relation : chaque titre est cherché parmi les
+// entrées vivantes de la base visée, sans accents ni casse. Un titre absent ou
+// porté par plusieurs entrées refuse la requête entière, et le dit.
+export async function resolveRelationAnswers(
+  properties: readonly Property[],
+  raw: AgentValues,
+): Promise<RelationAnswers> {
+  const answers: RelationAnswers = new Map();
+  const wanted = new Map(Object.entries(raw).map(([name, value]) => [fold(name), value]));
+  for (const prop of properties) {
+    if (prop.type !== "relation" || prop.twinOf) continue;
+    const input = wanted.get(fold(prop.name));
+    if (input === undefined) continue;
+    const titles = toList(input);
+    if (!titles || !titles.length) continue;
+
+    const rows = await db
+      .select({ id: pages.id, title: pages.title })
+      .from(pages)
+      .where(and(eq(pages.dbId, prop.target ?? ""), eq(pages.type, "entry"), isNull(pages.trashedAt)));
+    const ids: string[] = [];
+    let error: string | null = null;
+    for (const title of titles) {
+      const matches = rows.filter((row) => fold(row.title || "") === fold(title));
+      if (matches.length === 0) {
+        error = `${prop.name} : aucune entrée « ${title} » dans la base visée`;
+        break;
+      }
+      if (matches.length > 1) {
+        const names = matches.map((row) => `${row.title || "Sans titre"} ${row.id}`).join(", ");
+        error = `${prop.name} : « ${title} » désigne ${matches.length} entrées (${names})`;
+        break;
+      }
+      if (!ids.includes(matches[0].id)) ids.push(matches[0].id);
+    }
+    answers.set(prop.id, error ? { error } : { ids });
+  }
+  return answers;
+}
 
 export async function convertMarkdown(markdown: string, origin: string | null): Promise<Conversion> {
   const rows = await pathRows();

@@ -8,6 +8,7 @@ import { SiteAddress } from "@/components/settings/SiteAddress";
 import { SyncSection } from "@/components/settings/SyncSection";
 import { VersionSection } from "@/components/settings/VersionSection";
 import { listAgentLog } from "@/lib/agent_log";
+import { listAgentRequests } from "@/lib/agent_requests";
 import { listAgentTokens } from "@/lib/agent_tokens";
 import { canSwitchVersion } from "@/lib/app_version";
 import { getCurrentUser } from "@/lib/auth";
@@ -69,7 +70,7 @@ async function Section({ section, username }: { section: SettingsSection; userna
       );
     }
     case "agent": {
-      const [tokens, log] = await Promise.all([listAgentTokens(), listAgentLog()]);
+      const [tokens, log, requests] = await Promise.all([listAgentTokens(), listAgentLog(), listAgentRequests()]);
       return (
         <AgentSection
           tokens={tokens.map((token) => ({
@@ -86,6 +87,15 @@ async function Section({ section, username }: { section: SettingsSection; userna
             model: entry.model,
             action: entry.action,
             pageTitle: entry.pageTitle,
+          }))}
+          requests={requests.map((demand) => ({
+            id: demand.id,
+            action: demand.action,
+            pageId: demand.pageId,
+            pageTitle: demand.pageTitle,
+            tokenName: demand.tokenName,
+            model: demand.model,
+            createdAt: demand.createdAt.toISOString(),
           }))}
         />
       );

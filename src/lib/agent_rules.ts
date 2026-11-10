@@ -22,6 +22,32 @@ export function parseModel(header: string | null): string | null {
   return clean === "" ? null : clean.slice(0, MODEL_MAX);
 }
 
+// Gestes qui passent par une validation humaine (palier f) : publication et
+// suppression définitive. Dépublier, corbeille et restauration restent
+// immédiats.
+export const REQUEST_ACTIONS = ["publish", "purge"] as const;
+export type RequestAction = (typeof REQUEST_ACTIONS)[number];
+export const REQUEST_DECISIONS = ["accepted", "refused"] as const;
+export type RequestDecision = (typeof REQUEST_DECISIONS)[number];
+
+export function isRequestAction(raw: unknown): raw is RequestAction {
+  return typeof raw === "string" && (REQUEST_ACTIONS as readonly string[]).includes(raw);
+}
+
+export function requestDecision(raw: unknown): RequestDecision | null {
+  return raw === "accepted" || raw === "refused" ? raw : null;
+}
+
+// Verbe de la demande, tel que le lit Antonin dans Réglages.
+export function requestActionLabel(action: RequestAction): string {
+  return action === "publish" ? "Publier" : "Purger";
+}
+
+// Action du journal quand la demande est traitée.
+export function requestLogAction(action: RequestAction): string {
+  return action === "publish" ? "publication" : "purge";
+}
+
 export function checkTokenName(raw: unknown): { value: string } | { error: string } {
   if (typeof raw !== "string") return { error: "Nom du jeton attendu" };
   const name = raw.trim();
