@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { createSaver, type Patch, type SaveStatus } from "@/lib/saver";
 import { sameJson } from "@/lib/sync_merge";
 import type { WebFields } from "@/lib/web_save";
+import { onPageMoved } from "./page_moved";
 
 // Plafond du navigateur pour une requête keepalive (celle qui survit à la
 // fermeture de l'onglet) : 64 Ko, marge comprise.
@@ -130,9 +131,15 @@ export function useAutosave(pageId: string, { initial, onSaved, onMerged, onRemo
       if (document.visibilityState === "hidden") void saver.flush(true);
       else void refresh();
     };
+    // Une page glissée dans l'arbre a emporté son bloc : ancienne et nouvelle
+    // mère se relisent comme au retour sur l'onglet.
+    const offMoved = onPageMoved(({ from, to }) => {
+      if (from === pageId || to === pageId) void refresh();
+    });
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
+      offMoved();
       void saver.flush(true);
     };
   }, [saver, pageId, confirmed, remote, lastStatus]);

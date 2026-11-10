@@ -13,9 +13,10 @@ import {
 import { fr } from "@blocknote/core/locales";
 import { BlockNoteView } from "@blocknote/mantine";
 import { getDefaultReactSlashMenuItems, SuggestionMenuController, useCreateBlockNote } from "@blocknote/react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { columnStructure } from "@/lib/blocks";
 import { checkUpload } from "@/lib/upload_rules";
+import { dropSpot, onEditorDrop, onEditorHover, type DropSpot } from "./editor_drop";
 import { useEdgeScroll } from "./use_edge_scroll";
 import { planBlockRuns } from "@/lib/web_save";
 import { youtubeId } from "@/lib/youtube";
@@ -116,6 +117,31 @@ function replaceDocument(editor: EditorInstance, target: unknown[]): void {
       else if (run.before) editor.insertBlocks(insert, run.before, "before");
       else editor.replaceBlocks(editor.document, insert);
     }
+  });
+}
+
+// Page de l'arbre déposée dans ce corps (editor_drop.ts) : son bloc se pose à
+// l'endroit visé, et un bloc propriétaire déjà présent s'en va dans la même
+// transaction. useSubpages voit donc le compte de blocs inchangé et ne jette
+// rien. Sans endroit (corps vide), le bloc va en bas.
+type DocBlock = { id: string; type: string; props: Record<string, unknown>; children: DocBlock[] };
+
+function ownerBlocksOf(blocks: readonly DocBlock[], childId: string): DocBlock[] {
+  return blocks.flatMap((block) => [
+    ...(block.type === "subpage" && block.props.pageId === childId && block.props.link !== true ? [block] : []),
+    ...ownerBlocksOf(block.children ?? [], childId),
+  ]);
+}
+
+function placeSubpage(editor: EditorInstance, childId: string, spot: DropSpot | null): void {
+  const existing = ownerBlocksOf(editor.document as unknown as DocBlock[], childId);
+  if (spot && existing.some((block) => block.id === spot.blockId)) return;
+  const block = { type: "subpage", props: { pageId: childId, kind: "page" } } as unknown as PartialBlock;
+  const last = editor.document[editor.document.length - 1];
+  editor.transact(() => {
+    if (spot) editor.insertBlocks([block], spot.blockId, spot.placement);
+    else editor.insertBlocks([block], last, "after");
+    if (existing.length) editor.removeBlocks(existing.map((owner) => owner.id));
   });
 }
 
@@ -286,8 +312,30 @@ export default function Editor({ pageId, initialBody, onCreateChild, onChange, o
     return () => onReady?.(null);
   }, [editor, onReady]);
 
+  // Dépôt d'une page de l'arbre : trait d'insertion au survol, bloc posé au
+  // lâcher. Seulement là où une sous-page peut naître.
+  const acceptsSubpages = !!onCreateChild;
+  const [spot, setSpot] = useState<DropSpot | null>(null);
+  useEffect(() => {
+    if (!acceptsSubpages) return;
+    const offHover = onEditorHover((hover) => {
+      const host = hostRef.current;
+      setSpot(hover && host && hover.hostId === pageId ? dropSpot(host, hover.point) : null);
+    });
+    const offDrop = onEditorDrop(({ hostId, pageId: childId, point }) => {
+      setSpot(null);
+      const host = hostRef.current;
+      if (hostId === pageId && host) placeSubpage(editor, childId, dropSpot(host, point));
+    });
+    return () => {
+      offHover();
+      offDrop();
+    };
+  }, [acceptsSubpages, editor, pageId]);
+
   return (
-    <div ref={hostRef}>
+    <div ref={hostRef} className="editor-host" data-drop-page={acceptsSubpages ? pageId : undefined}>
+      {spot && <div className="editor-drop-line" style={{ top: spot.top, left: spot.left, width: spot.width }} aria-hidden />}
       <BlockNoteView editor={editor} theme="light" slashMenu={false} onChange={() => onChange(editor.document)}>
         <SuggestionMenuController
           triggerCharacter="/"

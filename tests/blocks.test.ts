@@ -10,6 +10,8 @@ import {
   isForeignLink,
   linkedRefs,
   ownerRefs,
+  subpageOwnerBlock,
+  withoutOwnerBlocks,
   refChanges,
   renderHtml,
   safeHref,
@@ -505,5 +507,55 @@ describe("appendAtEnd", () => {
     expect(appendAtEnd([para("a")], [para("b")])).toEqual([para("a"), para("b")]);
     expect(appendAtEnd(null, [para("b")])).toEqual([para("b")]);
     expect(appendAtEnd([para("")], [para("b")])).toEqual([para("b"), para("")]);
+  });
+});
+
+describe("bloc propriétaire d'une sous-page déplacée", () => {
+  const owner = (id: string, pageId: string) => ({ id, type: "subpage", props: { pageId, kind: "page", link: false }, children: [] });
+  const link = (id: string, pageId: string) => ({ id, type: "subpage", props: { pageId, kind: "page", link: true }, children: [] });
+  const para = (id: string, text: string) => ({ id, type: "paragraph", props: {}, content: [{ type: "text", text, styles: {} }], children: [] });
+
+  it("fabrique un bloc que ownerRefs compte", () => {
+    expect(ownerRefs([subpageOwnerBlock("pg_a", "b1")]).get("pg_a")).toBe(1);
+  });
+
+  it("retire le bloc propriétaire, garde les liens et les autres blocs", () => {
+    const { body, removed } = withoutOwnerBlocks([para("p1", "avant"), owner("b1", "pg_a"), link("b2", "pg_a"), owner("b3", "pg_b")], "pg_a");
+    expect(removed).toBe(1);
+    expect(body.map((block) => (block as { id: string }).id)).toEqual(["p1", "b2", "b3"]);
+  });
+
+  it("descend dans les enfants", () => {
+    const toggle = { ...para("t", "dépliant"), children: [owner("b1", "pg_a"), para("p2", "reste")] };
+    const { body, removed } = withoutOwnerBlocks([toggle], "pg_a");
+    expect(removed).toBe(1);
+    expect((body[0] as { children: { id: string }[] }).children.map((block) => block.id)).toEqual(["p2"]);
+  });
+
+  it("laisse un paragraphe vide dans une colonne vidée", () => {
+    const columns = {
+      id: "cl",
+      type: "columnList",
+      props: {},
+      children: [
+        { id: "c1", type: "column", props: {}, children: [owner("b1", "pg_a")] },
+        { id: "c2", type: "column", props: {}, children: [para("p", "x")] },
+      ],
+    };
+    const { body } = withoutOwnerBlocks([columns], "pg_a");
+    const first = (body[0] as { children: { children: { id: string; type: string }[] }[] }).children[0].children;
+    expect(first).toEqual([{ id: "b1", type: "paragraph", props: {}, content: [], children: [] }]);
+  });
+
+  it("laisse un paragraphe vide dans un corps vidé", () => {
+    const { body } = withoutOwnerBlocks([owner("b1", "pg_a")], "pg_a");
+    expect(body).toEqual([{ id: "b1", type: "paragraph", props: {}, content: [], children: [] }]);
+  });
+
+  it("ne touche à rien sans bloc propriétaire", () => {
+    const start = [para("p1", "x"), link("b2", "pg_a")];
+    const { body, removed } = withoutOwnerBlocks(start, "pg_a");
+    expect(removed).toBe(0);
+    expect(body).toEqual(start);
   });
 });

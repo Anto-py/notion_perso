@@ -9,6 +9,7 @@ import { useEffect, useRef } from "react";
 import { ownerRefs, refChanges } from "@/lib/blocks";
 import type { AbsentTarget, TreeRow } from "@/lib/tree";
 import type { ChildKind } from "./Editor";
+import { onPageMoved } from "./page_moved";
 import { send } from "./request";
 import { addToDirectory, getPageDirectory, setPageDirectory } from "./subpageBlock";
 
@@ -33,6 +34,18 @@ export function useSubpages(
   useEffect(() => {
     setPageDirectory(directory, { hostId: pageId, absent });
   }, [directory, pageId, absent]);
+
+  // Page glissée dans l'arbre : l'annuaire apprend sa nouvelle mère tout de
+  // suite. Sans cela, le corps relu sans son bloc arriverait avant l'arbre
+  // rafraîchi, et bodyChanged jetterait la page qu'on vient de déplacer.
+  useEffect(
+    () =>
+      onPageMoved(({ pageId: moved, to }) => {
+        const row = getPageDirectory().get(moved);
+        if (row) addToDirectory({ ...row, parentId: to });
+      }),
+    [],
+  );
 
   // Une base naît sous la racine des bases (parentId null côté serveur, la
   // racine étant lue par son rôle) ; la page ne la montre que par une vue liée.

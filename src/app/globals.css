@@ -4819,3 +4819,19 @@ button.link.icon-danger {
 .agent-created code {
   word-break: break-all;
 }
+
+/* Page de l'arbre glissée au-dessus de l'éditeur : trait où son bloc se posera
+   (components/editor_drop.ts). */
+.editor-host {
+  position: relative;
+}
+
+.editor-drop-line {
+  position: absolute;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 1px;
+  background: var(--accent);
+  pointer-events: none;
+  z-index: 5;
+}

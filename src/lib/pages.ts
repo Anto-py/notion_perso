@@ -5,7 +5,7 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, ne, sql } from "dri
 import { db } from "@/db";
 import { media, pages } from "@/db/schema";
 import { FOLDER_ICON, fallbackParent, placementError, trashError, type PageKind } from "./bases";
-import { appendAtEnd, flattenToText } from "./blocks";
+import { appendAtEnd, flattenToText, ownerRefs, subpageOwnerBlock, withoutOwnerBlocks } from "./blocks";
 import { newId } from "./ids";
 import { removeCitedEntries } from "./relation_query";
 import { emptyConfig } from "./views";
@@ -247,8 +247,15 @@ export async function updatePage(id: string, patch: PagePatch, check?: SaveCheck
 // Reparentage. newParentId null : la page remonte à la racine de l'arbre ;
 // une base ou un dossier ne quitte jamais « Bases ». beforeId (facultatif)
 // insère la page devant cette sœur, null la met en fin de liste ; absent, la
-// page garde sa clé d'ordre et se range selon elle.
-export async function movePage(id: string, newParentId: string | null, beforeId?: string | null): Promise<Outcome> {
+// page garde sa clé d'ordre et se range selon elle. placeBlock faux : le bloc
+// quitte l'ancienne mère mais n'est pas ajouté à la nouvelle, l'appelant le
+// posant lui-même (page déposée à un endroit précis de l'éditeur ouvert).
+export async function movePage(
+  id: string,
+  newParentId: string | null,
+  beforeId?: string | null,
+  { placeBlock = true }: { placeBlock?: boolean } = {},
+): Promise<Outcome> {
   const page = await getPage(id);
   if (!page || page.trashedAt || page.type === "entry") return NOT_FOUND;
   // La racine des bases reste sous « Ressources » : elle porte le rangement de
@@ -280,8 +287,41 @@ export async function movePage(id: string, newParentId: string | null, beforeId?
     }
     set.manualOrder = orderBefore(siblings, beforeId);
   }
-  await db.update(pages).set(set).where(eq(pages.id, id));
+  await db.transaction(async (tx) => {
+    await tx.update(pages).set(set).where(eq(pages.id, id));
+    if (page.type === "page" && page.parentId !== newParentId) {
+      await carryOwnerBlock(tx, id, page.parentId, placeBlock ? newParentId : null);
+    }
+  });
   return { ok: true };
+}
+
+// Le bloc propriétaire suit la sous-page (lib/blocks.ts, withoutOwnerBlocks) :
+// retiré du corps de l'ancienne mère, ajouté au bas de la nouvelle si elle a un
+// corps et ne le porte pas déjà. Lignes verrouillées : un ajout du Vide-cerveau
+// ou d'un agent au même instant ne se perd pas, et l'éditeur ouvert, dont la
+// révision est dépassée, fusionne à son prochain enregistrement.
+async function carryOwnerBlock(tx: Tx, id: string, oldParentId: string | null, newParentId: string | null) {
+  const bodyOf = async (pageId: string) => {
+    const [row] = await tx.select({ type: pages.type, body: pages.body }).from(pages).where(eq(pages.id, pageId)).for("update");
+    return row;
+  };
+  const write = (pageId: string, body: unknown[]) =>
+    tx.update(pages).set({ body, bodyText: flattenToText(body) }).where(eq(pages.id, pageId));
+
+  if (oldParentId) {
+    const row = await bodyOf(oldParentId);
+    if (row) {
+      const { body, removed } = withoutOwnerBlocks(row.body, id);
+      if (removed) await write(oldParentId, body);
+    }
+  }
+  if (newParentId) {
+    const row = await bodyOf(newParentId);
+    if (row && row.type === "page" && !ownerRefs(row.body).has(id)) {
+      await write(newParentId, appendAtEnd(row.body, [subpageOwnerBlock(id, globalThis.crypto.randomUUID())]));
+    }
+  }
 }
 
 // --- Corbeille -------------------------------------------------------------

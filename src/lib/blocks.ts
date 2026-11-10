@@ -234,6 +234,48 @@ export function refChanges(
   };
 }
 
+// Une sous-page qui change de mère (glisser dans l'arbre, accès agent) emporte
+// son bloc propriétaire : il quitte le corps de l'ancienne mère et arrive au
+// bas de la nouvelle. Un lien (link: true) reste en place, il ne dit rien du
+// rangement. Une colonne ou un corps vidés par le retrait gardent un
+// paragraphe vide, qui reprend l'id du bloc parti : BlockNote ne sait pas
+// monter une colonne sans bloc, et l'éditeur ouvert ignore un document vide
+// (Editor.tsx, replaceDocument).
+export function subpageOwnerBlock(pageId: string, id: string): Record<string, Json> {
+  return { id, type: SUBPAGE_BLOCK, props: { pageId, kind: "page", link: false }, children: [] };
+}
+
+export function withoutOwnerBlocks(body: Json, pageId: string): { body: Json[]; removed: number } {
+  let removed = 0;
+  const isOwner = (block: Json): boolean => {
+    if (!isObject(block) || block.type !== SUBPAGE_BLOCK) return false;
+    const props = propsOf(block);
+    return props.pageId === pageId && props.link !== true;
+  };
+  const visit = (blocks: Json[], keepOne: boolean): Json[] => {
+    const kept: Json[] = [];
+    let lastId: Json = "";
+    for (const block of blocks) {
+      if (isOwner(block)) {
+        removed++;
+        lastId = isObject(block) ? block.id : "";
+        continue;
+      }
+      if (isObject(block) && Array.isArray(block.children) && block.children.length) {
+        kept.push({ ...block, children: visit(block.children, block.type === "column") });
+      } else {
+        kept.push(block);
+      }
+    }
+    if (keepOne && kept.length === 0 && blocks.length > 0) {
+      kept.push({ id: lastId, type: "paragraph", props: {}, content: [], children: [] });
+    }
+    return kept;
+  };
+  const next = visit(Array.isArray(body) ? body : [], true);
+  return { body: next, removed };
+}
+
 // --- Vues liées ----------------------------------------------------------------
 //
 // Un bloc « linked » montre une base existante avec des vues propres au bloc

@@ -18,7 +18,7 @@ import {
 } from "@dnd-kit/core";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { placementError } from "@/lib/bases";
 import { ancestorsOf, buildTree, GAP_PREFIX, parseGapId, wouldCreateCycle, type TreeRow } from "@/lib/tree";
 import { AUTHOR_NAME, CV_URL } from "@/lib/branding";
@@ -30,6 +30,8 @@ import { hydrateSidebar } from "./sidebar_store";
 import { SyncStatus } from "./SyncStatus";
 import { setTreeMeta } from "./tabs_store";
 import { TreeGap, TreeItem } from "./TreeItem";
+import { announceEditorDrop, announceEditorHover, dropHostAt, pointOf, type DropPoint } from "./editor_drop";
+import { announcePageMoved } from "./page_moved";
 
 export const ROOT_DROP_ID = "__racine__";
 
@@ -134,19 +136,76 @@ export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
   );
 
+  // Pointeur suivi pendant un glisser : l'éditeur de la page ouverte est hors
+  // du contexte dnd-kit, la barre décide elle-même s'il est survolé
+  // (editor_drop.ts). Seule une page se dépose dans un corps.
+  const pointer = useRef<DropPoint | null>(null);
+  const stopTracking = useRef<(() => void) | null>(null);
+
+  function trackPointer(row: TreeRow | null, start: Event) {
+    stopTracking.current?.();
+    pointer.current = pointOf(start);
+    if (row?.type !== "page") return;
+    const follow = (point: DropPoint | null) => {
+      if (!point) return;
+      pointer.current = point;
+      const host = dropHostAt(point);
+      announceEditorHover(host?.dataset.dropPage ? { hostId: host.dataset.dropPage, point } : null);
+    };
+    const onMouse = (event: MouseEvent) => follow(pointOf(event));
+    const onTouch = (event: TouchEvent) => follow(pointOf(event));
+    window.addEventListener("mousemove", onMouse);
+    window.addEventListener("touchmove", onTouch, { passive: true });
+    stopTracking.current = () => {
+      window.removeEventListener("mousemove", onMouse);
+      window.removeEventListener("touchmove", onTouch);
+      announceEditorHover(null);
+      stopTracking.current = null;
+    };
+  }
+
+  useEffect(() => () => stopTracking.current?.(), []);
+
+  function endDrag() {
+    setDragging(null);
+    stopTracking.current?.();
+  }
+
   function onDragStart(event: DragStartEvent) {
-    setDragging(rows.find((row) => row.id === event.active.id) ?? null);
+    const row = rows.find((candidate) => candidate.id === event.active.id) ?? null;
+    setDragging(row);
+    trackPointer(row, event.activatorEvent);
+  }
+
+  // Page lâchée sur l'éditeur de la page ouverte : elle y devient sous-page,
+  // à l'endroit visé. Le serveur la reparente et retire son bloc de l'ancienne
+  // mère sans en poser chez la nouvelle (placeBlock: false) ; l'éditeur pose
+  // le bloc lui-même. Déjà enfant de cette page, seul son bloc se déplace.
+  async function dropInBody(pageId: string, hostId: string, point: DropPoint) {
+    const moved = rows.find((row) => row.id === pageId);
+    if (!moved) return;
+    if (moved.type !== "page") {
+      setMessage("Seule une page se dépose dans le corps d'une page : rangez bases et dossiers dans l'arbre.");
+      return;
+    }
+    if ((parentOf.get(pageId) ?? null) !== hostId && !(await relocate(pageId, hostId, undefined, { placeBlock: false }))) return;
+    announceEditorDrop({ hostId, pageId, point });
   }
 
   // target : nouveau parent ; before absent, la page garde sa clé d'ordre
   // (dépôt sur une ligne), before null la met en fin de liste, sinon devant
-  // cette sœur (zone d'insertion).
-  async function relocate(pageId: string, target: string | null, before?: string | null) {
+  // cette sœur (zone d'insertion). Vrai si le serveur a déplacé la page.
+  async function relocate(
+    pageId: string,
+    target: string | null,
+    before?: string | null,
+    { placeBlock = true }: { placeBlock?: boolean } = {},
+  ): Promise<boolean> {
     const moved = rows.find((row) => row.id === pageId);
     // Refus immédiat de déplacer la racine des bases, sans attendre le serveur.
     if (moved?.basesRoot) {
       setMessage("« Bases de données » reste sous « Ressources ».");
-      return;
+      return false;
     }
     const parent = target ? rows.find((row) => row.id === target) : undefined;
     // Même règle que le serveur (lib/bases.ts) : une page n'entre pas dans un
@@ -158,24 +217,38 @@ export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
     );
     if (refused) {
       setMessage(refused);
-      return;
+      return false;
     }
     // Refus immédiat, sans attendre le serveur (qui refuserait aussi).
     if (wouldCreateCycle(parentOf, pageId, target)) {
       setMessage("Une page ne peut pas aller sous elle-même ni sous l'une de ses sous-pages.");
-      return;
+      return false;
     }
-    const body = before === undefined ? { parentId: target } : { parentId: target, before };
-    if (await post(`/api/pages/${pageId}/move`, body)) {
-      if (target && !expanded.has(target)) setExpanded(new Set([...expanded, target]));
-      router.refresh();
-    }
+    const body: Record<string, unknown> = before === undefined ? { parentId: target } : { parentId: target, before };
+    if (!placeBlock) body.placeBlock = false;
+    if (!(await post(`/api/pages/${pageId}/move`, body))) return false;
+    if (target && !expanded.has(target)) setExpanded(new Set([...expanded, target]));
+    // Le bloc de la page a quitté l'ancienne mère et rejoint la nouvelle :
+    // l'éditeur ouvert sur l'une d'elles se relit.
+    const from = parentOf.get(pageId) ?? null;
+    if (target !== from) announcePageMoved({ pageId, from, to: target });
+    router.refresh();
+    return true;
   }
 
   async function onDragEnd({ active, over }: DragEndEvent) {
-    setDragging(null);
-    if (!over || over.id === active.id) return;
+    const point = pointer.current;
+    endDrag();
     const pageId = String(active.id);
+    // L'éditeur de la page ouverte prime : la vignette, encore proche de la
+    // barre, peut toucher une ligne de l'arbre alors que le pointeur est dans
+    // le corps.
+    const host = point ? dropHostAt(point) : null;
+    if (point && host?.dataset.dropPage) {
+      await dropInBody(pageId, host.dataset.dropPage, point);
+      return;
+    }
+    if (!over || over.id === active.id) return;
     const gap = parseGapId(String(over.id));
     if (gap) {
       // Déposer une page devant elle-même ne fait rien.
@@ -228,7 +301,7 @@ export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
             collisionDetection={collisionDetection}
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
-            onDragCancel={() => setDragging(null)}
+            onDragCancel={endDrag}
           >
             <nav className={dragging ? "tree dragging" : "tree"} aria-label="Pages">
               {tree.length === 0 ? (
