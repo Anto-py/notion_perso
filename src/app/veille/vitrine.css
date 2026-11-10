@@ -1,0 +1,401 @@
+/* Vitrine de veille (/veille), tout sous .vitrine. Étape 6 : mise en page
+   fonctionnelle (rangées défilantes, filtres, repli du mot d'accueil) sur les
+   couleurs du thème ; la charte complète allégée (fond, cadre, coins) vient à
+   l'étape 11. */
+
+.vitrine .public-main {
+  max-width: 80rem;
+}
+
+.vitrine-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 1rem 0 0.75rem;
+  font-size: 2rem;
+}
+
+/* Mot d'accueil, replié à 4 lignes dès le rendu serveur. */
+.vitrine-welcome-wrap {
+  max-width: var(--text-width);
+  margin-bottom: 1.25rem;
+}
+
+.vitrine-welcome:not([data-open]) {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
+}
+
+.vitrine-welcome > :first-child {
+  margin-top: 0;
+}
+
+.vitrine-more,
+.vitrine-pill-more,
+.vitrine-clear {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Recherche */
+.vitrine-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.vitrine-search {
+  position: relative;
+  max-width: 40rem;
+}
+
+.vitrine-search-input {
+  width: 100%;
+  padding: 0.7rem 2.5rem 0.7rem 0.9rem;
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-command);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 1.05rem;
+}
+
+.vitrine-search-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.vitrine-search-input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.vitrine-search-clear {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.vitrine-search-clear:hover {
+  background: var(--hover);
+}
+
+.vitrine-search-error {
+  margin: 0.4rem 0 0;
+  color: var(--danger);
+  font-size: 0.9rem;
+}
+
+/* Panorama et menus */
+.vitrine-facets {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.vitrine-panorama {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vitrine-pill,
+.vitrine-chip,
+.vitrine-coeur,
+.vitrine-menu summary {
+  padding: 0.3rem 0.7rem;
+  border: 1.5px solid var(--accent);
+  border-radius: var(--r-command);
+  background: var(--bg);
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.vitrine-pill[aria-pressed="true"],
+.vitrine-coeur[aria-pressed="true"],
+.vitrine-menu summary[data-active] {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.vitrine-pill:disabled {
+  border-color: var(--line);
+  color: var(--ink-soft);
+  opacity: 0.6;
+  cursor: default;
+}
+
+.vitrine-menus {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.vitrine-menu {
+  position: relative;
+}
+
+.vitrine-menu summary {
+  list-style: none;
+}
+
+.vitrine-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.vitrine-menu-list {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 14rem;
+  max-height: 20rem;
+  overflow-y: auto;
+  padding: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-surface);
+  background: var(--bg);
+  box-shadow: 4px 4px 0 var(--line);
+}
+
+.vitrine-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.3rem;
+  border-radius: var(--r-inner);
+  cursor: pointer;
+}
+
+.vitrine-menu-item:hover {
+  background: var(--hover);
+}
+
+.vitrine-menu-item[data-inert] {
+  color: var(--ink-soft);
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Ligne des filtres actifs */
+.vitrine-active {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding-top: 0.25rem;
+  color: var(--ink-soft);
+}
+
+.vitrine-chip {
+  background: var(--accent-soft);
+}
+
+/* Rangées */
+.vitrine-row,
+.vitrine-all {
+  margin-bottom: 2rem;
+}
+
+.vitrine-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.vitrine-row-title {
+  margin: 0 0 0.6rem;
+  font-family: var(--font-label);
+  font-size: 1.1rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vitrine-row-arrows {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.vitrine-arrow {
+  width: 2.2rem;
+  height: 2.2rem;
+  border: 1.5px solid var(--accent);
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--accent);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.vitrine-arrow[data-faded] {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.vitrine-row-track {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  padding: 0.25rem 0.25rem 1rem;
+}
+
+.vitrine-row-track:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.vitrine-row-track > .vitrine-card {
+  flex: 0 0 17rem;
+  scroll-snap-align: start;
+}
+
+/* Sentinelles des bouts de rangée : points d'accroche elles aussi, sinon
+   l'accrochage obligatoire aligne la première carte au chargement et cache
+   la sentinelle de départ (piste décalée de 21 px, mesuré). */
+.vitrine-row-edge {
+  flex: 0 0 1px;
+  align-self: stretch;
+  scroll-snap-align: start;
+}
+
+.vitrine-row-empty,
+.vitrine-empty {
+  color: var(--ink-soft);
+}
+
+.vitrine-none p {
+  margin: 0 0 0.6rem;
+}
+
+.vitrine-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Grille */
+.vitrine-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 1rem;
+}
+
+/* Carte */
+.vitrine-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.9rem 1rem;
+  border: 1.5px solid var(--accent);
+  border-radius: var(--r-surface);
+  background: var(--bg);
+}
+
+.vitrine-card-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.vitrine-heart {
+  color: var(--warm);
+}
+
+.vitrine-card-desc,
+.vitrine-card-snippet {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+
+.vitrine-card-snippet {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  font-style: italic;
+}
+
+.vitrine-card mark {
+  background: var(--hit);
+  color: inherit;
+}
+
+.vitrine-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
+}
+
+.vitrine-tags li {
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--r-inner);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.vitrine-card-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: auto 0 0;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.vitrine-new {
+  padding: 0 0.4rem;
+  border-radius: var(--r-inner);
+  background: var(--warm);
+  color: var(--ink);
+  font-family: var(--font-label);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 760px) {
+  .vitrine-row-track > .vitrine-card {
+    flex-basis: 80%;
+  }
+}

@@ -9,14 +9,14 @@ import { Suspense } from "react";
 import { PageCover } from "@/components/PageCover";
 import { PageIcon } from "@/components/PageIcon";
 import { PublicFooter, siteName } from "@/components/PublicRenderer";
-import { VitrineGrid } from "@/components/vitrine/VitrineGrid";
-import { VitrineRow } from "@/components/vitrine/VitrineRow";
+import { Vitrine } from "@/components/vitrine/Vitrine";
 import { VitrineWelcome } from "@/components/vitrine/VitrineWelcome";
 import { renderHtml } from "@/lib/blocks";
 import { faviconHref } from "@/lib/icons";
 import { SEARCH_MIN_LENGTH } from "@/lib/search";
-import { parseVitrineState, vitrineRenderOptions, vitrineView, type VitrineState } from "@/lib/vitrine";
-import { loadVitrine, searchVitrine, type Vitrine } from "@/lib/vitrine_query";
+import { parseVitrineState, vitrineRenderOptions, type VitrineState } from "@/lib/vitrine";
+import { loadVitrine, searchVitrine, type Vitrine as VitrineData } from "@/lib/vitrine_query";
+import type { VitrineSearch } from "@/lib/vitrine_search";
 
 type SearchParams = PageProps<"/veille">["searchParams"];
 
@@ -53,7 +53,7 @@ async function VitrinePage({ searchParams }: { searchParams: SearchParams }) {
     <div className="public">
       <main className="public-main">
         {vitrine && state ? (
-          <VitrineContent vitrine={vitrine} state={state} ranked={search ? search.results.map((result) => result.slug) : null} />
+          <VitrineContent vitrine={vitrine} state={state} search={search} />
         ) : (
           <p className="public-gone">Ce contenu n&apos;est plus disponible.</p>
         )}
@@ -63,12 +63,11 @@ async function VitrinePage({ searchParams }: { searchParams: SearchParams }) {
   );
 }
 
-function VitrineContent({ vitrine, state, ranked }: { vitrine: Vitrine; state: VitrineState; ranked: string[] | null }) {
+function VitrineContent({ vitrine, state, search }: { vitrine: VitrineData; state: VitrineState; search: VitrineSearch | null }) {
   const { base, entries, welcome } = vitrine;
-  // ranked null (pas de recherche) : les résultats suivent les filtres seuls,
-  // dans l'ordre du titre.
-  const view = vitrineView(entries, state, ranked);
   const welcomeHtml = welcome ? renderHtml(welcome.body, vitrineRenderOptions(entries)).trim() : "";
+  // Vitrine reçoit l'état et la recherche déjà jouée : son rendu serveur est
+  // celui que l'hydratation retrouve.
   return (
     <>
       <PageCover cover={base.cover} position={base.coverPosition} className="page-cover public-cover" />
@@ -76,17 +75,7 @@ function VitrineContent({ vitrine, state, ranked }: { vitrine: Vitrine; state: V
         <PageIcon icon={base.icon} type="database" /> {base.title || "Sans titre"}
       </h1>
       {welcomeHtml ? <VitrineWelcome html={welcomeHtml} /> : null}
-      {view.kind === "empty" ? <p className="vitrine-empty">La veille est en cours de constitution.</p> : null}
-      {view.kind === "vitrine" ? (
-        <>
-          {view.heart.length ? <VitrineRow id="coeur" title="★ Coups de cœur" entries={view.heart} /> : null}
-          <VitrineRow id="recent" title="✦ Ajoutés récemment" entries={view.recent} />
-          <VitrineGrid entries={view.all} />
-        </>
-      ) : null}
-      {view.kind === "results" ? (
-        <VitrineRow id="results" title={`Résultats (${view.results.length})`} entries={view.results} empty="Aucune ressource ne correspond." />
-      ) : null}
+      <Vitrine entries={entries} initialState={state} initialSearch={search} />
     </>
   );
 }
