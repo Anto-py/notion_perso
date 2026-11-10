@@ -2,9 +2,12 @@
 // 1. En production (MIGRATE_ON_START=1) : migrations et compte unique (un échec
 //    arrête le processus, voir db/bootstrap.ts).
 // 1 bis. Sur une instance sans SYNC_REMOTE_URL (serveur, développement) :
-//    déménagement des bases hors de « Bases » (étape 16, palier c). Idempotent :
-//    un démarrage ordinaire ne trouve rien et ne lit aucun corps. Le Mac le
-//    reçoit par la synchronisation. Un échec n'empêche pas le démarrage.
+//    déménagement des bases dans « Bases » (étape 16, palier c), puis conversion
+//    de la racine sur la page « Bases de données » (étape 17, palier c).
+//    Idempotents : un démarrage ordinaire ne trouve rien. La conversion ne
+//    tourne qu'une fois, tant que le rôle est porté par un dossier : après elle,
+//    `basesPageConverted` est vrai et plus rien ne se rejoue. Le Mac reçoit le
+//    résultat par la synchronisation. Un échec n'empêche pas le démarrage.
 // 2. Purge de la corbeille (éléments de plus de 30 jours). L'autre déclencheur
 //    est l'ouverture de la corbeille (api/trash). Un échec n'empêche pas le
 //    serveur de démarrer.
@@ -21,11 +24,21 @@ export async function register() {
     await bootstrap();
   }
   if (!process.env.SYNC_REMOTE_URL) {
-    const [{ db }, { describeRun, runBasesMove }] = await Promise.all([import("./db"), import("./lib/bases_move_query")]);
+    const [{ db }, { describeRun, runBasesMove }, { basesPageConverted, describeConversion, runBasesPageMove }] = await Promise.all([
+      import("./db"),
+      import("./lib/bases_move_query"),
+      import("./lib/bases_page_move_query"),
+    ]);
     await runBasesMove(db, { write: true }).then(
       (run) => console.log(describeRun(run)),
       (error) => console.error("Déménagement vers « Bases » impossible :", error),
     );
+    if (!(await basesPageConverted(db))) {
+      await runBasesPageMove(db, { write: true }).then(
+        (run) => console.log(describeConversion(run)),
+        (error) => console.error("Conversion de la racine des bases impossible :", error),
+      );
+    }
   }
   const { tryPurgeExpired } = await import("./lib/media_cleanup_query");
   await tryPurgeExpired();
