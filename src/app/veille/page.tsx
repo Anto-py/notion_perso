@@ -14,8 +14,9 @@ import { VitrineRow } from "@/components/vitrine/VitrineRow";
 import { VitrineWelcome } from "@/components/vitrine/VitrineWelcome";
 import { renderHtml } from "@/lib/blocks";
 import { faviconHref } from "@/lib/icons";
-import { parseVitrineState, vitrineRenderOptions, vitrineView } from "@/lib/vitrine";
-import { loadVitrine, type Vitrine } from "@/lib/vitrine_query";
+import { SEARCH_MIN_LENGTH } from "@/lib/search";
+import { parseVitrineState, vitrineRenderOptions, vitrineView, type VitrineState } from "@/lib/vitrine";
+import { loadVitrine, searchVitrine, type Vitrine } from "@/lib/vitrine_query";
 
 type SearchParams = PageProps<"/veille">["searchParams"];
 
@@ -44,22 +45,29 @@ async function VitrinePage({ searchParams }: { searchParams: SearchParams }) {
   // Rendu à chaque requête, jamais au build : la vitrine suit la base.
   await connection();
   const [vitrine, params] = await Promise.all([loadVitrine(), searchParams]);
+  const state = vitrine ? parseVitrineState(params, vitrine.entries) : null;
+  // Une recherche dans l'adresse est jouée au serveur : un lien partagé
+  // s'ouvre sur ses résultats, sans clignotement.
+  const search = state && state.q.trim().length >= SEARCH_MIN_LENGTH ? await searchVitrine(state.q) : null;
   return (
     <div className="public">
       <main className="public-main">
-        {vitrine ? <VitrineContent vitrine={vitrine} params={params} /> : <p className="public-gone">Ce contenu n&apos;est plus disponible.</p>}
+        {vitrine && state ? (
+          <VitrineContent vitrine={vitrine} state={state} ranked={search ? search.results.map((result) => result.slug) : null} />
+        ) : (
+          <p className="public-gone">Ce contenu n&apos;est plus disponible.</p>
+        )}
       </main>
       <PublicFooter />
     </div>
   );
 }
 
-function VitrineContent({ vitrine, params }: { vitrine: Vitrine; params: Awaited<SearchParams> }) {
+function VitrineContent({ vitrine, state, ranked }: { vitrine: Vitrine; state: VitrineState; ranked: string[] | null }) {
   const { base, entries, welcome } = vitrine;
-  const state = parseVitrineState(params, entries);
-  // La recherche du serveur (searchVitrine) n'existe pas encore : sans elle,
-  // les résultats ne suivent que les filtres, dans l'ordre du titre.
-  const view = vitrineView(entries, state, null);
+  // ranked null (pas de recherche) : les résultats suivent les filtres seuls,
+  // dans l'ordre du titre.
+  const view = vitrineView(entries, state, ranked);
   const welcomeHtml = welcome ? renderHtml(welcome.body, vitrineRenderOptions(entries)).trim() : "";
   return (
     <>

@@ -7,6 +7,7 @@ import { db } from "@/db";
 import { pages } from "@/db/schema";
 import { listEntries } from "./databases";
 import { getPage, type Page } from "./pages";
+import { HIT_END, HIT_START } from "./search";
 import { syncConfig } from "./sync_config";
 import { parseConfig } from "./views";
 import {
@@ -14,8 +15,10 @@ import {
   toVitrineEntry,
   vitrineFields,
   type VitrineEntry,
+  type VitrineFields,
 } from "./vitrine";
 import { applyVitrinePatch, vitrineAddress, type VitrinePatch } from "./vitrine_pilotage";
+import { rankVitrineHits, vitrineSearchTerms, type FieldRank, type VitrineSearch } from "./vitrine_search";
 
 // Interrupteur booléen vrai seulement, comme parseVitrine : la chaîne "true"
 // n'active rien.
@@ -41,10 +44,13 @@ function livingWelcome(page: Page | null): Page | null {
   return page && !page.trashedAt && page.type === "page" ? page : null;
 }
 
+// `fields` reste au serveur (searchVitrine) : il porte les options des
+// propriétés lues, jamais celles de Catégorie.
 export type Vitrine = {
   base: { id: string; title: string; icon: string | null; cover: string | null; coverPosition: number | null };
   entries: VitrineEntry[];
   welcome: Page | null;
+  fields: VitrineFields;
 };
 
 // Ce que sert /veille, lu en direct à chaque rendu (aucun cache entre deux
@@ -69,8 +75,77 @@ export const loadVitrine = cache(async (): Promise<Vitrine | null> => {
     base: { id: row.id, title: row.title, icon: row.icon, cover: row.cover, coverPosition: row.coverPosition },
     entries: rows.map((entry) => toVitrineEntry(entry, fields, { slug: slugs.get(entry.id)!, hasNotes: notes.has(entry.id), now })),
     welcome: livingWelcome(welcomePage),
+    fields,
   };
 });
+
+// Extrait d'une ligne, marqué comme celui de la recherche de l'app.
+const HEADLINE_OPTIONS = `StartSel=${HIT_START}, StopSel=${HIT_END}, MaxWords=18, MinWords=8, MaxFragments=1, FragmentDelimiter=" … "`;
+
+// Recherche de /veille (§2) sur les entrées vivantes de la base active, null
+// sans vitrine. Quatre documents par entrée, bâtis à la volée : titre,
+// libellés de Domaine (table id → libellé passée en jsonb), Description,
+// corps. Un mot est trouvé dans un champ par sa racine française (« reviser »
+// trouve « révision ») ou comme début de mot sans accents (« evaluat »
+// trouve « évaluation » pendant la frappe, motif de searchPages). Le tri et
+// le choix du mode sont dans rankVitrineHits.
+export async function searchVitrine(raw: string): Promise<VitrineSearch | null> {
+  const vitrine = await loadVitrine();
+  if (!vitrine) return null;
+  const { query, terms } = vitrineSearchTerms(raw);
+  if (!terms.length) return { query, mode: "tous_les_mots", total: 0, results: [] };
+
+  const { domaines, description } = vitrine.fields;
+  const labels = Object.fromEntries((domaines?.options ?? []).map((option) => [option.id, option.name]));
+  const list = sql.join(
+    terms.map((term) => sql`${term}`),
+    sql`, `,
+  );
+  // Mots réduits à lettres et chiffres par searchTerms : aucune syntaxe de
+  // tsquery ni d'expression régulière ne peut s'y glisser.
+  const combined = terms.map((term) => `${term}:*`).join(" | ");
+  const result = await db.execute<{ id: string; title: string; found: number; field: FieldRank; snippet: string | null }>(sql`
+    WITH terms AS MATERIALIZED (
+      SELECT f_unaccent(t) AS t, to_tsquery('french', f_unaccent(t) || ':*') AS q
+      FROM unnest(ARRAY[${list}]::text[]) AS t
+    ), labels AS MATERIALIZED (
+      SELECT key AS id, value AS label FROM jsonb_each_text(${JSON.stringify(labels)}::jsonb)
+    ), docs AS MATERIALIZED (
+      SELECT p.id, p.title, COALESCE(p.body_text, '') AS body,
+        ARRAY[COALESCE(p.title, ''), dom.text, COALESCE(p.property_values ->> ${description?.id ?? ""}, ''), COALESCE(p.body_text, '')] AS texts
+      FROM pages p
+      CROSS JOIN LATERAL (
+        SELECT COALESCE(string_agg(l.label, ' '), '') AS text
+        FROM jsonb_array_elements_text(
+          CASE WHEN jsonb_typeof(p.property_values -> ${domaines?.id ?? ""}) = 'array'
+          THEN p.property_values -> ${domaines?.id ?? ""} ELSE '[]'::jsonb END
+        ) AS v(id)
+        JOIN labels l ON l.id = v.id
+      ) dom
+      WHERE p.db_id = ${vitrine.base.id} AND p.type = 'entry' AND p.trashed_at IS NULL
+    ), fields AS (
+      SELECT d.id, f.rank, to_tsvector('french', f_unaccent(f.text)) AS v, lower(f_unaccent(f.text)) AS plain
+      FROM docs d
+      CROSS JOIN LATERAL unnest(d.texts) WITH ORDINALITY AS f(text, rank)
+    ), hits AS (
+      SELECT fields.id, terms.t, min(fields.rank) AS rank
+      FROM fields
+      CROSS JOIN terms
+      WHERE fields.v @@ terms.q OR fields.plain ~ ('\\m' || terms.t)
+      GROUP BY fields.id, terms.t
+    ), scored AS (
+      SELECT id, count(*)::int AS found, min(rank)::int AS field FROM hits GROUP BY id
+    )
+    SELECT d.id, d.title, s.found, s.field,
+      CASE WHEN s.field = 4
+        THEN ts_headline('fr_unaccent', d.body, to_tsquery('french', f_unaccent(${combined})), ${HEADLINE_OPTIONS})
+      END AS snippet
+    FROM scored s
+    JOIN docs d ON d.id = s.id
+  `);
+  const slugOf = new Map(vitrine.entries.map((entry) => [entry.id, entry.slug]));
+  return { query, ...rankVitrineHits(result.rows, terms.length, slugOf) };
+}
 
 // Pages dont les médias se servent sans session au titre de la vitrine : la
 // base (icône, bandeau), ses entrées vivantes, la page d'accueil. Réunie à la
