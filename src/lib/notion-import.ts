@@ -2,7 +2,7 @@
 // plan d'écriture. Module pur (aucune base, aucun disque) : il rend des pages
 // prêtes à insérer, leurs médias et un rapport. L'écriture vit dans
 // lib/import_write.ts.
-import { BASES_ROOT_ID, FOLDER_ICON, type PageKind } from "./bases";
+import { FOLDER_ICON, type PageKind } from "./bases";
 import { planBasesMove } from "./bases_move";
 import { createHash } from "node:crypto";
 import { flattenToText } from "./blocks";
@@ -99,6 +99,8 @@ export type RemoteAsset = {
 
 export type ImportPlan = {
   rootId: string;
+  // Racine des bases lue par son rôle au moment de l'import (étape 17).
+  basesRootId: string;
   pages: PlanPage[];
   media: PlanMedia[];
   icons: PlanIcon[];
@@ -107,7 +109,14 @@ export type ImportPlan = {
 };
 
 // now : date du dossier « Import Notion du … » (lue à Bruxelles).
-export type ImportOptions = { newId?: (prefix: string) => string; newBlockId?: () => string; now?: Date };
+// basesRootId : la racine des bases, lue par son rôle à l'appelant ; le plan
+// est pur et ne peut pas la deviner.
+export type ImportOptions = {
+  basesRootId: string;
+  newId?: (prefix: string) => string;
+  newBlockId?: () => string;
+  now?: Date;
+};
 
 // dbId et dbTitle ne sont posés que pour une entrée : un lien de CSV s'en sert
 // pour reconnaître une relation vers des entrées d'une même base.
@@ -146,7 +155,7 @@ export function resolveArchivePath(fromPath: string, href: string): string {
   return parts.join("/");
 }
 
-export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}): ImportPlan {
+export function buildImportPlan(bytes: Uint8Array, options: ImportOptions): ImportPlan {
   const makeId = options.newId ?? defaultNewId;
   const newBlockId = options.newBlockId ?? (() => globalThis.crypto.randomUUID());
   const { files, warnings } = unpackZip(bytes);
@@ -637,7 +646,7 @@ export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}):
     // En tête du plan : le dossier s'écrit avant ses bases.
     pages.unshift({
       id: folderId,
-      parentId: BASES_ROOT_ID,
+      parentId: options.basesRootId,
       dbId: null,
       type: "folder",
       title: folderTitle,
@@ -657,6 +666,7 @@ export function buildImportPlan(bytes: Uint8Array, options: ImportOptions = {}):
   const iconMediaList = [...iconMedia.values()];
   return {
     rootId,
+    basesRootId: options.basesRootId,
     pages,
     media: [...mediaByPath.values(), ...iconMediaList.map((item) => item.media)],
     icons: iconMediaList.map((item) => item.icon),

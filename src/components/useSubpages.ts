@@ -6,7 +6,6 @@
 // un bloc collé d'ailleurs ou un « Lien vers une page » ne jette rien.
 import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
-import { BASES_ROOT_ID } from "@/lib/bases";
 import { ownerRefs, refChanges } from "@/lib/blocks";
 import type { AbsentTarget, TreeRow } from "@/lib/tree";
 import type { ChildKind } from "./Editor";
@@ -35,8 +34,9 @@ export function useSubpages(
     setPageDirectory(directory, { hostId: pageId, absent });
   }, [directory, pageId, absent]);
 
-  // Une base naît à la racine de « Bases » (parentId null côté serveur) ; la
-  // page ne la montre que par une vue liée.
+  // Une base naît sous la racine des bases (parentId null côté serveur, la
+  // racine étant lue par son rôle) ; la page ne la montre que par une vue liée.
+  // L'annuaire porte la racine, d'où son id (étape 17).
   async function createChild(kind: ChildKind): Promise<string | null> {
     const parentId = kind === "database" ? null : pageId;
     const result = await send("/api/pages", "POST", { parentId, type: kind });
@@ -45,7 +45,8 @@ export function useSubpages(
       return null;
     }
     const id = result.data.id;
-    addToDirectory({ id, parentId: kind === "database" ? BASES_ROOT_ID : pageId, type: kind, title: "", icon: null, closed: false });
+    const rootId = kind === "database" ? (directory.find((row) => row.basesRoot)?.id ?? null) : pageId;
+    addToDirectory({ id, parentId: rootId, type: kind, title: "", icon: null, closed: false });
     router.refresh();
     return id;
   }

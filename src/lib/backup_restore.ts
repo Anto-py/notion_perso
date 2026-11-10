@@ -33,10 +33,20 @@ export type RecoveryOutcome =
 // copies.
 async function liveRefs(): Promise<Map<string, LiveRef>> {
   const rows = await db
-    .select({ id: pages.id, type: pages.type, parentId: pages.parentId, dbId: pages.dbId, trashedAt: pages.trashedAt })
+    .select({
+      id: pages.id,
+      type: pages.type,
+      parentId: pages.parentId,
+      dbId: pages.dbId,
+      isBasesRoot: pages.isBasesRoot,
+      trashedAt: pages.trashedAt,
+    })
     .from(pages);
   return new Map(
-    rows.map((row) => [row.id, { type: row.type, parentId: row.parentId, dbId: row.dbId, trashed: row.trashedAt !== null }]),
+    rows.map((row) => [
+      row.id,
+      { type: row.type, parentId: row.parentId, dbId: row.dbId, isBasesRoot: row.isBasesRoot, trashed: row.trashedAt !== null },
+    ]),
   );
 }
 

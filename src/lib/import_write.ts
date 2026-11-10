@@ -5,7 +5,6 @@ import { Readable } from "node:stream";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { iconImages, media, pages } from "@/db/schema";
-import { BASES_ROOT_ID } from "./bases";
 import type { ImportPlan } from "./notion-import";
 import { compareKeys, keyBetween, keyFromIndex } from "./order_key";
 import { discardFile, saveFile } from "./storage";
@@ -42,10 +41,10 @@ export async function applyImportPlan(plan: ImportPlan): Promise<void> {
     }));
 
     await db.transaction(async (tx) => {
-      // Le dossier d'import arrive après ce que « Bases » range déjà.
-      const inBases = rows.filter((row) => row.parentId === BASES_ROOT_ID);
+      // Le dossier d'import arrive après ce que la racine des bases range déjà.
+      const inBases = rows.filter((row) => row.parentId === plan.basesRootId);
       if (inBases.length > 0) {
-        const siblings = await tx.select({ key: pages.manualOrder }).from(pages).where(eq(pages.parentId, BASES_ROOT_ID));
+        const siblings = await tx.select({ key: pages.manualOrder }).from(pages).where(eq(pages.parentId, plan.basesRootId));
         let last = siblings.map((row) => row.key).sort(compareKeys).at(-1) ?? null;
         for (const row of inBases) row.manualOrder = last = keyBetween(last, null);
       }

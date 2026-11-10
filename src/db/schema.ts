@@ -102,7 +102,8 @@ export const pages = pgTable(
     // garantit qu'une seconde ligne ne peut pas porter le rôle.
     isInbox: boolean("is_inbox").notNull().default(false),
     // Le dossier « Bases », une seule ligne d'id fixe posée par la migration
-    // 0012 (lib/bases.ts, BASES_ROOT_ID), même motif d'index qu'is_inbox.
+    // 0012 (racine des bases), même motif d'index qu'is_inbox. Étape 17 : le
+    // rôle passe à une page, l'id n'est plus fixe.
     isBasesRoot: boolean("is_bases_root").notNull().default(false),
     // Clé d'ordre fractionnaire (lib/order_key.ts), triée octet par octet :
     // la migration 0008 pose COLLATE "C", que Drizzle ne sait pas déclarer.

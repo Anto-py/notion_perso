@@ -5,6 +5,7 @@ import { fail, requireUser } from "@/lib/api";
 import { hydrateRemoteMedia } from "@/lib/import_remote";
 import { applyImportPlan } from "@/lib/import_write";
 import { buildImportPlan, MAX_IMPORT_BYTES, NotionImportError } from "@/lib/notion-import";
+import { basesRootId } from "@/lib/pages";
 import { fetchRemoteImage } from "@/lib/unfurl_fetch";
 
 // Marge pour l'enveloppe multipart autour du fichier.
@@ -30,9 +31,13 @@ export async function POST(request: Request) {
   if (!(file instanceof File)) return fail(400, "Archive zip attendue");
   if (file.size > MAX_IMPORT_BYTES) return fail(413, "Archive trop lourde : la limite est de 500 Mo.");
 
+  // La racine des bases se lit par son rôle (étape 17), jamais par un id fixe.
+  const rootId = await basesRootId();
+  if (!rootId) return fail(409, "Racine des bases introuvable : l'import ne peut pas ranger ses bases.");
+
   let plan;
   try {
-    plan = buildImportPlan(new Uint8Array(await file.arrayBuffer()));
+    plan = buildImportPlan(new Uint8Array(await file.arrayBuffer()), { basesRootId: rootId });
   } catch (error) {
     // Une archive illisible ou vide est un refus explicable, pas une panne :
     // 422 et le message du parseur.

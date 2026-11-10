@@ -1,7 +1,6 @@
 // Vide-cerveau : la base Inbox, son schéma de départ et la capture rapide
 // (note ou lien). Une seule base porte le rôle, garanti par l'index unique
 // partiel pages_inbox_idx ; elle est créée à la première visite de /inbox.
-import { BASES_ROOT_ID } from "./bases";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { pages } from "@/db/schema";
@@ -9,7 +8,7 @@ import { CAPTURE_TITLE_MAX, noteFromText } from "./capture";
 import { COVER_POSITION_DEFAULT, imageCover } from "./covers";
 import { keyAfterLast, updateDatabase } from "./databases";
 import { newId } from "./ids";
-import { recordMedia, updatePage, type Page } from "./pages";
+import { basesRootId, recordMedia, updatePage, type Page } from "./pages";
 import { valuesToText, type Property, type Values } from "./properties";
 import { parseConfig, sanitizeView, type DbConfig } from "./views";
 import { domainOf } from "./unfurl";
@@ -58,6 +57,8 @@ async function migrateInboxProperties(inbox: Page): Promise<Page> {
 export async function ensureInbox(): Promise<Page> {
   const existing = await getInbox();
   if (existing) return migrateInboxProperties(existing);
+  // Sous la racine des bases, lue par son rôle (étape 17).
+  const rootId = await basesRootId();
   const [created] = await db
     .insert(pages)
     .values({
@@ -66,8 +67,8 @@ export async function ensureInbox(): Promise<Page> {
       title: INBOX_TITLE,
       dbConfig: inboxConfig(),
       isInbox: true,
-      // Rangé dans « Bases » comme toute base (étape 16).
-      parentId: BASES_ROOT_ID,
+      // Rangé sous la racine des bases comme toute base (étapes 16 et 17).
+      parentId: rootId,
     })
     .onConflictDoNothing()
     .returning();

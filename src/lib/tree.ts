@@ -2,7 +2,7 @@
 // importé par le serveur (contrôle du déplacement) comme par le navigateur
 // (refus immédiat pendant le glisser-déposer).
 import type { PageKind } from "./bases";
-import { FIRST_KEY, keyBetween } from "./order_key";
+import { keyBetween } from "./order_key";
 import { fold } from "./property_schema";
 
 export type TreeRow = {
@@ -13,8 +13,8 @@ export type TreeRow = {
   icon: string | null;
   // Exclusion du partage posée sur la page elle-même : cadenas dans la sidebar.
   closed: boolean;
-  // Le dossier « Bases » et le Vide-cerveau (étape 16) : rôles fixes, absents
-  // des lignes qui ne viennent pas de listTreeRows.
+  // La racine des bases et le Vide-cerveau (étapes 16 et 17) : rôles fixes,
+  // absents des lignes qui ne viennent pas de listTreeRows.
   basesRoot?: boolean;
   inbox?: boolean;
 };
@@ -33,19 +33,6 @@ export function buildTree(rows: TreeRow[]): TreeNode[] {
     else roots.push(node);
   }
   return roots;
-}
-
-// « Bases » garde la tête de l'arbre tant qu'on ne l'a pas déplacé : la
-// migration lui laisse la clé d'ordre par défaut (`FIRST_KEY`). Un glisser
-// n'écrit cette clé qu'en tête de liste, où la mise en tête est sans effet ;
-// dès qu'une autre clé lui est écrite, ou qu'une ligne a été rangée devant lui
-// (clé plus petite), sa place suit l'ordre manuel. Appelé par `listTreeRows`.
-export function basesHead<T extends TreeRow & { manualOrder: string }>(rows: T[]): T[] {
-  const index = rows.findIndex((row) => row.basesRoot);
-  if (index < 0 || rows[index].manualOrder !== FIRST_KEY) return rows;
-  const behind = rows.some((row) => row.parentId === null && !row.basesRoot && row.manualOrder < FIRST_KEY);
-  if (behind || index === 0) return rows;
-  return [rows[index], ...rows.slice(0, index), ...rows.slice(index + 1)];
 }
 
 // Zones d'insertion du glisser (entre deux lignes) : l'identifiant porte le

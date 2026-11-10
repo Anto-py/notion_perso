@@ -8,7 +8,6 @@
 import { eq, inArray, ne, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { pages } from "../db/schema.ts";
-import { BASES_ROOT_ID } from "./bases.ts";
 import { planBasesMove, type BasesMovePlan, type MoveRow } from "./bases_move.ts";
 import { flattenToText } from "./blocks.ts";
 import { compareKeys, keysBetween } from "./order_key.ts";
@@ -36,9 +35,11 @@ export async function runBasesMove<T extends Record<string, unknown>>(
       })
       .from(pages)
       .where(ne(pages.type, "entry"));
-    if (!lite.some((row) => row.isBasesRoot && row.id === BASES_ROOT_ID)) {
-      throw new BasesMoveError("Dossier « Bases » absent : la migration 0012 n'est pas appliquée.");
+    const root = lite.find((row) => row.isBasesRoot && row.trashedAt === null);
+    if (!root) {
+      throw new BasesMoveError("Racine des bases absente : la migration 0012 n'est pas appliquée.");
     }
+    const rootId = root.id;
     const types = new Map(lite.map((row) => [row.id, row.type]));
     const hostIds = [
       ...new Set(
@@ -47,9 +48,11 @@ export async function runBasesMove<T extends Record<string, unknown>>(
           .map((row) => row.parentId!),
       ),
     ];
-    const outside = lite.some((row) => row.type === "database" && (!row.parentId || types.get(row.parentId) !== "folder"));
+    const outside = lite.some(
+      (row) => row.type === "database" && (!row.parentId || (row.parentId !== rootId && types.get(row.parentId) !== "folder")),
+    );
     const titles = new Map(lite.map((row) => [row.id, row.title]));
-    if (!outside) return { plan: planBasesMove([]), titles, written: false };
+    if (!outside) return { plan: planBasesMove([], { target: rootId }), titles, written: false };
 
     // Un hôte peut être une entrée : la requête légère les écarte, celle-ci
     // les reprend avec leur corps.
@@ -75,14 +78,14 @@ export async function runBasesMove<T extends Record<string, unknown>>(
         .filter((row) => row.type === "entry")
         .map((row) => ({ id: row.id, type: row.type, parentId: row.parentId, body: row.body, trashed: row.trashedAt !== null })),
     ];
-    const plan = planBasesMove(rows);
+    const plan = planBasesMove(rows, { target: rootId });
     if (!write || plan.moved.length === 0) return { plan, titles, written: false };
 
-    // Les bases arrivent après ce que « Bases » range déjà.
+    // Les bases arrivent après ce que la racine range déjà.
     const siblings = await tx
       .select({ manualOrder: pages.manualOrder })
       .from(pages)
-      .where(eq(pages.parentId, BASES_ROOT_ID));
+      .where(eq(pages.parentId, rootId));
     const last = siblings.map((row) => row.manualOrder).sort(compareKeys).at(-1) ?? null;
     const keys = keysBetween(last, null, plan.moved.length);
     for (const [index, base] of plan.moved.entries()) {
@@ -107,7 +110,7 @@ export function describeRun({ plan, written }: BasesMoveRun): string {
   const { moved, trashed, converted, added } = plan.report;
   if (moved + trashed === 0) return "Bases : rien à déménager.";
   const verb = written ? "rangées" : "à ranger";
-  return `Bases : ${moved + trashed} bases ${verb} dans « Bases » (dont ${trashed} en corbeille), ${converted} blocs convertis en vue liée, ${added} vues liées ajoutées en fin de page.`;
+  return `Bases : ${moved + trashed} bases ${verb} sous « Bases de données » (dont ${trashed} en corbeille), ${converted} blocs convertis en vue liée, ${added} vues liées ajoutées en fin de page.`;
 }
 
 // Détail base par base, pour l'essai à blanc.

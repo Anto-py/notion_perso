@@ -51,8 +51,8 @@ function hrefOf(node: TreeNode): string {
 }
 
 export function TreeItem({ node, depth, activeId, expanded, onToggle, onCreate }: Props) {
-  // Chaque ligne se déplace, « Bases » compris : le tri à la racine, le refus
-  // d'un dépôt ailleurs, sont faits par placementError au lâcher.
+  // Chaque ligne se déplace, la page racine comprise : le refus d'un dépôt
+  // mal placé est fait par placementError au lâcher.
   const drag = useDraggable({ id: node.id });
   const drop = useDroppable({ id: node.id, disabled: node.type !== "page" && node.type !== "folder" });
   const [menu, setMenu] = useState(false);
@@ -94,7 +94,7 @@ export function TreeItem({ node, depth, activeId, expanded, onToggle, onCreate }
             </span>
           )}
         </Link>
-        {node.type === "folder" && (
+        {(node.type === "folder" || node.basesRoot) && (
           <span className="tree-add">
             <button
               type="button"

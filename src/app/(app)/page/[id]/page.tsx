@@ -31,10 +31,10 @@ async function PageLoader({ params }: Pick<PageProps<"/page/[id]">, "params">) {
     return (
       <FolderView
         key={page.id}
-        folder={{ id: page.id, title: page.title, icon: page.icon, isRoot: page.isBasesRoot }}
+        folder={{ id: page.id, title: page.title, icon: page.icon }}
         trail={ancestorRows(rows, page.id)}
         items={await listFolder(page.id)}
-        basesInside={page.isBasesRoot ? 0 : await countFolderBases(page.id)}
+        basesInside={await countFolderBases(page.id)}
       />
     );
   }

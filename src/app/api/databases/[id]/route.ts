@@ -13,7 +13,15 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/databases/[
   if (found.page.type !== "database") return fail(404, "Base introuvable");
   const entries = (await listEntries(id)).filter((entry) => canAccess(found.user, entry, "read"));
   return Response.json({
-    database: { id: found.page.id, title: found.page.title, icon: found.page.icon },
+    // Bandeau et cadrage servent la base encastrée (étape 17, `embed`) ; la vue
+    // liée les ignore.
+    database: {
+      id: found.page.id,
+      title: found.page.title,
+      icon: found.page.icon,
+      cover: found.page.cover,
+      coverPosition: found.page.coverPosition,
+    },
     config: configOf(found.page),
     entries,
   });

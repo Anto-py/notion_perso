@@ -7,7 +7,7 @@
 // disparue prend un id neuf, parce que le serveur fait gagner la purge contre
 // une modification et qu'un id purgé recréé serait effacé au cycle suivant.
 import type { Page } from "./pages";
-import { BASES_ROOT_ID, type PageKind } from "./bases";
+import type { PageKind } from "./bases";
 import { planBasesMove } from "./bases_move";
 import { LINKED_BLOCK, SUBPAGE_BLOCK } from "./blocks";
 import { storedNamesIn } from "./media_cleanup";
@@ -31,8 +31,9 @@ export type SourcePage = Pick<
 >;
 
 // Ce que le plan a besoin de savoir de la base vive : la ligne existe-t-elle,
-// où est-elle rangée, en corbeille ou non, et si c'est un dossier de « Bases ».
-export type LiveRef = { type: PageKind; parentId: string | null; dbId: string | null; trashed: boolean };
+// où est-elle rangée, en corbeille ou non, si c'est un dossier, et si elle
+// porte le rôle de racine des bases (étape 17, racine lue par son rôle).
+export type LiveRef = { type: PageKind; parentId: string | null; dbId: string | null; trashed: boolean; isBasesRoot?: boolean };
 
 export type PlannedPage = {
   // L'id sous lequel la page sera écrite dans la base vive.
@@ -154,25 +155,31 @@ export function planRecovery(
     if (live.has(page.id)) copies.push({ id: newId("pg"), sourceId: page.id });
   }
 
-  // Étape 16 : une sauvegarde antérieure range ses bases sous des pages. Elles
-  // rejoignent « Bases » et la page reprise garde une vue liée à leur place ;
-  // un dossier hors de « Bases » y revient aussi. Un dossier vif en corbeille
-  // ne reçoit rien (même règle que la restauration).
+  // Étape 16 et 17 : une sauvegarde antérieure range ses bases sous des pages.
+  // Elles rejoignent la racine des bases (lue par son rôle dans la base vive) et
+  // la page reprise garde une vue liée à leur place ; un dossier hors de la
+  // racine y revient aussi. Un dossier vif en corbeille ne reçoit rien (même
+  // règle que la restauration).
+  const rootId = [...live].find(([, ref]) => ref.isBasesRoot)?.[0] ?? null;
   const liveFolder = (id: string): boolean => {
     const ref = live.get(id);
     return ref !== undefined && !ref.trashed && ref.type === "folder";
   };
-  const isFolder = (id: string | null): boolean =>
-    id !== null && (pages.some((planned) => planned.id === id && planned.source.type === "folder") || liveFolder(id));
-  const move = planBasesMove(
-    pages.map((planned) => ({ id: planned.id, type: planned.source.type, parentId: planned.parentId, body: planned.body, trashed: false })),
-    { isFolder: liveFolder },
-  );
-  const moved = new Set(move.moved.map((base) => base.id));
+  const isHost = (id: string | null): boolean =>
+    id !== null && (id === rootId || pages.some((planned) => planned.id === id && planned.source.type === "folder") || liveFolder(id));
+  const move = rootId
+    ? planBasesMove(
+        pages.map((planned) => ({ id: planned.id, type: planned.source.type, parentId: planned.parentId, body: planned.body, trashed: false })),
+        { target: rootId, isFolder: liveFolder },
+      )
+    : null;
+  const moved = new Set(move?.moved.map((base) => base.id) ?? []);
   for (const planned of pages) {
-    const strayFolder = planned.source.type === "folder" && planned.id !== BASES_ROOT_ID && !isFolder(planned.parentId);
-    if (moved.has(planned.id) || strayFolder) planned.parentId = BASES_ROOT_ID;
-    const body = move.bodies.get(planned.id);
+    if (rootId) {
+      const strayFolder = planned.source.type === "folder" && planned.id !== rootId && !isHost(planned.parentId);
+      if (moved.has(planned.id) || strayFolder) planned.parentId = rootId;
+    }
+    const body = move?.bodies.get(planned.id);
     if (body) planned.body = body;
   }
 

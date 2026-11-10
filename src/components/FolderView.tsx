@@ -1,7 +1,7 @@
 "use client";
-// Dossier de « Bases » (étape 16, BRAINSTORMING §14) : ni corps ni
-// propriétés ; il liste ses dossiers puis ses bases, et en crée. « Bases »
-// s'ouvre sur le même écran, sans renommage ni corbeille.
+// Dossier sous la racine des bases (étapes 16 et 17, BRAINSTORMING §14 et §15) :
+// ni corps ni propriétés ; il liste ses dossiers puis ses bases, et en crée. La
+// racine elle-même est une page : elle s'ouvre dans l'éditeur, pas ici.
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -14,12 +14,12 @@ import { useTabMeta } from "./tabs_store";
 
 export type Crumb = { id: string; title: string; icon: string | null; type: string };
 
-// Fil « Bases / Cours / Séquences » au-dessus du titre d'une base ou d'un
-// dossier : chaque élément ouvre son dossier.
+// Fil « Bases de données / Cours / Séquences » au-dessus du titre d'une base ou
+// d'un dossier : chaque élément ouvre sa page.
 export function BasesCrumbs({ trail }: { trail: Crumb[] }) {
   if (!trail.length) return null;
   return (
-    <nav className="bases-crumbs" aria-label="Chemin dans « Bases »">
+    <nav className="bases-crumbs" aria-label="Chemin dans « Bases de données »">
       {trail.map((crumb, index) => (
         <span key={crumb.id}>
           {index > 0 && " / "}
@@ -31,7 +31,7 @@ export function BasesCrumbs({ trail }: { trail: Crumb[] }) {
 }
 
 type Props = {
-  folder: { id: string; title: string; icon: string | null; isRoot: boolean };
+  folder: { id: string; title: string; icon: string | null };
   trail: Crumb[];
   items: FolderItem[];
   // Bases emportées par une mise à la corbeille, toute profondeur.
@@ -72,16 +72,12 @@ export function FolderView({ folder, trail, items, basesInside }: Props) {
     router.refresh();
   }
 
-  const empty = folder.isRoot ? "Aucune base." : "Dossier vide.";
-
   return (
     <main className="page">
       <div className="page-bar">
-        {!folder.isRoot && (
-          <button type="button" className="ghost" onClick={() => (basesInside > 0 ? setConfirming(true) : void moveToTrash())}>
-            Supprimer le dossier
-          </button>
-        )}
+        <button type="button" className="ghost" onClick={() => (basesInside > 0 ? setConfirming(true) : void moveToTrash())}>
+          Supprimer le dossier
+        </button>
       </div>
       {confirming && (
         <div className="confirm-bar" role="alert">
@@ -97,23 +93,15 @@ export function FolderView({ folder, trail, items, basesInside }: Props) {
         </div>
       )}
       <BasesCrumbs trail={trail} />
-      {folder.isRoot ? (
-        <h1 className="folder-title">
-          <PageLabel row={{ ...folder, type: "folder" }} />
-        </h1>
-      ) : (
-        <>
-          <IconPicker pageId={folder.id} type="folder" initial={folder.icon} />
-          <CommitInput
-            key={folder.title}
-            className="page-title folder-title-input"
-            aria-label="Nom du dossier"
-            placeholder="Sans titre"
-            value={folder.title}
-            onCommit={(title) => void rename(title)}
-          />
-        </>
-      )}
+      <IconPicker pageId={folder.id} type="folder" initial={folder.icon} />
+      <CommitInput
+        key={folder.title}
+        className="page-title folder-title-input"
+        aria-label="Nom du dossier"
+        placeholder="Sans titre"
+        value={folder.title}
+        onCommit={(title) => void rename(title)}
+      />
       {message && (
         <p className="status status-error" role="alert">
           {message}
@@ -128,7 +116,7 @@ export function FolderView({ folder, trail, items, basesInside }: Props) {
         </button>
       </div>
       {items.length === 0 ? (
-        <p className="hint">{empty}</p>
+        <p className="hint">Dossier vide.</p>
       ) : (
         <ul className="folder-list">
           {items.map((item) => (

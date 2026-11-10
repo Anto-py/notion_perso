@@ -8,6 +8,7 @@ const ROOT_ID = "a".repeat(32);
 function ids() {
   let next = 0;
   return {
+    basesRootId: "pg_basesracine00000",
     newId: (prefix: string) => `${prefix}_${String(next++).padStart(16, "0")}`,
     newBlockId: () => `blk_${next++}`,
   };

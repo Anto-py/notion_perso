@@ -3642,6 +3642,35 @@ mark.hit {
   margin-bottom: 0.25rem;
 }
 
+/* Base encastrée (étape 17) : le bandeau et le libellé de la base ouvrent la
+   section, sans cadre, comme une partie de la page hôte. */
+.linked-block.linked-embed {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.linked-embed .linked-cover {
+  height: 150px;
+  border-radius: var(--r-inner);
+}
+
+.linked-embed-body {
+  padding: 0.5rem 0 0.75rem;
+}
+
+.linked-embed-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.linked-embed-head .linked-title a {
+  font-size: 1.15em;
+}
+
 .linked-title a {
   font-weight: 600;
   text-decoration-color: var(--line);

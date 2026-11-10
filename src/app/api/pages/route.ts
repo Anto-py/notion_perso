@@ -12,7 +12,7 @@ export async function GET() {
 
 // POST { parentId?, type? } : crée une page vierge (type "page", par défaut),
 // une base vide (type "database") ou un dossier (type "folder"), sous parentId
-// ou, sans lui, à la racine de l'arbre (page) ou de « Bases » (base, dossier).
+// ou, sans lui, à la racine de l'arbre (page) ou des bases (base, dossier).
 export async function POST(request: Request) {
   const body = await readJson(request);
   const parentId = optionalId(body?.parentId);

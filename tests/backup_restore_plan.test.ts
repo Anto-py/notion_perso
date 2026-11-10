@@ -150,7 +150,11 @@ describe("planRecovery", () => {
         page({ id: "pg_veille", body: [{ id: "b1", type: "subpage", props: { pageId: "pg_base" }, children: [] }] }),
         page({ id: "pg_base", parentId: "pg_veille", type: "database" }),
       ];
-      const plan = planRecovery(source, new Map(), newId);
+      // La racine se lit par son rôle dans la base vive (étape 17).
+      const live = new Map([
+        ["pg_basesracine00000", liveRef({ type: "page", parentId: "pg_ressources", isBasesRoot: true })],
+      ]);
+      const plan = planRecovery(source, live, newId);
       const [host, base] = plan.pages;
       expect(base.parentId).toBe("pg_basesracine00000");
       expect(host.body).toEqual([{ id: "b1", type: "linked", props: { databaseId: base.id, config: "" }, children: [] }]);
@@ -161,7 +165,11 @@ describe("planRecovery", () => {
         page({ id: "pg_veille", body: [{ id: "v1", type: "linked", props: { databaseId: "pg_base", config: "" }, children: [] }] }),
         page({ id: "pg_base", parentId: "pg_basesracine00000", type: "database" }),
       ];
-      const plan = planRecovery(source, new Map([["pg_basesracine00000", liveRef({ type: "folder" })]]), newId);
+      const plan = planRecovery(
+        source,
+        new Map([["pg_basesracine00000", liveRef({ type: "page", parentId: "pg_ressources", isBasesRoot: true })]]),
+        newId,
+      );
       const base = plan.pages.find((p) => p.source.id === "pg_base")!;
       expect(base.id).not.toBe("pg_base");
       expect(base.parentId).toBe("pg_basesracine00000");

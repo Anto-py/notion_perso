@@ -9,7 +9,7 @@ import { flattenToText } from "./blocks";
 import { newId } from "./ids";
 import { removeCitedEntries } from "./relation_query";
 import { emptyConfig } from "./views";
-import { basesHead, orderBefore, wouldCreateCycle, type AbsentTarget, type TreeRow } from "./tree";
+import { orderBefore, wouldCreateCycle, type AbsentTarget, type TreeRow } from "./tree";
 import { mergeWebSave, type WebFields } from "./web_save";
 
 export const TRASH_RETENTION_DAYS = 30;
@@ -20,9 +20,21 @@ export type Outcome = { ok: true } | { ok: false; status: 400 | 404 | 409; error
 
 const NOT_FOUND: Outcome = { ok: false, status: 404, error: "Page introuvable" };
 
+// La racine des bases : la ligne `is_bases_root`, jamais un id fixe (étape 17).
+// Elle a un parent (« Ressources »), donc elle ne peut pas servir de repli
+// implicite : chaque appelant qui range une base ou un dossier la lit ici.
+export async function basesRootId(executor: Pick<typeof db, "select"> = db): Promise<string | null> {
+  const [row] = await executor
+    .select({ id: pages.id })
+    .from(pages)
+    .where(and(eq(pages.isBasesRoot, true), isNull(pages.trashedAt)))
+    .limit(1);
+  return row?.id ?? null;
+}
+
 // Pages, bases et dossiers, hors corbeille. Les entrées de base vivent dans
 // leur base, pas dans la sidebar. Le Vide-cerveau y figure comme toute base,
-// dans « Bases », en plus de son épingle (étape 16).
+// sous « Bases de données », en plus de son épingle (étape 16).
 export async function listTreeRows(): Promise<TreeRow[]> {
   const rows = await db
     .select({
@@ -39,7 +51,7 @@ export async function listTreeRows(): Promise<TreeRow[]> {
     .from(pages)
     .where(and(isNull(pages.trashedAt), ne(pages.type, "entry")))
     .orderBy(asc(pages.manualOrder), asc(pages.createdAt));
-  return basesHead(rows).map((row) => ({
+  return rows.map((row) => ({
     id: row.id,
     parentId: row.parentId,
     type: row.type,
@@ -107,8 +119,9 @@ export async function getPage(id: string, executor: Pick<typeof db, "select"> = 
 }
 
 // Un parent doit exister et être hors corbeille, puis accepter l'élément
-// (lib/bases.ts) : une page sous une page ou à la racine, une base ou un
-// dossier dans « Bases ».
+// (lib/bases.ts) : une page sous une page (racine comprise) ou à la racine de
+// l'arbre, une base ou un dossier sous la racine des bases ou un de ses
+// dossiers.
 async function checkParent(child: { type: PageKind; isBasesRoot?: boolean }, parentId: string | null): Promise<Outcome> {
   let parent: Page | null = null;
   if (parentId) {
@@ -122,9 +135,9 @@ async function checkParent(child: { type: PageKind; isBasesRoot?: boolean }, par
 export type CreatedKind = "page" | "database" | "folder";
 
 // Page vierge, base vide ou dossier. Sans parentId, une page naît à la racine
-// de l'arbre, une base ou un dossier à la racine de « Bases ».
+// de l'arbre, une base ou un dossier sous la racine des bases.
 export async function createPage(parentId: string | null, type: CreatedKind = "page"): Promise<Outcome & { id?: string }> {
-  const parent = parentId ?? fallbackParent(type);
+  const parent = parentId ?? fallbackParent(type, await basesRootId());
   const check = await checkParent({ type }, parent);
   if (!check.ok) return check;
   const id = newId("pg");
@@ -203,6 +216,9 @@ export async function updatePage(id: string, patch: PagePatch, check?: SaveCheck
 export async function movePage(id: string, newParentId: string | null, beforeId?: string | null): Promise<Outcome> {
   const page = await getPage(id);
   if (!page || page.trashedAt || page.type === "entry") return NOT_FOUND;
+  // La racine des bases reste sous « Ressources » : elle porte le rangement de
+  // toutes les bases, la déplacer le rendrait invisible de sa page d'accueil.
+  if (page.isBasesRoot) return { ok: false, status: 400, error: "« Bases de données » reste sous « Ressources »." };
   const check = await checkParent(page, newParentId);
   if (!check.ok) return check;
   const rows = await db.select({ id: pages.id, parentId: pages.parentId }).from(pages);
@@ -329,7 +345,7 @@ export async function restorePage(id: string): Promise<Outcome> {
         : [];
       const livable = parent && !parent.trashedAt ? parent : null;
       if ((head.parentId && !livable) || placementError(head, livable)) {
-        await tx.update(pages).set({ parentId: fallbackParent(head.type) }).where(eq(pages.id, id));
+        await tx.update(pages).set({ parentId: fallbackParent(head.type, await basesRootId(tx)) }).where(eq(pages.id, id));
       }
     }
     return { ok: true } as const;

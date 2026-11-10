@@ -10,6 +10,8 @@ const ENTRY_ID = "d".repeat(32);
 function ids() {
   let next = 0;
   return {
+    // La racine des bases, lue par son rôle en production (étape 17).
+    basesRootId: "pg_basesracine00000",
     newId: (prefix: string) => `${prefix}_${String(next++).padStart(16, "0")}`,
     newBlockId: () => `blk_${next++}`,
   };

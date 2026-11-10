@@ -130,7 +130,7 @@ const MEDIA_GROUP = "Médias";
 
 // Le bloc s'insère aussitôt, en attente, puis reçoit l'id de l'enfant créé :
 // le curseur reste à sa place pendant la requête. Un échec retire le bloc.
-// Une base naît dans « Bases » (étape 16) : le bloc en attente cède la place
+// Une base naît sous « Bases de données » (étapes 16 et 17) : le bloc en attente cède la place
 // à une vue liée de même position, qui n'a aucun pouvoir sur sa base.
 function childItems(editor: EditorInstance, onCreateChild: (kind: ChildKind) => Promise<string | null>) {
   const item = (kind: ChildKind, title: string, subtext: string, aliases: string[], icon: string) => ({
@@ -144,7 +144,7 @@ function childItems(editor: EditorInstance, onCreateChild: (kind: ChildKind) => 
       void onCreateChild(kind).then((id) => {
         const block = editor.getBlock(inserted.id);
         if (!block) return;
-        if (id && kind === "database") editor.replaceBlocks([block], [{ type: "linked", props: { databaseId: id } }]);
+        if (id && kind === "database") editor.replaceBlocks([block], [{ type: "linked", props: { databaseId: id, embed: true } }]);
         else if (id) editor.updateBlock(block, { props: { pageId: id } });
         else editor.removeBlocks([block]);
       });
@@ -152,7 +152,7 @@ function childItems(editor: EditorInstance, onCreateChild: (kind: ChildKind) => 
   });
   return [
     item("page", "Page", "Créer une sous-page ici", ["page", "sous-page", "subpage"], "📄"),
-    item("database", "Base", "Créer une base dans « Bases », montrée ici", ["base", "database", "tableau", "kanban"], "🗃️"),
+    item("database", "Nouvelle base", "Créer une base sous « Bases de données », l’encastrer ici", ["base", "database", "tableau", "kanban"], "🗃️"),
   ];
 }
 
@@ -171,14 +171,24 @@ const pageLinkItem = (editor: EditorInstance) => ({
   },
 });
 
-// Une base existante, montrée avec ses propres vues (bloc « linked »).
+// Une base existante, montrée avec son bandeau et son emoji (étape 17).
+const embedItem = (editor: EditorInstance) => ({
+  title: "Base",
+  subtext: "Encastrer une base existante, bandeau et emoji compris",
+  aliases: ["base", "embed", "encastrée", "encastree", "database", "tableau"],
+  group: "Pages",
+  icon: <span aria-hidden>🗃️</span>,
+  onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: "linked", props: { embed: true } }),
+});
+
+// Une base existante, montrée avec ses propres vues seules (bloc « linked »).
 const linkedItem = (editor: EditorInstance) => ({
   title: "Vue liée",
   subtext: "Afficher une base existante, avec ses propres vues",
-  aliases: ["vue liée", "vue liee", "liée", "linked", "base", "embed"],
+  aliases: ["vue liée", "vue liee", "liée", "linked", "base"],
   group: "Pages",
   icon: <span aria-hidden>🔗</span>,
-  onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: "linked" }),
+  onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: "linked", props: { embed: false } }),
 });
 
 // Le signet naît vide ; son adresse est lue par /api/bookmark. La page hôte
@@ -200,10 +210,12 @@ function slashItems(
   const items = getDefaultReactSlashMenuItems(editor).map((item) =>
     item.group === "Média" ? { ...item, group: MEDIA_GROUP } : item,
   );
-  // Pages, le lien, la vue liée, puis colonnes, puis les blocs courants.
+  // Pages, le lien, la base encastrée ou la vue liée, puis colonnes, puis les
+  // blocs courants.
   items.unshift(
     ...(onCreateChild ? childItems(editor, onCreateChild) : []),
     pageLinkItem(editor),
+    embedItem(editor),
     linkedItem(editor),
     ...columnItems(editor),
   );

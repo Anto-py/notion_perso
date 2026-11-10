@@ -5,7 +5,9 @@
 // les entrées et le schéma restent ceux de la base source, où les saisies
 // s'écrivent. BRAINSTORMING §4, SPECS « views ». Depuis l'étape 16, la
 // structure de la base (colonnes, ordre, titre, icône) ne se modifie que sur
-// son écran, dans « Bases » : le bloc saisit des entrées et règle ses vues.
+// son écran, sous « Bases de données » : le bloc saisit des entrées et règle
+// ses vues. Étape 17 : `embed` ajoute le bandeau et le libellé de la base
+// avant ses vues ; sans lui, le bloc reste une vue liée.
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createReactBlockSpec } from "@blocknote/react";
@@ -46,6 +48,7 @@ import { CalendarView } from "./CalendarView";
 import { GalleryView } from "./GalleryView";
 import { KanbanView } from "./KanbanView";
 import { ListView } from "./ListView";
+import { PageCover } from "./PageCover";
 import { PageLabel } from "./PageIcon";
 import { send } from "./request";
 import { usePageDirectory } from "./subpageBlock";
@@ -54,7 +57,7 @@ import { ViewControls } from "./ViewControls";
 import { ViewTabs } from "./ViewTabs";
 
 type Loaded = {
-  database: { id: string; title: string; icon: string | null };
+  database: { id: string; title: string; icon: string | null; cover: string | null; coverPosition: number | null };
   config: DbConfig;
   entries: EntryRow[];
 };
@@ -65,6 +68,8 @@ export const linkedBlock = createReactBlockSpec(
     propSchema: {
       databaseId: { default: "" },
       config: { default: "" },
+      // Vrai : base encastrée (bandeau, emoji, titre puis les vues).
+      embed: { default: false },
     },
     content: "none",
   },
@@ -75,6 +80,7 @@ export const linkedBlock = createReactBlockSpec(
         key={block.props.databaseId}
         databaseId={block.props.databaseId}
         config={block.props.config}
+        embed={block.props.embed}
         onPick={(databaseId) => editor.updateBlock(block.id, { props: { databaseId, config: "" } })}
         onConfig={(config) => editor.updateBlock(block.id, { props: { config } })}
       />
@@ -82,9 +88,15 @@ export const linkedBlock = createReactBlockSpec(
   },
 );
 
-type Props = { databaseId: string; config: string; onPick: (id: string) => void; onConfig: (config: string) => void };
+type Props = {
+  databaseId: string;
+  config: string;
+  embed: boolean;
+  onPick: (id: string) => void;
+  onConfig: (config: string) => void;
+};
 
-function LinkedDatabase({ databaseId, config, onPick, onConfig }: Props) {
+function LinkedDatabase({ databaseId, config, embed, onPick, onConfig }: Props) {
   const pages = usePageDirectory();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -323,7 +335,7 @@ function LinkedDatabase({ databaseId, config, onPick, onConfig }: Props) {
     else reload();
   }
 
-  if (!databaseId) return <Picker pages={pages} onPick={onPick} />;
+  if (!databaseId) return <Picker pages={pages} embed={embed} onPick={onPick} />;
   if (error) return <p className="linked-panel linked-missing">{error}</p>;
   if (!loaded) return <p className="linked-panel">Chargement de la base…</p>;
 
@@ -341,33 +353,41 @@ function LinkedDatabase({ databaseId, config, onPick, onConfig }: Props) {
   const shown = properties.filter((prop) => !view.hidden.includes(prop.id));
 
   return (
-    <div className="linked-block" ref={root} contentEditable={false}>
-      <div className="linked-bar">
-        <Link href={`/db/${loaded.database.id}`} className="linked-title">
-          <PageLabel row={{ ...loaded.database, type: "database" }} />
-        </Link>
-        {hidden > 0 && (
-          <span className="badge" role="status">
-            {hidden} {hidden > 1 ? "entrées masquées" : "entrée masquée"} par les filtres
-          </span>
-        )}
-        {linked.overrides[view.id] && (
-          <button type="button" className="ghost linked-reset" onClick={resetView}>
-            Réglages locaux · Revenir à la base
-          </button>
-        )}
-        <Link href={`/db/${loaded.database.id}`} className="linked-open">
-          Ouvrir dans Bases ↗
-        </Link>
-      </div>
-      {message && (
-        <p className="status status-error" role="alert">
-          {message}
-        </p>
+    <div className={embed ? "linked-block linked-embed" : "linked-block"} ref={root} contentEditable={false}>
+      {embed && (
+        <PageCover
+          cover={loaded.database.cover}
+          position={loaded.database.coverPosition}
+          className="page-cover linked-cover"
+        />
       )}
-      <ViewTabs views={views} activeId={view.id} properties={properties} onSelect={selectView} editable={false} />
-      <ViewControls properties={properties} view={view} columns={boardColumns} onChange={changeView} />
-      {view.kind === "table" && (
+      <div className={embed ? "linked-embed-body" : undefined}>
+        <div className={embed ? "linked-embed-head" : "linked-bar"}>
+          <Link href={`/db/${loaded.database.id}`} className="linked-title">
+            <PageLabel row={{ ...loaded.database, type: "database" }} />
+          </Link>
+          {hidden > 0 && (
+            <span className="badge" role="status">
+              {hidden} {hidden > 1 ? "entrées masquées" : "entrée masquée"} par les filtres
+            </span>
+          )}
+          {linked.overrides[view.id] && (
+            <button type="button" className="ghost linked-reset" onClick={resetView}>
+              Réglages locaux · Revenir à la base
+            </button>
+          )}
+          <Link href={`/db/${loaded.database.id}`} className="linked-open">
+            Ouvrir la base ↗
+          </Link>
+        </div>
+        {message && (
+          <p className="status status-error" role="alert">
+            {message}
+          </p>
+        )}
+        <ViewTabs views={views} activeId={view.id} properties={properties} onSelect={selectView} editable={false} />
+        <ViewControls properties={properties} view={view} columns={boardColumns} onChange={changeView} />
+        {view.kind === "table" && (
         <TableView
           properties={shown}
           entries={visible}
@@ -431,12 +451,21 @@ function LinkedDatabase({ databaseId, config, onPick, onConfig }: Props) {
         ) : (
           <p className="hint">Le Kanban groupe les entrées par une propriété à valeurs discrètes.</p>
         ))}
+      </div>
     </div>
   );
 }
 
 // Base pas encore choisie : la liste de l'arbre, sans requête de plus.
-function Picker({ pages, onPick }: { pages: ReadonlyMap<string, { id: string; type: string; title: string; icon: string | null }>; onPick: (id: string) => void }) {
+function Picker({
+  pages,
+  embed,
+  onPick,
+}: {
+  pages: ReadonlyMap<string, { id: string; type: string; title: string; icon: string | null }>;
+  embed: boolean;
+  onPick: (id: string) => void;
+}) {
   const databases = [...pages.values()]
     .filter((row) => row.type === "database")
     .sort((a, b) => a.title.localeCompare(b.title, "fr"));
@@ -444,7 +473,7 @@ function Picker({ pages, onPick }: { pages: ReadonlyMap<string, { id: string; ty
   return (
     <div className="linked-panel" contentEditable={false}>
       <label className="linked-picker">
-        <span>Vue liée : choisir la base</span>
+        <span>{embed ? "Base : choisir la base" : "Vue liée : choisir la base"}</span>
         <select defaultValue="" onChange={(event) => event.target.value && onPick(event.target.value)}>
           <option value="" disabled>
             Choisir une base…

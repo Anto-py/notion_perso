@@ -1,11 +1,11 @@
-// Déménagement des bases vers « Bases » (étape 16, palier c ; SPECS « Dossier
-// « Bases » », ligne « Déménagement »). Module pur : il dit ce qu'il faut
+// Déménagement des bases vers la racine des bases (étapes 16 et 17 ; SPECS
+// « Racine dans « Bases de données » »). Module pur : il dit ce qu'il faut
 // écrire, sans base ni disque. Trois appelants : le démarrage du serveur
 // (bases_move_query.ts), l'import Notion (notion-import.ts, cible = dossier
 // d'import) et la reprise d'une sauvegarde (backup_restore_plan.ts).
 //
 // Extensions .ts explicites : npm run bases:demenager tourne sous Node seul.
-import { BASES_ROOT_ID, type PageKind } from "./bases.ts";
+import type { PageKind } from "./bases.ts";
 import { LINKED_BLOCK, SUBPAGE_BLOCK } from "./blocks.ts";
 
 type Json = unknown;
@@ -23,10 +23,11 @@ export type MoveRow = {
 };
 
 export type MoveOptions = {
-  // Dossier d'arrivée ; la racine de « Bases » par défaut.
-  target?: string;
+  // Dossier d'arrivée (la racine des bases, ou un dossier d'import sous elle).
+  // Jamais un id fixe : la racine se lit par son rôle.
+  target: string;
   // Parent absent des lignes fournies (reprise d'une sauvegarde : le parent
-  // vit dans la base vive) : est-il un dossier de « Bases » ?
+  // vit dans la base vive) : est-il un dossier sous la racine ?
   isFolder?: (id: string) => boolean;
 };
 
@@ -85,16 +86,18 @@ function hasLinked(body: Json, databaseId: string): boolean {
   );
 }
 
-export function planBasesMove(rows: readonly MoveRow[], options: MoveOptions = {}): BasesMovePlan {
-  const target = options.target ?? BASES_ROOT_ID;
+export function planBasesMove(rows: readonly MoveRow[], options: MoveOptions): BasesMovePlan {
+  const { target } = options;
   const byId = new Map(rows.map((row) => [row.id, row]));
   const isFolder = (id: string): boolean => {
     const row = byId.get(id);
     return row ? row.type === "folder" : (options.isFolder?.(id) ?? false);
   };
+  // La racine elle-même (cible) et ses dossiers reçoivent les bases.
+  const isHost = (id: string): boolean => id === target || isFolder(id);
 
   const outside = rows
-    .filter((row) => row.type === "database" && !(row.parentId && isFolder(row.parentId)))
+    .filter((row) => row.type === "database" && !(row.parentId && isHost(row.parentId)))
     .sort(
       (a, b) =>
         Number(Boolean(b.isInbox)) - Number(Boolean(a.isInbox)) ||

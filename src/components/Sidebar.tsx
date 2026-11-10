@@ -114,9 +114,9 @@ export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
     return data ?? {};
   }
 
-  // Sans parent : une page naît à la racine de l'arbre, une base à celle de
-  // « Bases » ; une sous-page naît du menu « / » de sa mère. Le « + » de
-  // « Bases » et de ses dossiers passe parentId.
+  // Sans parent : une page naît à la racine de l'arbre, une base sous celle des
+  // bases ; une sous-page naît du menu « / » de sa mère. Le « + » de la racine
+  // et de ses dossiers passe parentId.
   async function createPage(type: "page" | "database" | "folder" = "page", parentId: string | null = null) {
     const data = await post("/api/pages", { parentId, type });
     if (!data?.id) return;
@@ -143,9 +143,15 @@ export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
   // cette sœur (zone d'insertion).
   async function relocate(pageId: string, target: string | null, before?: string | null) {
     const moved = rows.find((row) => row.id === pageId);
+    // Refus immédiat de déplacer la racine des bases, sans attendre le serveur.
+    if (moved?.basesRoot) {
+      setMessage("« Bases de données » reste sous « Ressources ».");
+      return;
+    }
     const parent = target ? rows.find((row) => row.id === target) : undefined;
-    // Même règle que le serveur (lib/bases.ts) : une page n'entre pas dans
-    // « Bases », une base n'en sort pas. La ligne reste à sa place.
+    // Même règle que le serveur (lib/bases.ts) : une page n'entre pas dans un
+    // dossier, une base ne vit que sous la racine ou un dossier. La ligne reste
+    // à sa place.
     const refused = moved && placementError({ type: moved.type, isBasesRoot: moved.basesRoot }, parent ? { type: parent.type, isBasesRoot: parent.basesRoot } : null);
     if (refused) {
       setMessage(refused);
