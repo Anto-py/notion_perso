@@ -5,12 +5,14 @@
 // publiée liste les liens où le visiteur lit « Contenu privé », chacun avec
 // « Publier » (BRAINSTORMING §7), et les bases que ses vues liées ouvrent,
 // chacune avec « Exclure » ; une base ainsi ouverte nomme la page qui
-// l'ouvre (étape 16, §14).
+// l'ouvre (étape 16, §14). Une base porte en plus la section « Vitrine »
+// (étape 20).
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { TreeRow } from "@/lib/tree";
 import { PageLabel } from "./PageIcon";
 import { send } from "./request";
+import { VitrineSection } from "./vitrine/VitrineSection";
 
 type Props = { pageId: string; initialPublicId: string | null; initialClosed: boolean };
 
@@ -66,14 +68,17 @@ export function SharePanel({ pageId, initialPublicId, initialClosed }: Props) {
   const [message, setMessage] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const linkRef = useRef<HTMLInputElement>(null);
-  // Un clic hors du panneau ou Échap le referme.
+  // Un clic hors du panneau ou Échap le referme. Le sélecteur de page de la
+  // vitrine vit dans <body> (portail) : un clic dedans n'est pas un clic hors
+  // du panneau, et son Échap (preventDefault) ne ferme que lui.
   useEffect(() => {
     if (!open) return;
     function onPointer(event: PointerEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Element;
+      if (!rootRef.current?.contains(target) && !target.closest?.(".page-picker")) setOpen(false);
     }
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape" && !event.defaultPrevented) setOpen(false);
     }
     document.addEventListener("pointerdown", onPointer);
     document.addEventListener("keydown", onKey);
@@ -262,6 +267,7 @@ export function SharePanel({ pageId, initialPublicId, initialClosed }: Props) {
               {message}
             </p>
           )}
+          {isBase && <VitrineSection baseId={pageId} />}
         </div>
       )}
     </div>

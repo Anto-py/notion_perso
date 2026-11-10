@@ -2,7 +2,7 @@
 // l'affiche, il ne l'avale jamais.
 export type Result = { ok: true; data: Record<string, unknown> } | { ok: false; error: string };
 
-export async function send(url: string, method: "POST" | "PATCH" | "DELETE", body?: unknown): Promise<Result> {
+export async function send(url: string, method: "POST" | "PUT" | "PATCH" | "DELETE", body?: unknown): Promise<Result> {
   let response: Response;
   try {
     response = await fetch(url, {

@@ -24,6 +24,7 @@ import {
   type ShareNode,
 } from "./publication";
 import type { TreeRow } from "./tree";
+import { vitrineReach } from "./vitrine_query";
 
 // newToken : 32 octets en base64url. Une adresse d'une autre forme n'atteint
 // même pas la base.
@@ -117,10 +118,11 @@ export async function listChildren(pageId: string) {
     .orderBy(asc(pages.manualOrder), asc(pages.createdAt));
 }
 
-// Réunion des portées de toutes les publications, gardée 30 secondes : chaque
-// média public la consulte. Sur globalThis, Next chargeant parfois deux fois
-// un même module (instrumentation et route) ; publier, dépublier ou exclure
-// l'efface, pour qu'un média se ferme aussitôt.
+// Réunion des portées de toutes les publications et de la vitrine de veille,
+// gardée 30 secondes : chaque média public la consulte. Sur globalThis, Next
+// chargeant parfois deux fois un même module (instrumentation et route) ;
+// publier, dépublier, exclure ou piloter la vitrine l'efface, pour qu'un média
+// se ferme aussitôt.
 const REACH_TTL_MS = 30_000;
 type ReachMemo = { at: number; ids: Promise<Set<string>> };
 const store = globalThis as typeof globalThis & { __notionPublicReach?: ReachMemo | null };
@@ -130,8 +132,8 @@ export function forgetPublicReach(): void {
 }
 
 async function computePublicReach(): Promise<Set<string>> {
-  const graph = await loadShareGraph();
-  const ids = new Set<string>();
+  const [graph, vitrine] = await Promise.all([loadShareGraph(), vitrineReach()]);
+  const ids = new Set<string>(vitrine);
   for (const node of graph.values()) {
     if (!node.publicId) continue;
     for (const id of shareReach(graph, node.id).keys()) ids.add(id);
@@ -152,9 +154,9 @@ function publicReachAll(): Promise<Set<string>> {
 }
 
 // Un média est public s'il figure dans le corps d'une page lisible par un
-// lien, s'il en est l'icône, ou s'il est l'image de son bandeau. C'est le corps
-// qui compte, pas media.page_id : une image copiée dans une autre page y
-// apparaît, une image retirée du corps n'est plus servie.
+// lien ou par la vitrine, s'il en est l'icône, ou s'il est l'image de son
+// bandeau. C'est le corps qui compte, pas media.page_id : une image copiée
+// dans une autre page y apparaît, une image retirée du corps n'est plus servie.
 export async function isMediaPublic(filename: string): Promise<boolean> {
   const rows = await db
     .select({ id: pages.id })

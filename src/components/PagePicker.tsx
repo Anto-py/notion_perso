@@ -15,6 +15,9 @@ type Props = {
   hostId: string;
   onPick: (row: TreeRow) => void;
   onCancel: () => void;
+  // Restreint les choix (page d'accueil de la vitrine : des pages seulement).
+  accept?: (row: TreeRow) => boolean;
+  label?: string;
 };
 
 // Au-delà, la liste demande de préciser la recherche plutôt que de tout peindre.
@@ -22,7 +25,7 @@ const SHOWN_MAX = 50;
 const MENU_WIDTH = 420;
 const VIEWPORT_MARGIN = 12;
 
-export function PagePicker({ anchor, pages, hostId, onPick, onCancel }: Props) {
+export function PagePicker({ anchor, pages, hostId, onPick, onCancel, accept, label = "Chercher la page à lier" }: Props) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   // Le menu suit le bloc quand la page défile, au lieu de flotter à côté.
@@ -30,7 +33,8 @@ export function PagePicker({ anchor, pages, hostId, onPick, onCancel }: Props) {
   const menu = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
 
-  const choices = linkChoices([...pages.values()], hostId, query);
+  const all = linkChoices([...pages.values()], hostId, query);
+  const choices = accept ? all.filter((choice) => accept(choice.row)) : all;
   const shown = choices.slice(0, SHOWN_MAX);
 
   useEffect(() => {
@@ -65,7 +69,7 @@ export function PagePicker({ anchor, pages, hostId, onPick, onCancel }: Props) {
     <div ref={menu} className="picker-menu picker-menu-fixed page-picker" style={style}>
       <input
         ref={input}
-        aria-label="Chercher la page à lier"
+        aria-label={label}
         placeholder="Chercher une page ou une base"
         value={query}
         maxLength={500}

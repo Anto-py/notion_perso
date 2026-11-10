@@ -4835,3 +4835,49 @@ button.link.icon-danger {
   pointer-events: none;
   z-index: 5;
 }
+
+/* Section « Vitrine » du panneau « Partager » d'une base (étape 20). */
+.share-vitrine {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+}
+
+.share-vitrine-address {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  max-width: 100%;
+}
+
+.share-vitrine-address code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+}
+
+.share-vitrine-address .copy-url {
+  position: static;
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
+  flex-shrink: 0;
+}
+
+.share-vitrine-welcome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.share-vitrine-actions {
+  display: flex;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
