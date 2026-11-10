@@ -81,4 +81,23 @@ describe("createSaver", () => {
     await vi.advanceTimersByTimeAsync(10_000);
     expect(sendSpy).toHaveBeenCalledOnce();
   });
+
+  it("un flush demandé pendant un envoi attend sa fin avant de rendre la main", async () => {
+    let release: () => void = () => {};
+    const { saver, sendSpy } = setup(() => new Promise<void>((resolve) => (release = resolve)));
+    saver.queue({ title: "1" });
+    await vi.advanceTimersByTimeAsync(800);
+    expect(sendSpy).toHaveBeenCalledOnce();
+
+    let flushed = false;
+    const waiting = saver.flush(true).then(() => {
+      flushed = true;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(flushed).toBe(false);
+
+    release();
+    await waiting;
+    expect(flushed).toBe(true);
+  });
 });

@@ -9,7 +9,9 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "notion_perso",
     description: "Pages, bases et veille, auto-hébergées",
     lang: "fr",
-    start_url: "/",
+    // Ouverture de l'icône installée sur la capture du Vide-cerveau, le geste
+    // du téléphone ; TabsBridge applique la même règle à la racine en onglet.
+    start_url: "/inbox",
     scope: "/",
     display: "standalone",
     background_color: "#f2efe6",

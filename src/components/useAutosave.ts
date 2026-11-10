@@ -14,6 +14,7 @@ import { createSaver, type Patch, type SaveStatus } from "@/lib/saver";
 import { sameJson } from "@/lib/sync_merge";
 import type { WebFields } from "@/lib/web_save";
 import { onPageMoved } from "./page_moved";
+import { onRefreshRequested } from "./refresh_request";
 
 // Plafond du navigateur pour une requête keepalive (celle qui survit à la
 // fermeture de l'onglet) : 64 Ko, marge comprise.
@@ -116,16 +117,36 @@ export function useAutosave(pageId: string, { initial, onSaved, onMerged, onRemo
 
   useEffect(() => {
     const idle = () => lastStatus.current.state === "saved" && !saver.hasPending();
+    async function readPage(): Promise<RemotePage | null> {
+      const response = await fetch(`/api/pages/${pageId}`, { cache: "no-store" }).catch(() => null);
+      if (!response?.ok) return null;
+      const data = (await response.json().catch(() => null)) as { page?: RemotePage } | null;
+      return data?.page ?? null;
+    }
+    function apply(page: RemotePage) {
+      confirmed.current = { rev: page.rev, title: page.title, body: page.body };
+      remote?.(page);
+    }
     async function refresh() {
       if (!remote || !idle()) return;
-      const response = await fetch(`/api/pages/${pageId}`, { cache: "no-store" }).catch(() => null);
-      if (!response?.ok) return;
-      const data = (await response.json().catch(() => null)) as { page?: RemotePage } | null;
-      const page = data?.page;
+      const page = await readPage();
       // Une frappe partie pendant la lecture prime : la page relue attendra.
       if (!page || page.rev === confirmed.current.rev || !idle()) return;
-      confirmed.current = { rev: page.rev, title: page.title, body: page.body };
-      remote(page);
+      apply(page);
+    }
+    // Geste « Actualiser » : ce qui attend part d'abord, sinon la relecture
+    // poserait l'état du serveur par-dessus une frappe non envoyée. Un envoi
+    // raté interrompt tout, l'appelant le signale et n'actualise pas le reste.
+    async function reload() {
+      // Un envoi déjà en route est attendu par flush ; une frappe arrivée
+      // entre-temps repart dans un second lot avant la relecture.
+      for (let attempt = 0; !idle() && attempt < 3; attempt += 1) await saver.flush(true);
+      if (lastStatus.current.state === "error" || !idle()) {
+        throw new Error("Modifications non enregistrées : rien n'a été relu.");
+      }
+      const page = await readPage();
+      if (!page) throw new Error("Rien n'a été relu (page introuvable ou connexion perdue).");
+      if (page.rev !== confirmed.current.rev && idle()) apply(page);
     }
     const onVisibility = () => {
       if (document.visibilityState === "hidden") void saver.flush(true);
@@ -136,10 +157,12 @@ export function useAutosave(pageId: string, { initial, onSaved, onMerged, onRemo
     const offMoved = onPageMoved(({ from, to }) => {
       if (from === pageId || to === pageId) void refresh();
     });
+    const offRefresh = onRefreshRequested(reload);
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
       offMoved();
+      offRefresh();
       void saver.flush(true);
     };
   }, [saver, pageId, confirmed, remote, lastStatus]);

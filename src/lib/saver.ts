@@ -27,6 +27,9 @@ export function createSaver({ send, onStatus, onSaved, debounceMs = 800, retryMs
   let pending: Patch = {};
   let timer: ReturnType<typeof setTimeout> | undefined;
   let inFlight = false;
+  // L'envoi en cours, pour qu'un flush demandé pendant celui-ci l'attende au
+  // lieu de rendre la main aussitôt (relecture du serveur après le geste).
+  let running: Promise<void> | undefined;
   let failing = false;
 
   const hasPending = () => Object.keys(pending).length > 0;
@@ -38,26 +41,31 @@ export function createSaver({ send, onStatus, onSaved, debounceMs = 800, retryMs
 
   async function flush(leaving = false): Promise<void> {
     clearTimeout(timer);
-    if (inFlight || !hasPending()) return;
+    if (inFlight) return running;
+    if (!hasPending()) return;
     const patch = pending;
     pending = {};
     inFlight = true;
     if (!leaving) onStatus({ state: "saving" });
-    try {
-      await send(patch, leaving);
-      failing = false;
-      onSaved(patch);
-      onStatus({ state: hasPending() ? "pending" : "saved" });
-      if (hasPending()) schedule(debounceMs);
-    } catch (error) {
-      // Les frappes arrivées pendant l'envoi priment sur le lot refusé.
-      pending = { ...patch, ...pending };
-      failing = true;
-      onStatus({ state: "error", message: error instanceof Error ? error.message : String(error) });
-      if (!leaving) schedule(retryMs);
-    } finally {
-      inFlight = false;
-    }
+    running = (async () => {
+      try {
+        await send(patch, leaving);
+        failing = false;
+        onSaved(patch);
+        onStatus({ state: hasPending() ? "pending" : "saved" });
+        if (hasPending()) schedule(debounceMs);
+      } catch (error) {
+        // Les frappes arrivées pendant l'envoi priment sur le lot refusé.
+        pending = { ...patch, ...pending };
+        failing = true;
+        onStatus({ state: "error", message: error instanceof Error ? error.message : String(error) });
+        if (!leaving) schedule(retryMs);
+      } finally {
+        inFlight = false;
+        running = undefined;
+      }
+    })();
+    await running;
   }
 
   function queue(patch: Patch) {

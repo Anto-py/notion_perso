@@ -6,12 +6,13 @@
 // une option l'ajoute d'abord à la base, puis la choisit. Une entrée peut
 // aussi changer de base : les propriétés de même nom et type suivent.
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { withNewOption, type LinkRef, type Property, type Value, type Values } from "@/lib/properties";
 import type { DbConfig } from "@/lib/views";
 import { MoveToDatabase } from "./MoveToDatabase";
 import { PropertyInput } from "./PropertyInput";
 import { propIcon } from "./propertyUi";
+import { onRefreshRequested } from "./refresh_request";
 import { send } from "./request";
 
 type Props = {
@@ -29,6 +30,24 @@ export function PropertyPanel({ dbId, entryId, properties: initialProperties, va
   const [values, setValues] = useState(initialValues);
   const [error, setError] = useState<string | null>(null);
   const queue = useRef<Promise<void>>(Promise.resolve());
+  // Écritures en route : pendant qu'elles courent, ce panneau ne se laisse pas
+  // écraser par une relecture du serveur, qui ne les connaît pas encore.
+  const [writing, setWriting] = useState(0);
+  // Dernières valeurs reçues du serveur. router.refresh() les relit après un
+  // geste « Actualiser » ou une modification du Mac ; même motif que
+  // DatabaseView pour la configuration et les entrées.
+  const [shown, setShown] = useState({ properties: initialProperties, values: initialValues });
+  if (shown.properties !== initialProperties || shown.values !== initialValues) {
+    setShown({ properties: initialProperties, values: initialValues });
+    if (writing === 0) {
+      setProperties(initialProperties);
+      setValues(initialValues);
+    }
+  }
+
+  // Le geste « Actualiser » attend la fin des écritures de ce panneau avant
+  // de relire, sinon il poserait une valeur plus ancienne par-dessus.
+  useEffect(() => onRefreshRequested(() => queue.current), [queue]);
 
   function save(propId: string, value: Value | null) {
     setValues((previous) => {
@@ -37,10 +56,11 @@ export function PropertyPanel({ dbId, entryId, properties: initialProperties, va
       else next[propId] = value;
       return next;
     });
+    setWriting((count) => count + 1);
     queue.current = queue.current.then(async () => {
       const result = await send(`/api/entries/${entryId}`, "PATCH", { values: { [propId]: value } });
       setError(result.ok ? null : result.error);
-    });
+    }).finally(() => setWriting((count) => count - 1));
   }
 
   // Créer une entrée depuis le sélecteur d'une relation, sans quitter la page.

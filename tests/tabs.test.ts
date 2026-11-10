@@ -7,6 +7,7 @@ import {
   moveTab,
   openTab,
   restoreTabs,
+  startPathname,
   tabFrom,
   visit,
   type TabsState,
@@ -165,5 +166,14 @@ describe("reprise", () => {
       "/db/b",
     );
     expect(restored.tabs.map((tab) => tab.href)).toEqual(["/page/a", "/db/b"]);
+  });
+});
+
+describe("page d'ouverture", () => {
+  it("mène la racine à la capture sur un appareil tactile, et seulement elle", () => {
+    expect(startPathname("/", true)).toBe("/inbox");
+    expect(startPathname("/", false)).toBe("/");
+    expect(startPathname("/page/abc", true)).toBe("/page/abc");
+    expect(startPathname("/db/abc", true)).toBe("/db/abc");
   });
 });

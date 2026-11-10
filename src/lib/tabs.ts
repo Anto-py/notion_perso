@@ -34,6 +34,13 @@ export function isAppPathname(pathname: string): boolean {
 // Chemin d'application d'un href interne, ou null : liens externes, vues
 // publiques (/p/), sauvegarde et routes d'API restent hors des onglets. Le
 // paramètre de vue (?vue=) et l'ancre sont retirés : un onglet par écran.
+// Page d'ouverture : sur un appareil tactile, la racine mène à la capture du
+// Vide-cerveau, le geste du téléphone. Une adresse explicite fait toujours
+// foi ; ailleurs, « / » reprend le dernier onglet (hydrate).
+export function startPathname(pathname: string, touch: boolean): string {
+  return pathname === "/" && touch ? "/inbox" : pathname;
+}
+
 export function appPathname(href: string): string | null {
   if (!href.startsWith("/") || href.startsWith("//")) return null;
   let pathname: string;

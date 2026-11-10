@@ -4,7 +4,7 @@
 // Ne rend rien : la barre et les écrans lisent le magasin.
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useSyncExternalStore } from "react";
-import { appPathname } from "@/lib/tabs";
+import { appPathname, startPathname } from "@/lib/tabs";
 import {
   getServerSnapshot,
   getSnapshot,
@@ -57,10 +57,17 @@ export function TabsBridge() {
     activeRef.current = state.active;
   }, [state.active]);
 
-  // Reprise une fois, avec l'URL du premier rendu.
+  // Reprise une fois, avec l'URL du premier rendu. Sur un appareil tactile,
+  // la racine ouvre la capture du Vide-cerveau ; une adresse explicite et une
+  // navigation ultérieure vers « / » (le « + ») ne sont pas touchées.
   const firstPathname = useRef(pathname);
   useEffect(() => {
-    hydrate(firstPathname.current);
+    const start = startPathname(firstPathname.current, window.matchMedia("(pointer: coarse)").matches);
+    hydrate(start);
+    if (start !== firstPathname.current) {
+      router.replace(start);
+      return;
+    }
     const target = resumeTarget();
     if (target) router.replace(target);
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -24,6 +24,7 @@ import { ancestorsOf, buildTree, GAP_PREFIX, parseGapId, wouldCreateCycle, type 
 import { AUTHOR_NAME, CV_URL } from "@/lib/branding";
 import { formatClock } from "@/lib/sync_status";
 import { PageLabel } from "./PageIcon";
+import { RefreshControl } from "./RefreshControl";
 import { SearchBar } from "./SearchBar";
 import { SidebarResizer } from "./SidebarResizer";
 import { hydrateSidebar } from "./sidebar_store";
@@ -348,6 +349,7 @@ export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
             </button>
           </form>
           {macSyncedAt && <p className="sync-mac">Mac synchronisé à {formatClock(new Date(macSyncedAt))}</p>}
+          <RefreshControl />
           <SyncStatus />
         </div>
         <SidebarResizer />
