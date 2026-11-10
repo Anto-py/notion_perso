@@ -14,11 +14,18 @@ export const FOLDER_ICON = "📁";
 
 export type PageKind = "page" | "database" | "entry" | "folder";
 
-export type Placeable = { type: PageKind; isBasesRoot?: boolean };
+export type Placeable = { type: PageKind; isBasesRoot?: boolean; isInbox?: boolean; rootException?: boolean };
 
 // Une base ou un dossier : ce qui habite la racine.
 export function livesInBases(type: PageKind): boolean {
   return type === "database" || type === "folder";
+}
+
+// L'exception To Do (migration 0013) : une base marquée peut vivre à la racine
+// de l'arbre, en dehors de « Bases de données ». Le rôle ne vaut que pour une
+// base, jamais pour un dossier.
+export function livesAtRoot(child: Placeable): boolean {
+  return child.type === "database" && child.rootException === true;
 }
 
 // La racine ou l'un de ses dossiers : ce qui reçoit bases et dossiers.
@@ -33,6 +40,7 @@ export function placementError(child: Placeable, parent: Placeable | null): stri
   if (child.type === "entry") return "Une entrée vit dans sa base.";
   if (livesInBases(child.type)) {
     if (parent && isBasesSide(parent)) return null;
+    if (!parent && livesAtRoot(child)) return null;
     return child.type === "database"
       ? "Une base ne vit que dans « Bases de données »."
       : "Un dossier ne vit que dans « Bases de données ».";
@@ -43,10 +51,11 @@ export function placementError(child: Placeable, parent: Placeable | null): stri
 
 // Parent de repli quand le parent d'origine manque ou refuse l'élément
 // (restauration, réception d'une synchronisation) : la racine des bases pour
-// une base ou un dossier, la racine de l'arbre pour une page. L'id de la
-// racine est lu en base (`basesRootId`, lib/pages.ts), jamais fixé ici.
-export function fallbackParent(type: PageKind, rootId: string | null): string | null {
-  return livesInBases(type) ? rootId : null;
+// une base ou un dossier, la racine de l'arbre pour une page ou pour la base
+// marquée par l'exception To Do. L'id de la racine est lu en base
+// (`basesRootId`, lib/pages.ts), jamais fixé ici.
+export function fallbackParent(child: Placeable, rootId: string | null): string | null {
+  return livesInBases(child.type) && !livesAtRoot(child) ? rootId : null;
 }
 
 // Gestes interdits sur des pages à rôle fixe. La racine des bases et le
@@ -60,6 +69,7 @@ export function trashError(row: { isBasesRoot: boolean; isInbox: boolean }): str
 
 export function publishError(row: Placeable): string | null {
   if (row.isBasesRoot) return "La page « Bases de données » ne se publie pas.";
+  if (row.isInbox) return "Le Vide-cerveau ne se publie pas.";
   if (row.type === "folder") return "Un dossier ne se publie pas : publiez une base ou une page.";
   return null;
 }

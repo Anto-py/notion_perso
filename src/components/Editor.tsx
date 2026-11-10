@@ -3,7 +3,13 @@
 // ssr: false, dans PageView) : BlockNote manipule le DOM dès sa création.
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
-import { BlockNoteSchema, defaultBlockSpecs, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from "@blocknote/core";
+import {
+  BlockNoteSchema,
+  defaultBlockSpecs,
+  defaultInlineContentSpecs,
+  filterSuggestionItems,
+  insertOrUpdateBlockForSlashMenu,
+} from "@blocknote/core";
 import { fr } from "@blocknote/core/locales";
 import { BlockNoteView } from "@blocknote/mantine";
 import { getDefaultReactSlashMenuItems, SuggestionMenuController, useCreateBlockNote } from "@blocknote/react";
@@ -18,6 +24,7 @@ import { bookmarkBlock } from "./bookmarkBlock";
 import { conflictBlock } from "./conflictBlock";
 import { linkedBlock } from "./linkedBlock";
 import { youtubeBlock } from "./mediaBlocks";
+import { mentionSpec } from "./mention_inline";
 import { markFreshLink, subpageBlock } from "./subpageBlock";
 
 // Blocs proposés : ceux de BRAINSTORMING §2. Ni audio ni vidéo déposée (la
@@ -61,6 +68,10 @@ const schema = BlockNoteSchema.create({
     column: columnBlock(),
     // Jamais proposé au menu « / » : seule une fusion le pose.
     conflict: conflictBlock(),
+  },
+  inlineContentSpecs: {
+    ...defaultInlineContentSpecs,
+    mention: mentionSpec,
   },
 });
 

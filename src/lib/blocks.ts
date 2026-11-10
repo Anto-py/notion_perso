@@ -5,8 +5,9 @@
 // Le corps arrive du navigateur : on le parcourt sans lui faire confiance,
 // chaque champ inattendu est simplement ignoré.
 import { iconSrc, resolveIcon } from "./icons.ts";
+import { mentionProps } from "./mention.ts";
 import type { Orphan } from "./properties.ts";
-import { domainOf } from "./unfurl.ts";
+import { domainOf, faviconUrl } from "./unfurl.ts";
 import { isStoredName } from "./upload_rules.ts";
 import { youtubeEmbedUrl, youtubeId } from "./youtube.ts";
 
@@ -26,6 +27,11 @@ function inlineText(content: Json): string {
       if (!isObject(item)) return "";
       if (item.type === "text" && typeof item.text === "string") return item.text;
       if (item.type === "link") return inlineText(item.content);
+      // La recherche retrouve le titre et l'adresse d'une mention.
+      if (item.type === "mention") {
+        const mention = mentionProps(item.props);
+        return mention ? [mention.title, mention.url].filter(Boolean).join(" ") : "";
+      }
       return "";
     })
     .join("");
@@ -324,6 +330,18 @@ function inlineHtml(content: Json, options: RenderOptions): string {
         const target = href && options.internal ? internalLinkId(href) : null;
         if (target && options.internal) href = options.internal(target);
         return href ? `<a ${linkAttrs(href)}>${inner}</a>` : inner;
+      }
+      if (item.type === "mention") {
+        const mention = mentionProps(item.props);
+        if (!mention) return "";
+        const label = escapeHtml(mention.title || domainOf(mention.url));
+        const href = safeHref(mention.url);
+        if (!href) return `<span class="mention">${label}</span>`;
+        const icon = faviconUrl(mention.url);
+        const iconHtml = icon
+          ? `<img class="inbox-favicon" src="${escapeHtml(icon)}" alt="" width="16" height="16" loading="lazy">`
+          : `<span class="inbox-glyph" aria-hidden="true">🌐</span>`;
+        return `<a class="mention" ${linkAttrs(href)}>${iconHtml}<span class="mention-title">${label}</span></a>`;
       }
       return "";
     })

@@ -31,6 +31,7 @@ export type SyncPage = {
   inboxKind: "link" | "note" | null;
   isInbox: boolean;
   isBasesRoot: boolean;
+  rootException: boolean;
   manualOrder: string;
   shareEnabled: boolean;
   publicId: string | null;
@@ -65,6 +66,7 @@ const FIELD_GROUPS: (keyof SyncPage)[][] = [
   ["trashedAt"],
   ["isInbox"],
   ["isBasesRoot"],
+  ["rootException"],
   // Publier et fermer s'excluent : ils voyagent ensemble.
   ["shareEnabled", "publicId", "shareIncludeSubpages", "shareClosed"],
 ];

@@ -2765,6 +2765,31 @@ mark.hit {
   line-height: 1;
 }
 
+/* Mention en ligne : favicon, titre, fond discret. Même forme dans l'éditeur
+   et dans la page lue. */
+.mention {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--accent-soft);
+  color: var(--ink);
+  text-decoration: none;
+  vertical-align: baseline;
+}
+
+.mention:hover .mention-title {
+  text-decoration: underline;
+}
+
+.mention-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .inbox-body {
   flex: 1;
   min-width: 0;

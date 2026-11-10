@@ -36,6 +36,7 @@ function page(over: Partial<SyncPage> = {}): SyncPage {
     inboxKind: null,
     isInbox: false,
     isBasesRoot: false,
+    rootException: false,
     manualOrder: "a0",
     shareEnabled: false,
     publicId: null,

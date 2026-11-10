@@ -68,6 +68,7 @@ export function pageToSync(row: PageRow): SyncPage {
     inboxKind: row.inboxKind,
     isInbox: row.isInbox,
     isBasesRoot: row.isBasesRoot,
+    rootException: row.rootException,
     manualOrder: row.manualOrder,
     shareEnabled: row.shareEnabled,
     publicId: row.publicId,
@@ -129,6 +130,7 @@ const PAGE_FIELDS: Record<keyof SyncPage, Check> = {
   inboxKind: oneOf(null, "link", "note"),
   isInbox: isBool,
   isBasesRoot: isBool,
+  rootException: isBool,
   manualOrder: isOrderKey,
   shareEnabled: isBool,
   publicId: orNull(isText),
@@ -190,7 +192,7 @@ const READERS = {
 // une clé absente pour différente de false). La ligne envoyée, elle, reste
 // exigée complète.
 const BASE_DEFAULTS: Partial<Record<SyncKind, Record<string, unknown>>> = {
-  page: { shareClosed: false, isBasesRoot: false }, // migrations 0011_ne_pas_partager, 0012_bases
+  page: { shareClosed: false, isBasesRoot: false, rootException: false }, // migrations 0011_ne_pas_partager, 0012_bases, 0013_exception_to_do
 };
 
 function withBaseDefaults(kind: SyncKind, base: unknown): unknown {

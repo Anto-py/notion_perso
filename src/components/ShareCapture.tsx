@@ -8,11 +8,11 @@ import { useEffect, useRef, useState } from "react";
 import { iconText } from "@/lib/icons";
 import type { SharedPayload } from "@/lib/share";
 import { domainOf } from "@/lib/unfurl";
-import { SiteIcon } from "./InboxView";
+import { SiteIcon } from "./SiteIcon";
 import { send } from "./request";
 
 type Database = { id: string; title: string; icon: string | null };
-type Saved = { id: string; where: string; warning?: string };
+type Saved = { id: string; where: string; page: boolean };
 
 export function ShareCapture({
   payload,
@@ -66,37 +66,33 @@ export function ShareCapture({
   async function save() {
     setError(null);
     setBusy(true);
+    // Null quand la destination est le Vide-cerveau : la mention va à la page.
+    const destination = target === inbox.id ? null : target;
     const body = link
-      ? { url: link.url, title: title.trim() || domainOf(link.url), description: preview.description, source: preview.source, image: preview.image || null }
-      : { text };
+      ? {
+          url: link.url,
+          title: title.trim() || domainOf(link.url),
+          description: preview.description,
+          source: preview.source,
+          image: preview.image || null,
+          destination,
+        }
+      : { text, destination };
     const captured = await send("/api/inbox", "POST", body);
+    setBusy(false);
     if (!captured.ok) {
-      setBusy(false);
       setError(captured.error);
       return;
     }
-    const id = String(captured.data.id);
-    if (target === inbox.id) {
-      setBusy(false);
-      setSaved({ id, where: inbox.title });
-      return;
-    }
-    const moved = await send(`/api/entries/${id}/move`, "POST", { dbId: target });
-    setBusy(false);
-    setSaved(
-      moved.ok
-        ? { id, where: targetName }
-        : { id, where: inbox.title, warning: `Le déplacement vers « ${targetName} » a échoué : ${moved.error}` },
-    );
+    setSaved({ id: String(captured.data.id), where: targetName, page: destination === null });
   }
 
   if (saved) {
     return (
       <div className="share-done" role="status">
         <p className="share-done-title">Enregistré dans « {saved.where} ».</p>
-        {saved.warning && <p className="status status-error">{saved.warning}</p>}
         <div className="share-links">
-          <Link href={`/page/${saved.id}`}>Ouvrir l&apos;entrée</Link>
+          <Link href={`/page/${saved.id}`}>{saved.page ? "Ouvrir la page" : "Ouvrir l&apos;entrée"}</Link>
           <Link href="/inbox">Aller au Vide-cerveau</Link>
         </div>
       </div>

@@ -7,6 +7,7 @@ const root = { type: "page" as const, isBasesRoot: true };
 const folder = { type: "folder" as const };
 const page = { type: "page" as const };
 const database = { type: "database" as const };
+const todo = { type: "database" as const, rootException: true };
 
 describe("placementError", () => {
   it("range bases et dossiers sous la racine ou un de ses dossiers", () => {
@@ -33,11 +34,22 @@ describe("placementError", () => {
     expect(placementError({ type: "entry" }, root)).toBe("Une entrée vit dans sa base.");
   });
 
+  it("laisse l'exception To Do à la racine de l'arbre, et sous « Bases de données »", () => {
+    expect(placementError(todo, null)).toBeNull();
+    expect(placementError(todo, root)).toBeNull();
+    expect(placementError(todo, folder)).toBeNull();
+    expect(placementError(todo, page)).toBe("Une base ne vit que dans « Bases de données ».");
+    expect(placementError(todo, database)).toBe("Une base ne vit que dans « Bases de données ».");
+    expect(placementError({ type: "folder", rootException: true }, null)).toBe("Un dossier ne vit que dans « Bases de données ».");
+  });
+
   it("donne un repli à chaque type, avec la racine lue par son rôle", () => {
-    expect(fallbackParent("database", BASES_ROOT_ID)).toBe(BASES_ROOT_ID);
-    expect(fallbackParent("folder", BASES_ROOT_ID)).toBe(BASES_ROOT_ID);
-    expect(fallbackParent("page", BASES_ROOT_ID)).toBeNull();
-    expect(fallbackParent("database", null)).toBeNull();
+    expect(fallbackParent({ type: "database" }, BASES_ROOT_ID)).toBe(BASES_ROOT_ID);
+    expect(fallbackParent({ type: "folder" }, BASES_ROOT_ID)).toBe(BASES_ROOT_ID);
+    expect(fallbackParent({ type: "page" }, BASES_ROOT_ID)).toBeNull();
+    expect(fallbackParent({ type: "database" }, null)).toBeNull();
+    expect(fallbackParent(todo, BASES_ROOT_ID)).toBeNull();
+    expect(fallbackParent(todo, null)).toBeNull();
   });
 });
 
@@ -48,8 +60,9 @@ describe("rôles fixes", () => {
     expect(trashError({ isBasesRoot: false, isInbox: false })).toBeNull();
   });
 
-  it("refuse la publication de la racine et d'un dossier", () => {
+  it("refuse la publication de la racine, du Vide-cerveau et d'un dossier", () => {
     expect(publishError(root)).toBe("La page « Bases de données » ne se publie pas.");
+    expect(publishError({ type: "page", isInbox: true })).toBe("Le Vide-cerveau ne se publie pas.");
     expect(publishError(folder)).not.toBeNull();
     expect(publishError(database)).toBeNull();
     expect(publishError(page)).toBeNull();

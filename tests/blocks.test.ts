@@ -459,3 +459,36 @@ describe("bloc signet", () => {
     expect(renderHtml([{ type: "bookmark", props: { url: "javascript:alert(1)" } }])).toBe("");
   });
 });
+
+describe("mention", () => {
+  const body = [
+    {
+      type: "paragraph",
+      content: [{ type: "mention", props: { url: "https://exemple.org/a", title: "Exemple" } }],
+      children: [],
+    },
+  ];
+
+  it("entre dans le texte de recherche avec son titre et son adresse", () => {
+    expect(flattenToText(body)).toBe("Exemple https://exemple.org/a");
+  });
+
+  it("se rend en lien avec son favicon et son titre", () => {
+    const html = renderHtml(body);
+    expect(html).toContain('<a class="mention" href="https://exemple.org/a" target="_blank" rel="noopener noreferrer">');
+    expect(html).toContain('src="https://exemple.org/favicon.ico"');
+    expect(html).toContain('<span class="mention-title">Exemple</span>');
+  });
+
+  it("refuse une adresse dangereuse et garde le titre", () => {
+    const html = renderHtml([
+      {
+        type: "paragraph",
+        content: [{ type: "mention", props: { url: "javascript:alert(1)", title: "Piège" } }],
+        children: [],
+      },
+    ]);
+    expect(html).not.toContain("javascript:");
+    expect(html).toContain('<span class="mention">Piège</span>');
+  });
+});

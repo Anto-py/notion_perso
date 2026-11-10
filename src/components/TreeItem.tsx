@@ -46,7 +46,6 @@ export function TreeGap({
 }
 
 function hrefOf(node: TreeNode): string {
-  if (node.inbox) return "/inbox";
   return node.type === "database" ? `/db/${node.id}` : `/page/${node.id}`;
 }
 

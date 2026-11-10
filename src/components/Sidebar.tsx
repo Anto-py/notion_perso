@@ -152,7 +152,10 @@ export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
     // Même règle que le serveur (lib/bases.ts) : une page n'entre pas dans un
     // dossier, une base ne vit que sous la racine ou un dossier. La ligne reste
     // à sa place.
-    const refused = moved && placementError({ type: moved.type, isBasesRoot: moved.basesRoot }, parent ? { type: parent.type, isBasesRoot: parent.basesRoot } : null);
+    const refused = moved && placementError(
+      { type: moved.type, isBasesRoot: moved.basesRoot, rootException: moved.rootException },
+      parent ? { type: parent.type, isBasesRoot: parent.basesRoot, rootException: parent.rootException } : null,
+    );
     if (refused) {
       setMessage(refused);
       return;

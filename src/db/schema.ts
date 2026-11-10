@@ -105,6 +105,10 @@ export const pages = pgTable(
     // 0012 (racine des bases), même motif d'index qu'is_inbox. Étape 17 : le
     // rôle passe à une page, l'id n'est plus fixe.
     isBasesRoot: boolean("is_bases_root").notNull().default(false),
+    // La base autorisée à vivre à la racine de l'arbre, hors de « Bases de
+    // données » (exception To Do, migration 0013). Une seule, même motif
+    // d'index unique partiel que les autres rôles.
+    rootException: boolean("root_exception").notNull().default(false),
     // Clé d'ordre fractionnaire (lib/order_key.ts), triée octet par octet :
     // la migration 0008 pose COLLATE "C", que Drizzle ne sait pas déclarer.
     manualOrder: text("manual_order").notNull().default("a0"),
@@ -136,6 +140,7 @@ export const pages = pgTable(
     index("pages_trashed_at_idx").on(t.trashedAt),
     uniqueIndex("pages_inbox_idx").on(t.isInbox).where(sql`is_inbox`),
     uniqueIndex("pages_bases_root_idx").on(t.isBasesRoot).where(sql`is_bases_root`),
+    uniqueIndex("pages_root_exception_idx").on(t.rootException).where(sql`root_exception`),
     index("pages_sync_xid_idx").on(t.syncXid),
   ],
 );

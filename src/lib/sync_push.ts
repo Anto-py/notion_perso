@@ -54,9 +54,11 @@ export async function applyPush(items: PushItem[]): Promise<PushOutcome[]> {
   const errors = new Map<string, string>();
 
   await db.transaction(async (tx) => {
-    // La racine des bases est lue par son rôle, une fois pour le lot (étape 17).
+    // La racine des bases et l'exception To Do sont lues par leur rôle, une
+    // fois pour le lot (étape 17, migration 0013).
     const [root] = await tx.select({ id: pages.id }).from(pages).where(eq(pages.isBasesRoot, true)).limit(1);
-    await upsertPages(tx, upserts(items, "page"), now, notes, root?.id ?? null);
+    const [exception] = await tx.select({ id: pages.id }).from(pages).where(eq(pages.rootException, true)).limit(1);
+    await upsertPages(tx, upserts(items, "page"), now, notes, root?.id ?? null, exception?.id ?? null);
     await insertMedia(tx, upserts(items, "media"), errors);
     await upsertIconImages(tx, upserts(items, "icon_image"), errors);
     await deletePages(tx, deletionsOf(items, "page"));
@@ -80,11 +82,12 @@ export async function applyPush(items: PushItem[]): Promise<PushOutcome[]> {
 // renvoie à la racine, comme ON DELETE SET NULL ; une entrée dont la base a
 // été purgée n'a plus où vivre : elle devient une page, en corbeille, sans ses
 // valeurs. Les champs dérivés sont recalculés ici, jamais reçus.
-async function writePage(tx: Tx, input: SyncPage, previous: typeof pages.$inferSelect | undefined, now: string, rootId: string | null) {
+async function writePage(tx: Tx, input: SyncPage, previous: typeof pages.$inferSelect | undefined, now: string, rootId: string | null, exceptionId: string | null) {
   let row = input;
-  // Un seul rôle de racine (index unique) : quand le serveur en a déjà une, une
-  // autre ligne qui prétendrait au rôle le perd.
+  // Un seul rôle de racine et une seule exception To Do (index uniques) : quand
+  // le serveur en a déjà un, une autre ligne qui prétendrait au rôle le perd.
   if (row.isBasesRoot && rootId !== null && row.id !== rootId) row = { ...row, isBasesRoot: false };
+  if (row.rootException && exceptionId !== null && row.id !== exceptionId) row = { ...row, rootException: false };
   const effectiveRoot = rootId ?? (row.isBasesRoot ? row.id : null);
   const refs = [row.parentId, row.dbId].filter((ref): ref is string => ref !== null);
   const targets = refs.length
@@ -98,7 +101,7 @@ async function writePage(tx: Tx, input: SyncPage, previous: typeof pages.$inferS
   // la racine de l'arbre, une base ou un dossier sous la racine des bases.
   if (row.type !== "entry") {
     const parent = row.parentId ? byId.get(row.parentId) : undefined;
-    if ((row.parentId && !parent) || placementError(row, parent ?? null)) row = { ...row, parentId: fallbackParent(row.type, effectiveRoot) };
+    if ((row.parentId && !parent) || placementError(row, parent ?? null)) row = { ...row, parentId: fallbackParent(row, effectiveRoot) };
   }
   if (row.type === "entry" && row.parentId && !byId.has(row.parentId)) row = { ...row, parentId: null };
   const database = row.dbId ? byId.get(row.dbId) : undefined;
@@ -142,6 +145,7 @@ async function writePage(tx: Tx, input: SyncPage, previous: typeof pages.$inferS
     inboxKind: row.inboxKind,
     isInbox: row.isInbox,
     isBasesRoot: row.isBasesRoot,
+    rootException: row.rootException,
     manualOrder: row.manualOrder,
     shareEnabled: row.shareEnabled,
     publicId: row.publicId,
@@ -174,7 +178,7 @@ async function migrateEntries(tx: Tx, dbId: string, before: Property[], after: P
   }
 }
 
-async function upsertPages(tx: Tx, items: Upsert<"page">[], now: string, notes: Notes, rootId: string | null) {
+async function upsertPages(tx: Tx, items: Upsert<"page">[], now: string, notes: Notes, rootId: string | null, exceptionId: string | null) {
   if (!items.length) return;
   const ids = items.map((item) => item.id);
   const current = await tx.select().from(pages).where(inArray(pages.id, ids)).orderBy(pages.id).for("update");
@@ -192,7 +196,7 @@ async function upsertPages(tx: Tx, items: Upsert<"page">[], now: string, notes: 
     notes.set(item.id, { conflicts: decision.conflicts, revived: decision.revived });
     rows.push(decision.row);
   }
-  for (const row of writeOrder(rows)) await writePage(tx, row, before.get(row.id), now, rootId);
+  for (const row of writeOrder(rows)) await writePage(tx, row, before.get(row.id), now, rootId, exceptionId);
 
   const revived = [...notes].filter(([, note]) => note.revived).map(([id]) => id);
   if (revived.length) await tx.delete(deletions).where(and(eq(deletions.kind, "page"), inArray(deletions.id, revived)));

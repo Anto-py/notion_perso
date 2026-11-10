@@ -35,6 +35,7 @@ function page(over: Partial<SyncPage> = {}): SyncPage {
     inboxKind: null,
     isInbox: false,
     isBasesRoot: false,
+    rootException: false,
     manualOrder: "a0",
     shareEnabled: false,
     publicId: null,
@@ -112,11 +113,12 @@ describe("parsePush", () => {
     expect(Array.isArray(items) && items[0].kind === "page" && "base" in items[0] && items[0].base).toEqual(page());
   });
 
-  // Même cas pour la migration 0012 : un instantané antérieur n'a pas
-  // isBasesRoot, la ligne qu'il décrit n'était pas « Bases ».
-  it("lit un instantané antérieur à isBasesRoot comme une page ordinaire", () => {
-    const { isBasesRoot: _dropped, shareClosed: _closed, ...old } = page();
+  // Même cas pour les migrations 0012 et 0013 : un instantané antérieur n'a
+  // ni isBasesRoot ni rootException, la ligne qu'il décrit était ordinaire.
+  it("lit un instantané antérieur à isBasesRoot et rootException comme une page ordinaire", () => {
+    const { isBasesRoot: _dropped, rootException: _root, shareClosed: _closed, ...old } = page();
     void _dropped;
+    void _root;
     void _closed;
     const items = parsePush({ items: [pushPage(page({ title: "Mac" }), 3, old as SyncPage)] });
     expect(Array.isArray(items) && items[0].kind === "page" && "base" in items[0] && items[0].base).toEqual(page());

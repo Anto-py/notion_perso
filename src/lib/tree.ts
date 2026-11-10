@@ -17,6 +17,8 @@ export type TreeRow = {
   // absents des lignes qui ne viennent pas de listTreeRows.
   basesRoot?: boolean;
   inbox?: boolean;
+  // La base à l'exception To Do : elle peut vivre à la racine de l'arbre.
+  rootException?: boolean;
 };
 
 export type TreeNode = TreeRow & { children: TreeNode[] };

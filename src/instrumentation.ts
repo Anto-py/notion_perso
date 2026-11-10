@@ -24,10 +24,16 @@ export async function register() {
     await bootstrap();
   }
   if (!process.env.SYNC_REMOTE_URL) {
-    const [{ db }, { describeRun, runBasesMove }, { basesPageConverted, describeConversion, runBasesPageMove }] = await Promise.all([
+    const [
+      { db },
+      { describeRun, runBasesMove },
+      { basesPageConverted, describeConversion, runBasesPageMove },
+      { describeInboxPlan, inboxPageConverted, runInboxPageMove },
+    ] = await Promise.all([
       import("./db"),
       import("./lib/bases_move_query"),
       import("./lib/bases_page_move_query"),
+      import("./lib/inbox_page_move_query"),
     ]);
     await runBasesMove(db, { write: true }).then(
       (run) => console.log(describeRun(run)),
@@ -37,6 +43,12 @@ export async function register() {
       await runBasesPageMove(db, { write: true }).then(
         (run) => console.log(describeConversion(run)),
         (error) => console.error("Conversion de la racine des bases impossible :", error),
+      );
+    }
+    if (!(await inboxPageConverted(db))) {
+      await runInboxPageMove(db, { write: true }).then(
+        (run) => console.log(describeInboxPlan(run.plan)),
+        (error) => console.error("Conversion du Vide-cerveau impossible :", error),
       );
     }
   }

@@ -46,6 +46,7 @@ export async function listTreeRows(): Promise<TreeRow[]> {
       closed: pages.shareClosed,
       basesRoot: pages.isBasesRoot,
       inbox: pages.isInbox,
+      rootException: pages.rootException,
       manualOrder: pages.manualOrder,
     })
     .from(pages)
@@ -60,6 +61,7 @@ export async function listTreeRows(): Promise<TreeRow[]> {
     closed: row.closed,
     basesRoot: row.basesRoot,
     inbox: row.inbox,
+    rootException: row.rootException,
   }));
 }
 
@@ -137,7 +139,7 @@ export type CreatedKind = "page" | "database" | "folder";
 // Page vierge, base vide ou dossier. Sans parentId, une page naît à la racine
 // de l'arbre, une base ou un dossier sous la racine des bases.
 export async function createPage(parentId: string | null, type: CreatedKind = "page"): Promise<Outcome & { id?: string }> {
-  const parent = parentId ?? fallbackParent(type, await basesRootId());
+  const parent = parentId ?? fallbackParent({ type }, await basesRootId());
   const check = await checkParent({ type }, parent);
   if (!check.ok) return check;
   const id = newId("pg");
@@ -336,7 +338,7 @@ export async function restorePage(id: string): Promise<Outcome> {
       UPDATE pages SET trashed_at = NULL, updated_at = now() WHERE id IN (${trashedBatch(id)})`);
     if (!restored.rowCount) return NOT_FOUND;
     const [head] = await tx
-      .select({ type: pages.type, parentId: pages.parentId, isBasesRoot: pages.isBasesRoot })
+      .select({ type: pages.type, parentId: pages.parentId, isBasesRoot: pages.isBasesRoot, rootException: pages.rootException })
       .from(pages)
       .where(eq(pages.id, id));
     if (head && head.type !== "entry") {
@@ -345,7 +347,7 @@ export async function restorePage(id: string): Promise<Outcome> {
         : [];
       const livable = parent && !parent.trashedAt ? parent : null;
       if ((head.parentId && !livable) || placementError(head, livable)) {
-        await tx.update(pages).set({ parentId: fallbackParent(head.type, await basesRootId(tx)) }).where(eq(pages.id, id));
+        await tx.update(pages).set({ parentId: fallbackParent(head, await basesRootId(tx)) }).where(eq(pages.id, id));
       }
     }
     return { ok: true } as const;
