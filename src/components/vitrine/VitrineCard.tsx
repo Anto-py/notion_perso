@@ -2,7 +2,8 @@
 // hook : rendue par le serveur comme par le navigateur. Dans les résultats
 // d'une recherche, le terme est surligné dans le titre et la description, et
 // un passage trouvé dans le corps vient en extrait d'une ligne (§2). Le logo
-// viendra ensuite ; seuls les champs de VitrineEntry y entrent.
+// (VitrineLogo, seul îlot client) précède le titre ; seuls les champs de
+// VitrineEntry y entrent.
 //
 // Toute la carte ouvre la fiche (§5) : seul le titre est un lien, étiré sur
 // la carte par le CSS (::after). Sans JavaScript, il mène à l'adresse de la
@@ -11,6 +12,7 @@
 import { parseHeadline, type Segment } from "@/lib/search";
 import { ficheHref, highlightTerms, type VitrineEntry } from "@/lib/vitrine";
 import type { SheetRow } from "@/lib/vitrine_state";
+import { VitrineLogo } from "./VitrineLogo";
 
 const TAGS_SHOWN = 3;
 
@@ -34,6 +36,7 @@ export function VitrineCard({ entry, row, highlight }: { entry: VitrineEntry; ro
   return (
     <article className="vitrine-card">
       <h3 className="vitrine-card-title">
+        <VitrineLogo entry={entry} />
         <a className="vitrine-card-link" href={ficheHref(entry.slug)} data-fiche={entry.slug} data-row={row}>
           <Text text={entry.title || "Sans titre"} query={query} />
         </a>

@@ -62,7 +62,7 @@ export function isFetchableUrl(raw: string): boolean {
 }
 
 // Attributs d'une balise, guillemets simples, doubles ou nus.
-function attributes(tag: string): Record<string, string> {
+export function attributes(tag: string): Record<string, string> {
   const found: Record<string, string> = {};
   const pattern = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/g;
   for (const match of tag.matchAll(pattern)) found[match[1].toLowerCase()] = match[2] ?? match[3] ?? match[4] ?? "";

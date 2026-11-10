@@ -324,10 +324,56 @@
 
 .vitrine-card-title {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
   gap: 0.5rem;
   margin: 0;
   font-size: 1.05rem;
+}
+
+.vitrine-card-title .vitrine-heart {
+  margin-left: auto;
+}
+
+/* Logo, icône ou initiale (§12) : un carré de taille fixe, quel que soit le
+   repli, pour que les titres restent alignés d'une carte à l'autre. */
+.vitrine-logo {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.4rem;
+  object-fit: contain;
+}
+
+.vitrine-logo-big {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.6rem;
+}
+
+.vitrine-logo-emoji,
+.vitrine-logo-initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.vitrine-logo-emoji {
+  font-size: 1.5rem;
+}
+
+.vitrine-logo-big.vitrine-logo-emoji {
+  font-size: 2.2rem;
+}
+
+.vitrine-logo-initial {
+  border-radius: 50%;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.vitrine-logo-big.vitrine-logo-initial {
+  font-size: 1.4rem;
 }
 
 .vitrine-heart {
@@ -474,7 +520,7 @@
 
 .vitrine-sheet-title {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.5rem;
   margin: 0;
   font-size: 1.5rem;

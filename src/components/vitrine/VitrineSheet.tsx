@@ -11,6 +11,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from
 import { slugify, type VitrineEntry } from "@/lib/vitrine";
 import { ficheFromHref } from "@/lib/vitrine_state";
 import { CopyUrlButton } from "../CopyUrlButton";
+import { VitrineLogo } from "./VitrineLogo";
 
 type Props = {
   entry: VitrineEntry | null;
@@ -104,6 +105,7 @@ export function VitrineSheet({ entry, prev, next, url, onClose, onGo, onTag }: P
         <div className="vitrine-sheet-inner">
           <header className="vitrine-sheet-head">
             <h2 id="vitrine-sheet-title" className="vitrine-sheet-title">
+              <VitrineLogo entry={entry} big />
               {entry.title || "Sans titre"}
               {entry.coeur ? (
                 <span className="vitrine-heart" role="img" aria-label="Coup de cœur">

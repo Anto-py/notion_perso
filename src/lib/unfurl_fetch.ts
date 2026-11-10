@@ -113,15 +113,14 @@ async function readLimited(response: Response): Promise<string> {
   return new TextDecoder().decode(bytes);
 }
 
-// Titre, description et image d'une page. Toute panne (réseau, délai, page
-// protégée, format inattendu) donne le repli du BRAINSTORMING : le domaine
-// comme titre, l'URL restant de toute façon enregistrée par l'appelant.
-export async function unfurl(raw: string): Promise<UnfurlResult> {
-  if (!canFetch(raw)) return fallback(raw);
-  // Vidéo publique : oEmbed donne titre et auteur. Vidéo privée ou retirée :
-  // il répond 403 et la page HTML ne donne qu'un mur de consentement, d'où le
-  // repli direct sur le domaine plutôt qu'un titre « youtube.com » trompeur.
-  if (youtubeId(raw)) return (await youtubePreview(raw)) ?? fallback(raw);
+// Page lue sous garde, redirections suivies : url est l'adresse finale, html
+// son texte (UNFURL_MAX_BYTES au plus), null quand elle a répondu 2xx sans
+// être du HTML. null en entier : injoignable, refusée ou en erreur. Sert à
+// unfurl et aux logos de la vitrine (lib/vitrine_logo_store.ts).
+export type FetchedPage = { url: string; html: string | null };
+
+export async function fetchPage(raw: string): Promise<FetchedPage | null> {
+  if (!canFetch(raw)) return null;
   let current = raw;
   try {
     for (let hop = 0; hop <= UNFURL_MAX_REDIRECTS; hop++) {
@@ -135,24 +134,39 @@ export async function unfurl(raw: string): Promise<UnfurlResult> {
       });
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get("location");
-        if (!location) return fallback(raw);
+        if (!location) return null;
         const next = new URL(location, current).toString();
-        if (!canFetch(next)) return fallback(raw);
+        if (!canFetch(next)) return null;
         current = next;
         continue;
       }
-      if (!response.ok) return fallback(raw);
+      if (!response.ok) return null;
       const type = response.headers.get("content-type") ?? "";
       if (!type.includes("text/html") && !type.includes("application/xhtml")) {
         await response.body?.cancel().catch(() => {});
-        return fallback(raw, true);
+        return { url: current, html: null };
       }
-      return { ...parseUnfurl(await readLimited(response), current), reached: true };
+      return { url: current, html: await readLimited(response) };
     }
   } catch {
-    return fallback(raw);
+    return null;
   }
-  return fallback(raw);
+  return null;
+}
+
+// Titre, description et image d'une page. Toute panne (réseau, délai, page
+// protégée, format inattendu) donne le repli du BRAINSTORMING : le domaine
+// comme titre, l'URL restant de toute façon enregistrée par l'appelant.
+export async function unfurl(raw: string): Promise<UnfurlResult> {
+  if (!canFetch(raw)) return fallback(raw);
+  // Vidéo publique : oEmbed donne titre et auteur. Vidéo privée ou retirée :
+  // il répond 403 et la page HTML ne donne qu'un mur de consentement, d'où le
+  // repli direct sur le domaine plutôt qu'un titre « youtube.com » trompeur.
+  if (youtubeId(raw)) return (await youtubePreview(raw)) ?? fallback(raw);
+  const page = await fetchPage(raw);
+  if (!page) return fallback(raw);
+  if (page.html === null) return fallback(raw, true);
+  return { ...parseUnfurl(page.html, page.url), reached: true };
 }
 
 // Corps d'une image lu au plus `limit` octets ; null dès le dépassement, sans

@@ -95,7 +95,7 @@ function valueOf(row: EntryRow, prop: Property | null): Value | undefined {
 }
 
 // Adresse lue avec ou sans schéma ; http(s) seulement.
-function parseSite(raw: string): URL | null {
+export function parseSite(raw: string): URL | null {
   const text = raw.trim();
   if (!text || /\s/.test(text)) return null;
   try {
@@ -108,7 +108,7 @@ function parseSite(raw: string): URL | null {
   }
 }
 
-function hostOf(url: URL): string {
+export function hostOf(url: URL): string {
   return url.hostname.toLowerCase().replace(/^www\./, "");
 }
 

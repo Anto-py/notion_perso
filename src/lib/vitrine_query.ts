@@ -19,6 +19,7 @@ import {
   type VitrineEntry,
   type VitrineFields,
 } from "./vitrine";
+import { logoTarget } from "./vitrine_logo";
 import { findFiche } from "./vitrine_state";
 import { applyVitrinePatch, vitrineAddress, type VitrinePatch } from "./vitrine_pilotage";
 import { rankVitrineHits, vitrineSearchTerms, type FieldRank, type VitrineSearch } from "./vitrine_search";
@@ -93,6 +94,20 @@ export async function vitrineSheet(fiche: string): Promise<{ slug: string; html:
   const page = await getPage(entry.id);
   if (!page || page.trashedAt) return null;
   return { slug: entry.slug, html: renderHtml(page.body, vitrineRenderOptions(vitrine.entries)).trim() };
+}
+
+// Page d'accueil à lire pour le logo d'un hôte (§12), null sans vitrine ou si
+// aucune entrée vivante n'a ce site. Ne lit que la valeur Site Web : la route
+// du logo est appelée une fois par carte, loadVitrine y serait trop lourd.
+export async function vitrineLogoTarget(host: string): Promise<string | null> {
+  const row = await activeBase();
+  const site = row ? vitrineFields(parseConfig(row.dbConfig).properties).site : null;
+  if (!row || !site) return null;
+  const rows = await db
+    .select({ site: sql<string | null>`${pages.propertyValues} ->> ${site.id}` })
+    .from(pages)
+    .where(and(eq(pages.dbId, row.id), eq(pages.type, "entry"), isNull(pages.trashedAt)));
+  return logoTarget(host, rows.map((entry) => entry.site));
 }
 
 // Extrait d'une ligne, marqué comme celui de la recherche de l'app.
