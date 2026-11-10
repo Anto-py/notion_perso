@@ -6,8 +6,10 @@ import { SESSION_COOKIE, sessionCookieOptions } from "@/lib/session_cookie";
 import { loginPath } from "@/lib/share";
 
 // Chemins ouverts sans session (SPECS.md, « Rôle des fichiers clés »).
-// /api/media décide lui-même : média d'une page publiée ou refus.
-const PUBLIC_PATHS = [/^\/login$/, /^\/p\//, /^\/api\/auth\//, /^\/api\/media\//];
+// /api/media décide lui-même : média d'une page publiée ou refus. La vitrine
+// (/veille et ses routes publiques, limitées par IP) aussi ; son pilotage,
+// /api/vitrine/*, reste sous session.
+const PUBLIC_PATHS = [/^\/login$/, /^\/p\//, /^\/veille$/, /^\/api\/veille\//, /^\/api\/auth\//, /^\/api\/media\//];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

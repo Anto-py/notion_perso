@@ -4,15 +4,14 @@ import {
   NON_PRECISE,
   allRow,
   applyFilters,
-  applyVitrinePatch,
   assignSlugs,
   emptyVitrineState,
   facetCounts,
   heartRow,
   highlightTerms,
   initialColor,
+  isNarrowed,
   panorama,
-  parseVitrinePatch,
   parseVitrineState,
   recentRow,
   serializeVitrineState,
@@ -20,8 +19,9 @@ import {
   slugify,
   suggestLabels,
   toVitrineEntry,
-  vitrineAddress,
   vitrineFields,
+  vitrineRenderOptions,
+  vitrineView,
   type VitrineEntry,
 } from "@/lib/vitrine";
 
@@ -384,41 +384,64 @@ describe("initialColor", () => {
   });
 });
 
-describe("parseVitrinePatch", () => {
-  it("lit l'interrupteur et la page d'accueil, null retirant la page", () => {
-    expect(parseVitrinePatch({ enabled: true })).toEqual({ enabled: true });
-    expect(parseVitrinePatch({ welcomePageId: "pg_abc" })).toEqual({ welcomePageId: "pg_abc" });
-    expect(parseVitrinePatch({ welcomePageId: null })).toEqual({ welcomePageId: null });
-    expect(parseVitrinePatch({ enabled: false, welcomePageId: null })).toEqual({ enabled: false, welcomePageId: null });
+describe("isNarrowed", () => {
+  it("une lettre ne resserre rien, deux oui", () => {
+    expect(isNarrowed({ ...emptyVitrineState(), q: "m" })).toBe(false);
+    expect(isNarrowed({ ...emptyVitrineState(), q: " m " })).toBe(false);
+    expect(isNarrowed({ ...emptyVitrineState(), q: "mi" })).toBe(true);
   });
 
-  it("refuse un corps vide, un interrupteur non booléen ou un id illisible", () => {
-    expect(parseVitrinePatch(null)).toBeNull();
-    expect(parseVitrinePatch({})).toBeNull();
-    expect(parseVitrinePatch({ enabled: "true" })).toBeNull();
-    expect(parseVitrinePatch({ welcomePageId: "" })).toBeNull();
-    expect(parseVitrinePatch({ welcomePageId: "pg/../x" })).toBeNull();
-    expect(parseVitrinePatch({ enabled: true, welcomePageId: 3 })).toBeNull();
+  it("un filtre ou les coups de cœur resserrent ; la fiche seule non", () => {
+    expect(isNarrowed({ ...emptyVitrineState(), domaine: ["ia"] })).toBe(true);
+    expect(isNarrowed({ ...emptyVitrineState(), coeur: true })).toBe(true);
+    expect(isNarrowed({ ...emptyVitrineState(), fiche: "mindmup" })).toBe(false);
   });
 });
 
-describe("applyVitrinePatch", () => {
-  it("part d'une vitrine coupée sans page quand la base n'en a pas", () => {
-    expect(applyVitrinePatch(undefined, { enabled: true })).toEqual({ enabled: true, welcomePageId: null });
+describe("vitrineView", () => {
+  const entries = [
+    entry({ id: "a", title: "Zotero", domaines: ["IA"], coeur: true }),
+    entry({ id: "b", title: "Anki", domaines: ["IA"], createdAt: "2026-05-01T00:00:00Z" }),
+    entry({ id: "c", title: "Mindmup", domaines: ["Mind map"] }),
+  ];
+
+  it("base vide : vide, filtres compris", () => {
+    expect(vitrineView([], emptyVitrineState(), null)).toEqual({ kind: "empty" });
+    expect(vitrineView([], { ...emptyVitrineState(), domaine: ["ia"] }, null)).toEqual({ kind: "empty" });
   });
 
-  it("ne change que ce que le geste nomme", () => {
-    const current = { enabled: true, welcomePageId: "pg_old" };
-    expect(applyVitrinePatch(current, { welcomePageId: "pg_new" })).toEqual({ enabled: true, welcomePageId: "pg_new" });
-    expect(applyVitrinePatch(current, { welcomePageId: null })).toEqual({ enabled: true, welcomePageId: null });
-    expect(applyVitrinePatch(current, { enabled: false })).toEqual({ enabled: false, welcomePageId: "pg_old" });
+  it("sans resserrement : les trois rangées", () => {
+    const view = vitrineView(entries, { ...emptyVitrineState(), q: "z" }, null);
+    expect(view.kind).toBe("vitrine");
+    if (view.kind !== "vitrine") return;
+    expect(view.heart.map((e) => e.id)).toEqual(["a"]);
+    expect(view.recent.map((e) => e.id)).toEqual(["b", "a", "c"]);
+    expect(view.all.map((e) => e.title)).toEqual(["Anki", "Mindmup", "Zotero"]);
+  });
+
+  it("filtre sans recherche : résultats par titre", () => {
+    const view = vitrineView(entries, { ...emptyVitrineState(), domaine: ["ia"] }, null);
+    expect(view).toEqual({ kind: "results", results: [entries[1], entries[0]] });
+  });
+
+  it("recherche classée : ordre du serveur, croisé avec les filtres", () => {
+    const state = { ...emptyVitrineState(), q: "outil", domaine: ["ia"] };
+    const view = vitrineView(entries, state, ["mindmup", "zotero", "inconnu", "anki"]);
+    expect(view).toEqual({ kind: "results", results: [entries[0], entries[1]] });
   });
 });
 
-describe("vitrineAddress", () => {
-  it("rend le chemin seul sur l'instance web, l'adresse distante sur le Mac", () => {
-    expect(vitrineAddress(null)).toBe("/veille");
-    expect(vitrineAddress("https://notion.example.eu")).toBe("https://notion.example.eu/veille");
-    expect(vitrineAddress("https://notion.example.eu/")).toBe("https://notion.example.eu/veille");
+describe("vitrineRenderOptions", () => {
+  const options = vitrineRenderOptions([entry({ id: "pg_mind", title: "Mindmup", icon: "🧠" })]);
+
+  it("une entrée de la vitrine mène à sa fiche", () => {
+    expect(options.subpage?.("pg_mind")).toEqual({ href: "/veille?fiche=mindmup", title: "Mindmup", icon: "🧠", type: "entry" });
+    expect(options.internal?.("pg_mind")).toBe("/veille?fiche=mindmup");
+  });
+
+  it("toute autre page reste privée, et aucune vue liée ne sort", () => {
+    expect(options.subpage?.("pg_autre")).toBe("private");
+    expect(options.internal?.("pg_autre")).toBeNull();
+    expect(options.linked?.("pg_base", "{}")).toBeNull();
   });
 });

@@ -17,6 +17,12 @@ const nextConfig: NextConfig = {
           { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
         ],
       },
+      // La vitrine n'est jamais indexée. Ses métadonnées arrivent en flux à la
+      // fin du <body> (rendu dynamique) : l'en-tête ne dépend pas de ce flux.
+      {
+        source: "/veille",
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      },
     ];
   },
 };

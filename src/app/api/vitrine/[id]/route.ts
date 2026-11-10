@@ -2,7 +2,7 @@
 // session : /api/vitrine/* n'est pas dans les chemins publics du proxy.
 import { fail, readJson, requirePage } from "@/lib/api";
 import { forgetPublicReach } from "@/lib/publication_query";
-import { parseVitrinePatch } from "@/lib/vitrine";
+import { parseVitrinePatch } from "@/lib/vitrine_pilotage";
 import { setVitrine, vitrineState } from "@/lib/vitrine_query";
 
 // GET → { enabled, welcomePageId, welcomeTitle, welcomeMissing,

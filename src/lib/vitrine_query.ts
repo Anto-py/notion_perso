@@ -10,14 +10,12 @@ import { getPage, type Page } from "./pages";
 import { syncConfig } from "./sync_config";
 import { parseConfig } from "./views";
 import {
-  applyVitrinePatch,
   assignSlugs,
   toVitrineEntry,
-  vitrineAddress,
   vitrineFields,
   type VitrineEntry,
-  type VitrinePatch,
 } from "./vitrine";
+import { applyVitrinePatch, vitrineAddress, type VitrinePatch } from "./vitrine_pilotage";
 
 // Interrupteur booléen vrai seulement, comme parseVitrine : la chaîne "true"
 // n'active rien.

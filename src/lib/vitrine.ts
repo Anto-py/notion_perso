@@ -1,12 +1,11 @@
 // Vitrine de veille (étape 20), partie pure : servie au serveur comme au
 // navigateur. Lecture des champs de la base, slugs, filtres à facettes,
 // rangées, état d'adresse, suggestions et surlignage. Les requêtes vivent dans
-// vitrine_query.ts.
+// vitrine_query.ts, le pilotage depuis « Partager » dans vitrine_pilotage.ts.
 //
 // Seuls les champs de VITRINE_FIELDS sortent du serveur : toute autre
 // propriété (Catégorie comprise) reste privée, même si la base en ajoute.
 import {
-  ID_PATTERN,
   OPTION_COLORS,
   optionById,
   type EntryRow,
@@ -15,8 +14,8 @@ import {
   type PropertyType,
   type Value,
 } from "./property_schema";
+import type { RenderOptions } from "./blocks";
 import { fold as foldWithOrigin, highlightSegments, searchTerms, type Segment } from "./search";
-import type { VitrineConfig } from "./views";
 
 export const VITRINE_FIELDS = {
   description: { name: "Description", type: "text" },
@@ -282,6 +281,52 @@ export function allRow(entries: readonly VitrineEntry[]): VitrineEntry[] {
   return [...entries].sort((a, b) => collator.compare(a.title, b.title));
 }
 
+// Recherche de deux lettres au moins, filtre ou coups de cœur : la rangée
+// « Résultats » remplace la vitrine (§1, §2 : une lettre ne change rien).
+export function isNarrowed(state: VitrineState): boolean {
+  return state.q.trim().length >= 2 || state.coeur || FAMILIES.some((family) => state[family].length > 0);
+}
+
+export type VitrineView =
+  | { kind: "empty" }
+  | { kind: "vitrine"; heart: VitrineEntry[]; recent: VitrineEntry[]; all: VitrineEntry[] }
+  | { kind: "results"; results: VitrineEntry[] };
+
+// Ce que montre la page pour un état. `ranked` : slugs classés par la
+// recherche du serveur, croisés ensuite avec les filtres ; null sans
+// recherche, les résultats suivent alors l'ordre du titre.
+export function vitrineView(entries: readonly VitrineEntry[], state: VitrineState, ranked: readonly string[] | null): VitrineView {
+  if (!entries.length) return { kind: "empty" };
+  if (!isNarrowed(state)) return { kind: "vitrine", heart: heartRow(entries), recent: recentRow(entries), all: allRow(entries) };
+  const filtered = applyFilters(entries, state);
+  if (!ranked) return { kind: "results", results: allRow(filtered) };
+  const bySlug = new Map(filtered.map((entry) => [entry.slug, entry]));
+  return { kind: "results", results: ranked.flatMap((slug) => bySlug.get(slug) ?? []) };
+}
+
+export function ficheHref(slug: string): string {
+  return `/veille?fiche=${encodeURIComponent(slug)}`;
+}
+
+// Liens d'un corps rendu dans la vitrine (mot d'accueil, notes d'une fiche) :
+// une entrée de la base mène à sa fiche ; toute autre page reste privée, un
+// bloc dit « Contenu privé » sans la nommer, un lien dans une phrase garde
+// son texte seul ; une vue liée ne rend rien (elle montrerait Catégorie).
+export function vitrineRenderOptions(entries: readonly VitrineEntry[]): RenderOptions {
+  const byId = new Map(entries.map((entry) => [entry.id, entry]));
+  return {
+    subpage: (pageId) => {
+      const entry = byId.get(pageId);
+      return entry ? { href: ficheHref(entry.slug), title: entry.title, icon: entry.icon, type: "entry" } : "private";
+    },
+    internal: (pageId) => {
+      const entry = byId.get(pageId);
+      return entry ? ficheHref(entry.slug) : null;
+    },
+    linked: () => null,
+  };
+}
+
 // searchParams de Next (valeurs simples ou en tableau) ou URLSearchParams.
 export type ParamSource = URLSearchParams | Record<string, string | string[] | undefined>;
 
@@ -367,42 +412,4 @@ export function initialColor(title: string): OptionColor {
   let hash = 0;
   for (const char of plain(title)) hash = (hash * 31 + (char.codePointAt(0) ?? 0)) >>> 0;
   return INITIAL_COLORS[hash % INITIAL_COLORS.length];
-}
-
-// --- Pilotage (panneau « Partager ») ---------------------------------------
-
-export type VitrinePatch = { enabled?: boolean; welcomePageId?: string | null };
-
-// Corps de PUT /api/vitrine/[id] : au moins un des deux champs, chacun lisible.
-// welcomePageId null retire la page d'accueil. Sinon null (400).
-export function parseVitrinePatch(body: Record<string, unknown> | null): VitrinePatch | null {
-  if (!body) return null;
-  const patch: VitrinePatch = {};
-  if ("enabled" in body) {
-    if (typeof body.enabled !== "boolean") return null;
-    patch.enabled = body.enabled;
-  }
-  if ("welcomePageId" in body) {
-    const id = body.welcomePageId;
-    if (id !== null && (typeof id !== "string" || !ID_PATTERN.test(id))) return null;
-    patch.welcomePageId = id;
-  }
-  return Object.keys(patch).length ? patch : null;
-}
-
-// Seul ce que le geste nomme change ; une base sans vitrine part d'une
-// vitrine coupée sans page d'accueil.
-export function applyVitrinePatch(current: VitrineConfig | undefined, patch: VitrinePatch): VitrineConfig {
-  const base = current ?? { enabled: false, welcomePageId: null };
-  return {
-    enabled: patch.enabled ?? base.enabled,
-    welcomePageId: patch.welcomePageId === undefined ? base.welcomePageId : patch.welcomePageId,
-  };
-}
-
-// Adresse de la vitrine : sur le Mac, celle du site distant (règle de
-// SiteAddress) ; sur l'instance web, le chemin seul, l'origine se lisant dans
-// le navigateur (le serveur ne connaît pas le domaine derrière Coolify).
-export function vitrineAddress(remote: string | null): string {
-  return remote ? `${remote.replace(/\/+$/, "")}/veille` : "/veille";
 }

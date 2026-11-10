@@ -24,7 +24,8 @@ const resolve = cache(resolvePublication);
 // nom d'auteur. Lus au rendu, jamais au build : ce composant est toujours rendu
 // à la demande (il lit la base). cache() : métadonnées et page lisent le même
 // réglage, une seule requête.
-const siteName = cache(async (): Promise<string> => {
+// Partagé avec la vitrine (/veille).
+export const siteName = cache(async (): Promise<string> => {
   return (await getSetting("public.site_name")) ?? AUTHOR_NAME;
 });
 
@@ -100,7 +101,8 @@ async function PublicContent({ publicId, found }: { publicId: string; found: Pub
   );
 }
 
-async function PublicFooter() {
+// Pied signé, repris par la vitrine (/veille).
+export async function PublicFooter() {
   const linkedin = await linkedinUrl();
   return (
     <footer className="public-footer">
