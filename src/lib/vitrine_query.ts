@@ -5,6 +5,7 @@ import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { cache } from "react";
 import { db } from "@/db";
 import { pages } from "@/db/schema";
+import { renderHtml } from "./blocks";
 import { listEntries } from "./databases";
 import { getPage, type Page } from "./pages";
 import { HIT_END, HIT_START } from "./search";
@@ -14,9 +15,11 @@ import {
   assignSlugs,
   toVitrineEntry,
   vitrineFields,
+  vitrineRenderOptions,
   type VitrineEntry,
   type VitrineFields,
 } from "./vitrine";
+import { findFiche } from "./vitrine_state";
 import { applyVitrinePatch, vitrineAddress, type VitrinePatch } from "./vitrine_pilotage";
 import { rankVitrineHits, vitrineSearchTerms, type FieldRank, type VitrineSearch } from "./vitrine_search";
 
@@ -78,6 +81,19 @@ export const loadVitrine = cache(async (): Promise<Vitrine | null> => {
     fields,
   };
 });
+
+// Notes d'une fiche (§6) : corps de l'entrée rendu comme la vue publique,
+// liens réécrits pour la vitrine (une autre entrée mène à sa fiche, toute
+// autre page reste privée). `fiche` : slug ou id ; null sans vitrine ou pour
+// une entrée inconnue. Lu à l'ouverture, jamais envoyé avec la page.
+export async function vitrineSheet(fiche: string): Promise<{ slug: string; html: string } | null> {
+  const vitrine = await loadVitrine();
+  const entry = vitrine ? findFiche(vitrine.entries, fiche) : null;
+  if (!vitrine || !entry) return null;
+  const page = await getPage(entry.id);
+  if (!page || page.trashedAt) return null;
+  return { slug: entry.slug, html: renderHtml(page.body, vitrineRenderOptions(vitrine.entries)).trim() };
+}
 
 // Extrait d'une ligne, marqué comme celui de la recherche de l'app.
 const HEADLINE_OPTIONS = `StartSel=${HIT_START}, StopSel=${HIT_END}, MaxWords=18, MinWords=8, MaxFragments=1, FragmentDelimiter=" … "`;

@@ -1,11 +1,16 @@
 // Carte d'une ressource de la vitrine (BRAINSTORMING de la vitrine, §5). Sans
 // hook : rendue par le serveur comme par le navigateur. Dans les résultats
 // d'une recherche, le terme est surligné dans le titre et la description, et
-// un passage trouvé dans le corps vient en extrait d'une ligne (§2). Logo et
-// ouverture de la fiche viendront ensuite ; seuls les champs de VitrineEntry y
-// entrent.
+// un passage trouvé dans le corps vient en extrait d'une ligne (§2). Le logo
+// viendra ensuite ; seuls les champs de VitrineEntry y entrent.
+//
+// Toute la carte ouvre la fiche (§5) : seul le titre est un lien, étiré sur
+// la carte par le CSS (::after). Sans JavaScript, il mène à l'adresse de la
+// fiche ; avec, Vitrine intercepte le clic (data-fiche, data-row : rangée
+// d'origine, pour les voisines et le retour du focus).
 import { parseHeadline, type Segment } from "@/lib/search";
-import { highlightTerms, type VitrineEntry } from "@/lib/vitrine";
+import { ficheHref, highlightTerms, type VitrineEntry } from "@/lib/vitrine";
+import type { SheetRow } from "@/lib/vitrine_state";
 
 const TAGS_SHOWN = 3;
 
@@ -20,7 +25,7 @@ function Text({ text, query }: { text: string; query: string | null }) {
   return query ? <Marked segments={highlightTerms(text, query)} /> : text;
 }
 
-export function VitrineCard({ entry, highlight }: { entry: VitrineEntry; highlight?: CardHighlight }) {
+export function VitrineCard({ entry, row, highlight }: { entry: VitrineEntry; row: SheetRow; highlight?: CardHighlight }) {
   const tags = entry.domaines.slice(0, TAGS_SHOWN);
   const more = entry.domaines.length - tags.length;
   const meta = [entry.niveau, ...entry.prix].filter(Boolean).join(" · ");
@@ -29,7 +34,9 @@ export function VitrineCard({ entry, highlight }: { entry: VitrineEntry; highlig
   return (
     <article className="vitrine-card">
       <h3 className="vitrine-card-title">
-        <Text text={entry.title || "Sans titre"} query={query} />
+        <a className="vitrine-card-link" href={ficheHref(entry.slug)} data-fiche={entry.slug} data-row={row}>
+          <Text text={entry.title || "Sans titre"} query={query} />
+        </a>
         {entry.coeur ? (
           <span className="vitrine-heart" role="img" aria-label="Coup de cœur">
             ★

@@ -146,6 +146,14 @@ describe("toVitrineEntry", () => {
     expect(out).toMatchObject({ description: "", domaines: [], niveau: null, coeur: false, site: null, logo: null });
   });
 
+  it("rend un Site Web ouvrable : schéma ajouté, autre protocole écarté", () => {
+    const site = (value: string) =>
+      toVitrineEntry(row("e4", "Site", { p_site: value }), fields, { slug: "site", hasNotes: false, now: NOW }).site;
+    expect(site("mindmup.com")).toBe("https://mindmup.com/");
+    expect(site("javascript:alert(1)")).toBeNull();
+    expect(site("pas une adresse")).toBeNull();
+  });
+
   it("rend tout vide quand la propriété manque à la base", () => {
     const out = toVitrineEntry(row("e3", "Seul", {}), vitrineFields([]), { slug: "seul", hasNotes: false, now: NOW });
     expect(out).toMatchObject({ description: "", domaines: [], niveau: null, prix: [], type: [], coeur: false });

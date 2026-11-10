@@ -394,8 +394,190 @@
   text-transform: uppercase;
 }
 
+/* Bouton « Copier le lien » (filtres actifs, fiche) : toujours visible ici,
+   alors que .copy-url n'apparaît qu'au survol d'une cellule de tableau. */
+.vitrine .copy-url {
+  position: static;
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Carte : seul le titre est un lien, étiré sur toute la carte. */
+.vitrine-card {
+  position: relative;
+}
+
+.vitrine-card-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.vitrine-card-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.vitrine-card-link:focus-visible {
+  outline: none;
+}
+
+.vitrine-card:has(.vitrine-card-link:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.vitrine-card:hover {
+  box-shadow: 3px 3px 0 var(--accent);
+}
+
+/* Fiche inconnue au chargement (§6) */
+.vitrine-missing {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--r-inner);
+  background: var(--accent-soft);
+}
+
+/* Fiche superposée (§6). Le <dialog> défile ; son contenu le remplit, si
+   bien qu'un clic dont la cible est le <dialog> vient du fond assombri. */
+.vitrine-sheet {
+  width: min(46rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 3rem);
+  padding: 0;
+  border: 1.5px solid var(--accent);
+  border-radius: var(--r-surface);
+  background: var(--bg);
+  color: var(--ink);
+  overflow-y: auto;
+}
+
+.vitrine-sheet::backdrop {
+  background: rgb(0 0 0 / 0.55);
+}
+
+.vitrine-sheet-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 1.25rem 1.5rem 1rem;
+}
+
+.vitrine-sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.vitrine-sheet-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.vitrine-sheet-close {
+  flex-shrink: 0;
+  width: 2.2rem;
+  height: 2.2rem;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.vitrine-sheet-close:hover {
+  background: var(--accent-soft);
+}
+
+.vitrine-sheet-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vitrine-sheet-meta {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.vitrine-sheet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.vitrine-sheet-site {
+  padding: 0.35rem 0.8rem;
+  border: 1.5px solid var(--accent);
+  border-radius: var(--r-command);
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.vitrine-sheet-site:hover {
+  background: var(--accent-soft);
+}
+
+.vitrine-sheet-desc {
+  margin: 0;
+  max-width: var(--text-width);
+}
+
+/* Enfant direct : les titres du corps gardent le style de la vue publique. */
+.vitrine-sheet-notes > h3 {
+  margin: 0.5rem 0 0.3rem;
+  font-family: var(--font-label);
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vitrine-sheet-wait {
+  color: var(--ink-soft);
+}
+
+.vitrine-sheet-nav {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--line);
+}
+
 @media (max-width: 760px) {
   .vitrine-row-track > .vitrine-card {
     flex-basis: 80%;
+  }
+
+  /* Plein écran sous 760 px. */
+  .vitrine-sheet {
+    width: 100vw;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .vitrine-sheet-inner {
+    min-height: 100%;
+    padding: 1rem;
+  }
+
+  .vitrine-sheet-nav {
+    margin-top: auto;
   }
 }

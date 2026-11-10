@@ -6,10 +6,11 @@
 // s'estompent en bout de rangée, repéré par deux sentinelles observées.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { VitrineEntry } from "@/lib/vitrine";
+import type { SheetRow } from "@/lib/vitrine_state";
 import { VitrineCard, type CardHighlight } from "./VitrineCard";
 
 type Props = {
-  id: string;
+  id: Exclude<SheetRow, "all">;
   title: string;
   entries: readonly VitrineEntry[];
   highlight?: CardHighlight;
@@ -74,7 +75,7 @@ export function VitrineRow({ id, title, entries, highlight, empty }: Props) {
         <div ref={track} className="vitrine-row-track" tabIndex={0} aria-labelledby={headingId}>
           <span ref={startMark} className="vitrine-row-edge" aria-hidden="true" />
           {entries.map((entry) => (
-            <VitrineCard key={entry.id} entry={entry} highlight={highlight} />
+            <VitrineCard key={entry.id} entry={entry} row={id} highlight={highlight} />
           ))}
           <span ref={endMark} className="vitrine-row-edge" aria-hidden="true" />
         </div>

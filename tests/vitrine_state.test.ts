@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { emptyVitrineState, facetCounts, slugify, type VitrineEntry } from "@/lib/vitrine";
+import { emptyVitrineState, facetCounts, slugify, vitrineView, type VitrineEntry } from "@/lib/vitrine";
 import type { VitrineSearch } from "@/lib/vitrine_search";
 import {
   activeFilters,
   applySuggestion,
   clearAll,
+  ficheFromHref,
+  findFiche,
+  resolveFiche,
   resultsTitle,
   searchKey,
   searchPool,
+  sheetNeighbors,
   shownSearch,
   toggleCoeur,
   toggleFacet,
@@ -134,5 +138,61 @@ describe("vitrineHref", () => {
   it("rend l'adresse de l'état, nue pour la vitrine", () => {
     expect(vitrineHref(emptyVitrineState())).toBe("/veille");
     expect(vitrineHref({ ...emptyVitrineState(), q: "carte mentale", domaine: ["ia"] })).toBe("/veille?q=carte+mentale&domaine=ia");
+  });
+});
+
+describe("findFiche et resolveFiche", () => {
+  it("retrouve une entrée par slug ou par id", () => {
+    expect(findFiche(ENTRIES, "wooclap")?.id).toBe("b");
+    expect(findFiche(ENTRIES, "c")?.slug).toBe("padlet");
+    expect(findFiche(ENTRIES, "inconnu")).toBeNull();
+    expect(findFiche(ENTRIES, null)).toBeNull();
+  });
+
+  it("ramène un id au slug, écarte une fiche inconnue en le signalant", () => {
+    const base = { ...emptyVitrineState(), domaine: ["ia"] };
+    expect(resolveFiche({ ...base, fiche: "b" }, ENTRIES)).toEqual({ state: { ...base, fiche: "wooclap" }, missing: false });
+    expect(resolveFiche({ ...base, fiche: "kahoot" }, ENTRIES)).toEqual({ state: { ...base, fiche: null }, missing: true });
+    expect(resolveFiche(base, ENTRIES)).toEqual({ state: base, missing: false });
+  });
+});
+
+describe("sheetNeighbors", () => {
+  const vitrine = vitrineView(ENTRIES, emptyVitrineState(), null);
+
+  it("suit la rangée d'origine, sans boucler en bout de rangée", () => {
+    // Grille par titre : Mindmup, Padlet, Wooclap.
+    expect(sheetNeighbors(vitrine, ENTRIES, "all", "padlet")).toEqual({ prev: "mindmup", next: "wooclap" });
+    expect(sheetNeighbors(vitrine, ENTRIES, "all", "mindmup")).toEqual({ prev: null, next: "padlet" });
+    // Coups de cœur : Wooclap seule.
+    expect(sheetNeighbors(vitrine, ENTRIES, "coeur", "wooclap")).toEqual({ prev: null, next: null });
+  });
+
+  it("suit les résultats affichés, dans leur ordre", () => {
+    const results = vitrineView(ENTRIES, { ...emptyVitrineState(), domaine: ["ia"] }, null);
+    expect(sheetNeighbors(results, ENTRIES, "results", "padlet")).toEqual({ prev: null, next: "wooclap" });
+    // Lien direct sur une adresse filtrée : la rangée affichée fait foi.
+    expect(sheetNeighbors(results, ENTRIES, "all", "wooclap")).toEqual({ prev: "padlet", next: null });
+  });
+
+  it("retombe sur toutes les ressources quand la fiche n'est pas dans la rangée", () => {
+    // Fiche atteinte par un lien des notes, hors des coups de cœur.
+    expect(sheetNeighbors(vitrine, ENTRIES, "coeur", "padlet")).toEqual({ prev: "mindmup", next: "wooclap" });
+  });
+});
+
+describe("ficheFromHref", () => {
+  const origin = "https://notion.example.org";
+
+  it("lit la fiche d'un lien de la vitrine, relatif ou absolu", () => {
+    expect(ficheFromHref("/veille?fiche=wooclap", origin)).toBe("wooclap");
+    expect(ficheFromHref(`${origin}/veille?fiche=padlet&domaine=ia`, origin)).toBe("padlet");
+  });
+
+  it("ignore tout autre lien", () => {
+    expect(ficheFromHref("https://wooclap.com/?fiche=x", origin)).toBeNull();
+    expect(ficheFromHref("/p/abc", origin)).toBeNull();
+    expect(ficheFromHref("/veille?domaine=ia", origin)).toBeNull();
+    expect(ficheFromHref("http://[mal", origin)).toBeNull();
   });
 });

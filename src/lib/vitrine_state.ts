@@ -2,7 +2,7 @@
 // basculés, effacement, suggestion appliquée, pastilles actives, recherche
 // affichée. Les règles de lecture (filtres, facettes, rangées, adresse)
 // vivent dans vitrine.ts.
-import { FAMILIES, serializeVitrineState, type Facets, type Family, type VitrineEntry, type VitrineState } from "./vitrine";
+import { FAMILIES, allRow, serializeVitrineState, type Facets, type Family, type VitrineEntry, type VitrineState, type VitrineView } from "./vitrine";
 import type { VitrineSearch, VitrineSearchMode } from "./vitrine_search";
 import { SEARCH_MIN_LENGTH } from "./search";
 
@@ -74,4 +74,61 @@ export function resultsTitle(count: number, mode: VitrineSearchMode | null): str
 export function vitrineHref(state: VitrineState): string {
   const query = serializeVitrineState(state);
   return query ? `/veille?${query}` : "/veille";
+}
+
+// Fiche demandée par l'adresse : un slug, ou l'id d'une entrée (`pg_…`).
+export function findFiche(entries: readonly VitrineEntry[], fiche: string | null): VitrineEntry | null {
+  if (!fiche) return null;
+  return entries.find((entry) => entry.slug === fiche) ?? entries.find((entry) => entry.id === fiche) ?? null;
+}
+
+// État lu au chargement (§6) : un id devient le slug ; une fiche inconnue
+// (supprimée, renommée, en corbeille) est retirée et signalée par le bandeau.
+export function resolveFiche(state: VitrineState, entries: readonly VitrineEntry[]): { state: VitrineState; missing: boolean } {
+  if (!state.fiche) return { state, missing: false };
+  const entry = findFiche(entries, state.fiche);
+  return { state: { ...state, fiche: entry ? entry.slug : null }, missing: !entry };
+}
+
+// Rangée d'où la fiche a été ouverte ; `all` pour un lien direct.
+export type SheetRow = "coeur" | "recent" | "results" | "all";
+
+function rowList(view: VitrineView, entries: readonly VitrineEntry[], row: SheetRow): readonly VitrineEntry[] {
+  if (view.kind === "results") return view.results;
+  if (view.kind === "empty") return entries;
+  if (row === "coeur") return view.heart;
+  if (row === "recent") return view.recent;
+  return view.all;
+}
+
+// Voisines de la fiche dans sa rangée d'origine (‹ › et ← →), sans boucler.
+// Une fiche absente de la rangée (atteinte par un lien des notes) suit
+// toutes les ressources, dans l'ordre du titre.
+export function sheetNeighbors(
+  view: VitrineView,
+  entries: readonly VitrineEntry[],
+  row: SheetRow,
+  slug: string,
+): { prev: string | null; next: string | null } {
+  let list = rowList(view, entries, row);
+  let index = list.findIndex((entry) => entry.slug === slug);
+  if (index < 0) {
+    list = allRow(entries);
+    index = list.findIndex((entry) => entry.slug === slug);
+  }
+  if (index < 0) return { prev: null, next: null };
+  return { prev: list[index - 1]?.slug ?? null, next: list[index + 1]?.slug ?? null };
+}
+
+// Lien des notes vers une autre fiche (`/veille?fiche=…`, rendu par
+// vitrineRenderOptions) : la fiche change sur place au lieu de recharger.
+export function ficheFromHref(href: string, origin: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(href, origin);
+  } catch {
+    return null;
+  }
+  if (url.origin !== origin || url.pathname !== "/veille") return null;
+  return url.searchParams.get("fiche") || null;
 }

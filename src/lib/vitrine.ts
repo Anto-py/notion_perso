@@ -125,8 +125,11 @@ export function toVitrineEntry(
   fields: VitrineFields,
   options: { slug: string; hasNotes: boolean; now: number },
 ): VitrineEntry {
-  const site = textOf(valueOf(row, fields.site)).trim() || null;
-  const url = site ? parseSite(site) : null;
+  // Adresse normalisée (schéma ajouté, http et https seuls) : elle part dans
+  // le href de « Ouvrir le site », jamais le texte saisi.
+  const raw = textOf(valueOf(row, fields.site)).trim();
+  const url = raw ? parseSite(raw) : null;
+  const site = url ? url.href : null;
   return {
     id: row.id,
     slug: options.slug,

@@ -15,6 +15,7 @@ import { renderHtml } from "@/lib/blocks";
 import { faviconHref } from "@/lib/icons";
 import { SEARCH_MIN_LENGTH } from "@/lib/search";
 import { parseVitrineState, vitrineRenderOptions, type VitrineState } from "@/lib/vitrine";
+import { resolveFiche } from "@/lib/vitrine_state";
 import { loadVitrine, searchVitrine, type Vitrine as VitrineData } from "@/lib/vitrine_query";
 import type { VitrineSearch } from "@/lib/vitrine_search";
 
@@ -45,7 +46,10 @@ async function VitrinePage({ searchParams }: { searchParams: SearchParams }) {
   // Rendu à chaque requête, jamais au build : la vitrine suit la base.
   await connection();
   const [vitrine, params] = await Promise.all([loadVitrine(), searchParams]);
-  const state = vitrine ? parseVitrineState(params, vitrine.entries) : null;
+  // Fiche inconnue (supprimée, renommée) : retirée de l'état, signalée par un
+  // bandeau ; un id d'entrée devient son slug.
+  const resolved = vitrine ? resolveFiche(parseVitrineState(params, vitrine.entries), vitrine.entries) : null;
+  const state = resolved?.state ?? null;
   // Une recherche dans l'adresse est jouée au serveur : un lien partagé
   // s'ouvre sur ses résultats, sans clignotement.
   const search = state && state.q.trim().length >= SEARCH_MIN_LENGTH ? await searchVitrine(state.q) : null;
@@ -53,7 +57,7 @@ async function VitrinePage({ searchParams }: { searchParams: SearchParams }) {
     <div className="public">
       <main className="public-main">
         {vitrine && state ? (
-          <VitrineContent vitrine={vitrine} state={state} search={search} />
+          <VitrineContent vitrine={vitrine} state={state} search={search} missingFiche={resolved?.missing ?? false} />
         ) : (
           <p className="public-gone">Ce contenu n&apos;est plus disponible.</p>
         )}
@@ -63,7 +67,9 @@ async function VitrinePage({ searchParams }: { searchParams: SearchParams }) {
   );
 }
 
-function VitrineContent({ vitrine, state, search }: { vitrine: VitrineData; state: VitrineState; search: VitrineSearch | null }) {
+type ContentProps = { vitrine: VitrineData; state: VitrineState; search: VitrineSearch | null; missingFiche: boolean };
+
+function VitrineContent({ vitrine, state, search, missingFiche }: ContentProps) {
   const { base, entries, welcome } = vitrine;
   const welcomeHtml = welcome ? renderHtml(welcome.body, vitrineRenderOptions(entries)).trim() : "";
   // Vitrine reçoit l'état et la recherche déjà jouée : son rendu serveur est
@@ -75,7 +81,7 @@ function VitrineContent({ vitrine, state, search }: { vitrine: VitrineData; stat
         <PageIcon icon={base.icon} type="database" /> {base.title || "Sans titre"}
       </h1>
       {welcomeHtml ? <VitrineWelcome html={welcomeHtml} /> : null}
-      <Vitrine entries={entries} initialState={state} initialSearch={search} />
+      <Vitrine entries={entries} initialState={state} initialSearch={search} missingFiche={missingFiche} />
     </>
   );
 }

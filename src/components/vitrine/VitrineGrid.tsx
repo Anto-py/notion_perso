@@ -11,7 +11,7 @@ export function VitrineGrid({ entries }: { entries: readonly VitrineEntry[] }) {
       </h2>
       <div className="vitrine-grid">
         {entries.map((entry) => (
-          <VitrineCard key={entry.id} entry={entry} />
+          <VitrineCard key={entry.id} entry={entry} row="all" />
         ))}
       </div>
     </section>
