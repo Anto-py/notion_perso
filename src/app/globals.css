@@ -4807,3 +4807,15 @@ button.link.icon-danger {
 .linked-open:hover {
   color: var(--accent);
 }
+
+/* Réglages › Agent : jeton tout juste créé, montré une seule fois. */
+.agent-created {
+  margin: 0.8rem 0;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.agent-created code {
+  word-break: break-all;
+}

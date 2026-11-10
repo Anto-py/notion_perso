@@ -243,6 +243,52 @@ export const settings = pgTable("settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Accès agent (SPECS.md, « Accès agent »), serveur seulement, hors
+// synchronisation. Un jeton par usage, empreinte seule en base ; révoquer
+// date la ligne au lieu de l'effacer, pour que le journal garde son nom.
+export const agentTokens = pgTable("agent_tokens", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  createdAt: createdAt(),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+});
+
+// Journal des écritures de l'agent, 1000 dernières lignes. page_id sans clé
+// étrangère : la trace survit à la purge de la page. model : déclaré par
+// l'agent, non vérifié.
+export const agentLog = pgTable(
+  "agent_log",
+  {
+    id: text("id").primaryKey(),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+    tokenId: text("token_id").notNull(),
+    model: text("model"),
+    action: text("action").notNull(),
+    pageId: text("page_id"),
+    detail: jsonb("detail").notNull().default(sql`'{}'::jsonb`),
+  },
+  (t) => [index("agent_log_at_idx").on(t.at)],
+);
+
+// Gestes soumis à la validation d'Antonin (publication, purge). decision et
+// decided_at nuls : demande ouverte.
+export const agentRequests = pgTable(
+  "agent_requests",
+  {
+    id: text("id").primaryKey(),
+    tokenId: text("token_id").notNull(),
+    model: text("model"),
+    action: text("action").notNull(),
+    pageId: text("page_id").notNull(),
+    createdAt: createdAt(),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    decision: text("decision"),
+  },
+  (t) => [index("agent_requests_open_idx").on(t.createdAt).where(sql`${t.decidedAt} is null`)],
+);
+
 // Côté Mac seulement : une ligne unique (id 1). cursor : curseur du flux des
 // changements, à renvoyer au cycle suivant ; synced_at : fin du dernier cycle
 // réussi ; error : raison du dernier échec, effacée au succès suivant.

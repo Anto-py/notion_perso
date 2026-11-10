@@ -36,5 +36,7 @@ export const config = {
   // et le tronque sans erreur au-delà de 10 Mo (proxyClientMaxBodySize). Ces
   // routes vérifient elles-mêmes la session. api/sync, enfin, ne connaît pas
   // les cookies : l'app Mac s'y présente avec son jeton (lib/sync_server.ts).
-  matcher: ["/((?!_next/static|_next/image|manifest.webmanifest|sw.js|icons/|api/upload|api/import|api/sync/).*)"],
+  // api/agent non plus : le harnais s'y présente avec un jeton d'agent
+  // (lib/agent_auth.ts), vérifié par chaque route.
+  matcher: ["/((?!_next/static|_next/image|manifest.webmanifest|sw.js|icons/|api/upload|api/import|api/sync/|api/agent/).*)"],
 };

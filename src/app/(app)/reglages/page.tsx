@@ -1,11 +1,14 @@
 import { Suspense } from "react";
 import { AccountSection } from "@/components/settings/AccountSection";
+import { AgentSection } from "@/components/settings/AgentSection";
 import { BackupsSection } from "@/components/settings/BackupsSection";
 import { DevicesSection } from "@/components/settings/DevicesSection";
 import { PublicViewSection } from "@/components/settings/PublicViewSection";
 import { SiteAddress } from "@/components/settings/SiteAddress";
 import { SyncSection } from "@/components/settings/SyncSection";
 import { VersionSection } from "@/components/settings/VersionSection";
+import { listAgentLog } from "@/lib/agent_log";
+import { listAgentTokens } from "@/lib/agent_tokens";
 import { canSwitchVersion } from "@/lib/app_version";
 import { getCurrentUser } from "@/lib/auth";
 import { backupDir, listBackups, readOpenBackup } from "@/lib/backups";
@@ -61,6 +64,28 @@ async function Section({ section, username }: { section: SettingsSection; userna
             id: client.id,
             name: client.name,
             lastSeenAt: client.lastSeenAt?.toISOString() ?? null,
+          }))}
+        />
+      );
+    }
+    case "agent": {
+      const [tokens, log] = await Promise.all([listAgentTokens(), listAgentLog()]);
+      return (
+        <AgentSection
+          tokens={tokens.map((token) => ({
+            id: token.id,
+            name: token.name,
+            createdAt: token.createdAt.toISOString(),
+            lastUsedAt: token.lastUsedAt?.toISOString() ?? null,
+            revokedAt: token.revokedAt?.toISOString() ?? null,
+          }))}
+          log={log.map((entry) => ({
+            id: entry.id,
+            at: entry.at.toISOString(),
+            tokenName: entry.tokenName,
+            model: entry.model,
+            action: entry.action,
+            pageTitle: entry.pageTitle,
           }))}
         />
       );

@@ -3,7 +3,7 @@ import { newPasswordProblem, parseSettingWrite, readSettingValue, sectionsFor } 
 
 describe("sectionsFor", () => {
   it("montre Appareils et Vue publique sur l'app web, jamais Synchronisation ni Sauvegardes", () => {
-    expect(sectionsFor("web")).toEqual(["compte", "version", "appareils", "vue_publique"]);
+    expect(sectionsFor("web")).toEqual(["compte", "version", "appareils", "agent", "vue_publique"]);
   });
 
   it("montre Synchronisation et Sauvegardes sur le Mac, jamais Appareils ni Vue publique", () => {

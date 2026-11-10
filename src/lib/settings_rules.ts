@@ -5,11 +5,11 @@ import { parseBackupTrial, parseOpenBackup, parseServerCopy, type BackupTrial, t
 
 export type Instance = "mac" | "web";
 
-export type SettingsSection = "compte" | "synchronisation" | "sauvegardes" | "version" | "appareils" | "vue_publique";
+export type SettingsSection = "compte" | "synchronisation" | "sauvegardes" | "version" | "appareils" | "agent" | "vue_publique";
 
 // Chaque instance n'affiche que ce qui la concerne, dans cet ordre.
 const SECTIONS: Record<Instance, SettingsSection[]> = {
-  web: ["compte", "version", "appareils", "vue_publique"],
+  web: ["compte", "version", "appareils", "agent", "vue_publique"],
   mac: ["compte", "synchronisation", "sauvegardes", "version"],
 };
 
