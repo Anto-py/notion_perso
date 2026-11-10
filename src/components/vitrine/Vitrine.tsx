@@ -38,6 +38,7 @@ import {
 import type { CardHighlight } from "./VitrineCard";
 import { VitrineFacets } from "./VitrineFacets";
 import { VitrineGrid } from "./VitrineGrid";
+import { VitrineProposal } from "./VitrineProposal";
 import { VitrineRow } from "./VitrineRow";
 import { VitrineSearch } from "./VitrineSearch";
 import { VitrineSheet } from "./VitrineSheet";
@@ -74,6 +75,7 @@ export function Vitrine({ entries, initialState, initialSearch, missingFiche }: 
   const [state, setState] = useState(initialState);
   const [sheetRow, setSheetRow] = useState<SheetRow>("all");
   const [missing, setMissing] = useState(missingFiche);
+  const [proposing, setProposing] = useState(false);
   // Fermeture par history.back() en cours, et ce qu'elle appliquera au retour
   // (filtre d'une étiquette) : un second Échap ne recule pas d'une page.
   const closing = useRef<{ then: Transform | null } | null>(null);
@@ -174,10 +176,38 @@ export function Vitrine({ entries, initialState, initialSearch, missingFiche }: 
   const sheetEntry = findFiche(entries, state.fiche);
   const neighbors = sheetEntry ? sheetNeighbors(view, entries, sheetRow, sheetEntry.slug) : { prev: null, next: null };
 
-  if (view.kind === "empty") return <p className="vitrine-empty">La veille est en cours de constitution.</p>;
+  // Formulaire de proposition (§11) ; « voir » sur un doublon le ferme et
+  // ouvre la fiche de la ressource déjà présente.
+  const proposeButton = (
+    <button type="button" className="vitrine-propose" onClick={() => setProposing(true)}>
+      Proposer +
+    </button>
+  );
+  const proposal = (
+    <VitrineProposal
+      open={proposing}
+      entries={entries}
+      onClose={() => setProposing(false)}
+      onSee={(slug) => {
+        setProposing(false);
+        openSheet(slug, "all");
+      }}
+    />
+  );
+
+  if (view.kind === "empty") {
+    return (
+      <>
+        <p className="vitrine-empty">La veille est en cours de constitution.</p>
+        {proposeButton}
+        {proposal}
+      </>
+    );
+  }
 
   return (
     <>
+      <div className="vitrine-propose-line">{proposeButton}</div>
       {missing ? (
         <p className="vitrine-missing" role="status">
           Cette ressource n&apos;est plus dans la veille.
@@ -221,6 +251,7 @@ export function Vitrine({ entries, initialState, initialSearch, missingFiche }: 
                   query={shown.q}
                   suggestions={suggestLabels(shown.q, facetCounts(entries, { ...viewState, q: "" }).domaine)}
                   onPick={(slug) => setState((s) => applySuggestion(s, slug))}
+                  onPropose={() => setProposing(true)}
                 />
               ) : (
                 <p className="vitrine-row-empty">Aucune ressource ne correspond à ces filtres.</p>
@@ -238,6 +269,7 @@ export function Vitrine({ entries, initialState, initialSearch, missingFiche }: 
         onGo={(slug) => setState((s) => ({ ...s, fiche: slug }))}
         onTag={(slug) => closeSheet((s) => (s.domaine.includes(slug) ? s : toggleFacet(s, "domaine", slug)))}
       />
+      {proposal}
     </>
   );
 }
@@ -250,8 +282,19 @@ function highlightOf(shown: SettledSearch): CardHighlight | undefined {
 }
 
 // Recherche sans résultat (§3) : étiquettes proches d'un mot tapé, ou les
-// plus fournies ; un clic vide la recherche et applique le filtre.
-function NoResults({ query, suggestions, onPick }: { query: string; suggestions: { label: string; slug: string; count: number }[]; onPick: (slug: string) => void }) {
+// plus fournies ; un clic vide la recherche et applique le filtre. « Le
+// proposer » ouvre le formulaire (§11).
+function NoResults({
+  query,
+  suggestions,
+  onPick,
+  onPropose,
+}: {
+  query: string;
+  suggestions: { label: string; slug: string; count: number }[];
+  onPick: (slug: string) => void;
+  onPropose: () => void;
+}) {
   return (
     <div className="vitrine-none">
       <p>Aucune ressource ne contient « {query.trim()} ».</p>
@@ -265,6 +308,12 @@ function NoResults({ query, suggestions, onPick }: { query: string; suggestions:
           ))}
         </p>
       ) : null}
+      <p className="vitrine-suggest">
+        Tu connais un outil qui manque ?{" "}
+        <button type="button" className="vitrine-pill" onClick={onPropose}>
+          Le proposer
+        </button>
+      </p>
     </div>
   );
 }

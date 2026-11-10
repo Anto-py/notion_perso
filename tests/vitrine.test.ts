@@ -206,6 +206,13 @@ describe("siteKey", () => {
     expect(siteKey("https://padlet.com/antonin/mur/?ref=x#a")).toBe("padlet.com/antonin/mur");
   });
 
+  it("garde l'identifiant d'une vidéo YouTube, qui la distingue des autres", () => {
+    expect(siteKey("https://www.youtube.com/watch?v=AAA&t=30")).toBe("youtube.com/watch?v=AAA");
+    expect(siteKey("https://m.youtube.com/watch?v=AAA")).toBe("youtube.com/watch?v=AAA");
+    expect(siteKey("https://youtube.com/watch")).toBe("youtube.com/watch");
+    expect(siteKey("https://exemple.org/watch?v=AAA")).toBe("exemple.org/watch");
+  });
+
   it("rend null pour une adresse illisible", () => {
     expect(siteKey("")).toBeNull();
     expect(siteKey("pas une adresse")).toBeNull();

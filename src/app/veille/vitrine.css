@@ -602,6 +602,126 @@
   border-top: 1px solid var(--line);
 }
 
+/* Proposition d'une ressource (§11) : même fenêtre que la fiche. Le bouton
+   « Proposer + » sera la seule action jaune de la charte (étape 11). */
+.vitrine-propose-line {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.5rem;
+}
+
+.vitrine-propose,
+.vitrine-proposal-submit {
+  padding: 0.45rem 1rem;
+  border: 1.5px solid var(--accent);
+  border-radius: var(--r-command);
+  background: var(--accent);
+  color: var(--bg);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.vitrine-proposal-submit:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.vitrine-proposal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.vitrine-proposal-form > label,
+.vitrine-proposal-field > label {
+  margin-top: 0.5rem;
+  font-weight: 600;
+}
+
+.vitrine-proposal-form input,
+.vitrine-proposal-form textarea {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-inner);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+}
+
+.vitrine-proposal-form input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.vitrine-proposal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.vitrine-proposal-line {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.vitrine-proposal-remove,
+.vitrine-proposal-add,
+.vitrine-proposal-see {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.vitrine-proposal-add {
+  align-self: flex-start;
+  padding: 0.25rem 0;
+}
+
+.vitrine-proposal-see {
+  padding: 0;
+  text-decoration: underline;
+}
+
+.vitrine-proposal-note {
+  min-height: 1.3em;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.vitrine-proposal-note[data-tone="error"],
+.vitrine-proposal-notice[data-tone="error"] {
+  color: var(--danger);
+}
+
+.vitrine-proposal-note[data-tone="ok"] {
+  color: var(--accent);
+}
+
+.vitrine-proposal-send {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.vitrine-proposal-notice {
+  margin: 0;
+}
+
+/* Piège à robots : présent dans le formulaire, invisible et hors du clavier. */
+.vitrine-trap {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
 @media (max-width: 760px) {
   .vitrine-row-track > .vitrine-card {
     flex-basis: 80%;

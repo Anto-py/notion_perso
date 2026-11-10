@@ -4,6 +4,8 @@
 export type RateLimit = {
   // retryAfter : millisecondes avant la prochaine requête admise, 0 si admise.
   take(key: string): { ok: boolean; retryAfter: number };
+  // Requêtes encore admises dans la fenêtre en cours, sans en consommer.
+  remaining(key: string): number;
   size(): number;
 };
 
@@ -38,6 +40,11 @@ export function createRateLimit({
       if (window.count >= limit) return { ok: false, retryAfter: window.start + windowMs - at };
       window.count++;
       return { ok: true, retryAfter: 0 };
+    },
+    remaining(key) {
+      const window = windows.get(key);
+      if (!window || now() - window.start >= windowMs) return limit;
+      return Math.max(0, limit - window.count);
     },
     size: () => windows.size,
   };

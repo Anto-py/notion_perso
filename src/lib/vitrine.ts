@@ -113,11 +113,15 @@ export function hostOf(url: URL): string {
 }
 
 // Clé de comparaison d'un site : sans schéma, sans www, sans / final, sans
-// requête ni ancre. Sert à repérer un doublon proposé.
+// requête ni ancre. Sert à repérer un doublon proposé. Exception : une vidéo
+// YouTube garde son `v=`, sans quoi toutes les vidéos auraient la même clé.
 export function siteKey(raw: string): string | null {
   const url = parseSite(raw);
   if (!url) return null;
-  return `${hostOf(url)}${url.pathname.replace(/\/+$/, "")}`;
+  const host = hostOf(url).replace(/^m\.youtube\.com$/, "youtube.com");
+  const path = url.pathname.replace(/\/+$/, "");
+  const video = host === "youtube.com" && path === "/watch" ? url.searchParams.get("v") : null;
+  return `${host}${path}${video ? `?v=${video}` : ""}`;
 }
 
 export function toVitrineEntry(

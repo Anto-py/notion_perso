@@ -45,6 +45,21 @@ describe("createRateLimit", () => {
     expect(limit.take("ip").retryAfter).toBe(500);
   });
 
+  it("dit combien de requêtes restent, sans en consommer", () => {
+    const c = clock();
+    const limit = createRateLimit({ limit: 3, windowMs: 1_000, now: c.now });
+    expect(limit.remaining("ip")).toBe(3);
+    limit.take("ip");
+    expect(limit.remaining("ip")).toBe(2);
+    expect(limit.remaining("ip")).toBe(2);
+    limit.take("ip");
+    limit.take("ip");
+    limit.take("ip");
+    expect(limit.remaining("ip")).toBe(0);
+    c.advance(1_000);
+    expect(limit.remaining("ip")).toBe(3);
+  });
+
   it("oublie les clés expirées quand elles dépassent le plafond", () => {
     const c = clock();
     const limit = createRateLimit({ limit: 1, windowMs: 1_000, now: c.now, maxKeys: 2 });
