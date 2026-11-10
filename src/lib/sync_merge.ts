@@ -305,7 +305,9 @@ function mergeConfig(base: Json, mac: Json, web: Json, newer: Side): Json {
   });
   const properties = distinctNames(merged, uniqueName).slice(0, LIMITS.properties);
   const views = mergeList(b?.views ?? [], m.views, w.views, newer, atomicRules(newer));
-  return { properties, views: sanitizeViews(views, properties) };
+  // Vitrine absente notée null : undefined signifierait « pas de base commune ».
+  const vitrine = pick(b ? (b.vitrine ?? null) : undefined, m.vitrine ?? null, w.vitrine ?? null, newer);
+  return { properties, views: sanitizeViews(views, properties), ...(vitrine ? { vitrine } : {}) };
 }
 
 // --- Valeurs de propriétés ---------------------------------------------------

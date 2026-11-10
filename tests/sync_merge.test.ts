@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CONFLICT_BLOCK, mergePage, type SyncPage } from "@/lib/sync_merge";
+import { CONFLICT_BLOCK, mergeDbConfig, mergePage, type SyncPage } from "@/lib/sync_merge";
 import { parseConfig } from "@/lib/views";
 
 // Base commune à 10 h, Mac à 11 h, web à 12 h : le web est le plus récent,
@@ -348,5 +348,46 @@ describe("mergePage : configuration d'une base", () => {
     const mac = db([], [view("v1", "Tableau"), view("v_mac", "Liste", { kind: "list" })], { updatedAt: T_MAC });
     const web = db([], [view("v1", "Tableau"), view("v_web", "Tableau 2")], { updatedAt: T_WEB });
     expect(config(mergePage(base, mac, web)).views.map((v) => v.id)).toEqual(["v1", "v_mac", "v_web"]);
+  });
+});
+
+describe("fusion de la configuration : vitrine", () => {
+  const views = [{ id: "v1", name: "Tableau", kind: "table" }];
+  const on = { enabled: true, welcomePageId: "pg_accueil" };
+  const off = { enabled: false, welcomePageId: null };
+  const db = (config: Record<string, unknown>, over: Partial<SyncPage> = {}) =>
+    page({ type: "database", dbConfig: { properties: [], views, ...config }, ...over });
+  const vitrineOf = (result: { page: SyncPage }) => parseConfig(result.page.dbConfig).vitrine;
+
+  it("vitrine activée sur le Mac, vue renommée sur le web plus récent : les deux restent", () => {
+    const base = db({});
+    const mac = db({ vitrine: on }, { updatedAt: T_MAC });
+    const web = db({ views: [{ id: "v1", name: "Ressources", kind: "table" }] }, { updatedAt: T_WEB });
+    const merged = parseConfig(mergePage(base, mac, web).page.dbConfig);
+    expect(merged.vitrine).toEqual(on);
+    expect(merged.views[0].name).toBe("Ressources");
+  });
+
+  it("vitrine modifiée des deux côtés : la plus récente l'emporte", () => {
+    const base = db({ vitrine: off });
+    const mac = db({ vitrine: on, views: [{ id: "v1", name: "Mac", kind: "table" }] }, { updatedAt: T_MAC });
+    const web = db({ vitrine: { enabled: false, welcomePageId: "pg_autre" } }, { updatedAt: T_WEB });
+    expect(vitrineOf(mergePage(base, mac, web))).toEqual({ enabled: false, welcomePageId: "pg_autre" });
+  });
+
+  it("vitrine retirée d'un seul côté : le retrait est gardé", () => {
+    const base = db({ vitrine: on });
+    const mac = db({ views: [{ id: "v1", name: "Mac", kind: "table" }] }, { updatedAt: T_MAC });
+    const web = db({ vitrine: on, properties: [{ id: "p1", name: "Note", type: "text" }] }, { updatedAt: T_WEB });
+    expect(vitrineOf(mergePage(base, mac, web))).toBeUndefined();
+  });
+
+  it("mergeDbConfig : des vues envoyées sans vitrine gardent celle du serveur", () => {
+    const common = { properties: [], views };
+    const mine = { properties: [], views: [{ id: "v1", name: "Renommée", kind: "table" }] };
+    const theirs = { properties: [], views, vitrine: on };
+    const merged = parseConfig(mergeDbConfig(common, mine, theirs, true));
+    expect(merged.vitrine).toEqual(on);
+    expect(merged.views[0].name).toBe("Renommée");
   });
 });

@@ -108,7 +108,10 @@ export type View = {
   frozen_header: boolean;
   column_widths: Record<string, number>;
 };
-export type DbConfig = { properties: Property[]; views: View[] };
+// Vitrine publique /veille (étape 20) : portée par la base pour voyager avec
+// elle par la synchronisation, settings restant propre à chaque instance.
+export type VitrineConfig = { enabled: boolean; welcomePageId: string | null };
+export type DbConfig = { properties: Property[]; views: View[]; vitrine?: VitrineConfig };
 
 // Bornes d'une largeur de colonne : une valeur venue du navigateur ne peut ni
 // écraser une colonne ni déborder sans fin.
@@ -310,7 +313,16 @@ export function parseConfig(raw: unknown): DbConfig {
   const checked = validateProperties(migrateLegacyProperties(config.properties ?? []));
   const properties = typeof checked === "string" ? [] : checked;
   const views = Array.isArray(config.views) ? sanitizeViews(config.views, properties) : [sanitizeView(config.view, properties)];
-  return { properties, views };
+  const vitrine = parseVitrine(config.vitrine);
+  return vitrine ? { properties, views, vitrine } : { properties, views };
+}
+
+// Vitrine sans interrupteur lisible : écartée entière. Page d'accueil
+// illisible : nulle, la vitrine reste.
+export function parseVitrine(raw: unknown): VitrineConfig | undefined {
+  if (!isRecord(raw) || typeof raw.enabled !== "boolean") return undefined;
+  const welcome = raw.welcomePageId;
+  return { enabled: raw.enabled, welcomePageId: typeof welcome === "string" && ID_PATTERN.test(welcome) ? welcome : null };
 }
 
 // --- Gestes sur la liste des vues -----------------------------------------

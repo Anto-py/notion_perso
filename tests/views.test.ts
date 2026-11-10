@@ -37,6 +37,7 @@ import {
   newView,
   parseConfig,
   parseLinkedConfig,
+  parseVitrine,
   pickView,
   prefillValues,
   sanitizeView,
@@ -577,5 +578,37 @@ describe("vue liée", () => {
     expect(parseLinkedConfig(linkedConfigText(config))).toEqual(config);
     expect(parseLinkedConfig("{pas du json")).toEqual({ active: null, overrides: {} });
     expect(parseLinkedConfig("null")).toEqual({ active: null, overrides: {} });
+  });
+});
+
+describe("configuration de la vitrine", () => {
+  const properties = [{ id: "p1", name: "Note", type: "text" }];
+
+  it("une configuration sans vitrine se relit sans champ", () => {
+    const config = parseConfig({ properties, views: [{ id: "v1", kind: "table" }] });
+    expect("vitrine" in config).toBe(false);
+  });
+
+  it("une vitrine bien formée est relue telle quelle", () => {
+    const vitrine = { enabled: true, welcomePageId: "pg_KbbhgJPMDwiJWkDX" };
+    expect(parseConfig({ properties, views: [], vitrine }).vitrine).toEqual(vitrine);
+    expect(parseVitrine({ enabled: false, welcomePageId: null })).toEqual({ enabled: false, welcomePageId: null });
+  });
+
+  it("une valeur mal formée est écartée", () => {
+    for (const raw of [null, "oui", [], {}, { enabled: "true" }, { enabled: 1, welcomePageId: "pg_1" }]) {
+      expect(parseVitrine(raw)).toBeUndefined();
+      expect("vitrine" in parseConfig({ properties, views: [], vitrine: raw })).toBe(false);
+    }
+  });
+
+  it("une page d'accueil illisible devient nulle, la vitrine reste", () => {
+    for (const welcomePageId of [42, "", "pg 1", "x".repeat(41), undefined]) {
+      expect(parseVitrine({ enabled: true, welcomePageId })).toEqual({ enabled: true, welcomePageId: null });
+    }
+  });
+
+  it("une clé étrangère n'est pas gardée", () => {
+    expect(parseVitrine({ enabled: true, welcomePageId: null, slug: "veille" })).toEqual({ enabled: true, welcomePageId: null });
   });
 });

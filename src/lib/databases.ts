@@ -292,7 +292,8 @@ export type DatabasePatch = { properties?: Property[]; views?: unknown; base?: {
 // la base éditée comme aux bases voisines, quand retirer une jumelle retire la
 // relation qui la déclare ailleurs.
 async function writeConfig(tx: Tx, dbId: string, before: DbConfig, properties: Property[], views: unknown): Promise<DbConfig> {
-  const config: DbConfig = { properties, views: sanitizeViews(views, properties) };
+  // ...before : ce que le schéma ne décrit pas (la vitrine) traverse l'écriture.
+  const config: DbConfig = { ...before, properties, views: sanitizeViews(views, properties) };
   const entries = await tx
     .select({ id: pages.id, propertyValues: pages.propertyValues, valuesText: pages.valuesText })
     .from(pages)
@@ -412,7 +413,7 @@ export async function updateDatabase(id: string, patch: DatabasePatch): Promise<
     }
     const config: DbConfig = patch.properties
       ? await writeConfig(tx, id, before, properties, views)
-      : { properties, views: sanitizeViews(views, properties) };
+      : { ...before, properties, views: sanitizeViews(views, properties) };
     if (!patch.properties) await tx.update(pages).set({ dbConfig: config }).where(eq(pages.id, id));
 
     // Les autres bases : d'abord la relation retirée avec sa jumelle, puis les
