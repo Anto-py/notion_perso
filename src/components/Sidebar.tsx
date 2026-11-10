@@ -46,13 +46,12 @@ const collisionDetection: CollisionDetection = (args) => {
 
 type Props = {
   rows: TreeRow[];
-  username: string;
   inboxCount: number;
   // Dernier passage connu d'un Mac, lu sur l'app web ; null sur le Mac.
   macSyncedAt: string | null;
 };
 
-export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
+export function Sidebar({ rows, inboxCount, macSyncedAt }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   // Le pathname diffère entre le HTML prérendu et le navigateur : le lire après
@@ -333,21 +332,11 @@ export function Sidebar({ rows, username, inboxCount, macSyncedAt }: Props) {
           </DndContext>
         </SearchBar>
         <div className="sidebar-footer">
-          <Link href="/import" className={shownPathname === "/import" ? "active" : undefined}>
-            Importer
-          </Link>
-          <Link href="/trash" className={shownPathname === "/trash" ? "active" : undefined}>
-            Corbeille
-          </Link>
+          {/* Importer, Corbeille et la connexion vivent dans Réglages : le pied
+              ne garde que son entrée. */}
           <Link href="/reglages" className={shownPathname === "/reglages" ? "active" : undefined}>
             Réglages
           </Link>
-          <form method="post" action="/api/auth/logout">
-            <span>{username}</span>{" "}
-            <button type="submit" className="link">
-              Se déconnecter
-            </button>
-          </form>
           {macSyncedAt && <p className="sync-mac">Mac synchronisé à {formatClock(new Date(macSyncedAt))}</p>}
           <RefreshControl />
           <SyncStatus />

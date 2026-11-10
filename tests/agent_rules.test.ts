@@ -8,7 +8,6 @@ import {
   publicOrigin,
   requestActionLabel,
   requestDecision,
-  requestLogAction,
   touchDue,
 } from "@/lib/agent_rules";
 
@@ -71,11 +70,9 @@ describe("demandes de validation", () => {
     expect(requestDecision(undefined)).toBeNull();
   });
 
-  it("nomme la demande pour Réglages et le journal", () => {
+  it("nomme la demande pour Réglages", () => {
     expect(requestActionLabel("publish")).toBe("Publier");
     expect(requestActionLabel("purge")).toBe("Purger");
-    expect(requestLogAction("publish")).toBe("publication");
-    expect(requestLogAction("purge")).toBe("purge");
   });
 });
 

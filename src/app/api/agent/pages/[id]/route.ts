@@ -6,7 +6,6 @@
 // marquée `trashed`.
 import { fail, optionalId, readJson } from "@/lib/api";
 import { requireAgent } from "@/lib/agent_auth";
-import { logAgentAction } from "@/lib/agent_log";
 import { readTitle } from "@/lib/agent_write";
 import { isLibraryFile } from "@/lib/icon_library";
 import { checkIconValue } from "@/lib/icons";
@@ -68,10 +67,5 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/agent/page
     const saved = await updatePage(id, patch);
     if (!saved.ok) return fail(saved.status, saved.error);
   }
-  await logAgentAction(agent, "modification", id, {
-    title: patch.title ?? page.title,
-    changes: Object.keys(body),
-    ...("parentId" in body ? { parentId: body.parentId ?? null } : {}),
-  });
   return Response.json({ ok: true });
 }

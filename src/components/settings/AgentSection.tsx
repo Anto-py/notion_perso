@@ -1,14 +1,13 @@
 "use client";
 // Réglages › Agent (app web, BRAINSTORMING §17) : jetons d'agent, créés ici,
 // révocables au second clic ; le jeton en clair ne s'affiche qu'une fois,
-// avec la commande qui le range au trousseau. Puis le journal des écritures.
+// avec la commande qui le range au trousseau. Puis les demandes en attente.
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { CopyUrlButton } from "../CopyUrlButton";
 import { send } from "../request";
 
 type Token = { id: string; name: string; createdAt: string; lastUsedAt: string | null; revokedAt: string | null };
-type Entry = { id: string; at: string; tokenName: string | null; model: string | null; action: string; pageTitle: string | null };
 type Request = {
   id: string;
   action: "publish" | "purge";
@@ -26,7 +25,7 @@ function keychainCommand(token: string): string {
   return `security add-generic-password -U -a np -s ${SERVICE} -w '${token}'`;
 }
 
-export function AgentSection({ tokens, log, requests }: { tokens: Token[]; log: Entry[]; requests: Request[] }) {
+export function AgentSection({ tokens, requests }: { tokens: Token[]; requests: Request[] }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -179,24 +178,6 @@ export function AgentSection({ tokens, log, requests }: { tokens: Token[]; log: 
         </ul>
       )}
 
-      <h3>Journal</h3>
-      {log.length === 0 ? (
-        <p>Aucune écriture de l&apos;agent.</p>
-      ) : (
-        <ul className="settings-list agent-log">
-          {log.map((entry) => (
-            <li key={entry.id}>
-              <span className="hint">{DATE.format(new Date(entry.at))}</span>
-              <span className="settings-list-name">{entry.action}</span>
-              <span>{entry.pageTitle ?? "sans page"}</span>
-              <span className="hint">
-                {entry.tokenName ?? "jeton inconnu"}
-                {entry.model ? ` · ${entry.model}` : ""}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
     </section>
   );
 }

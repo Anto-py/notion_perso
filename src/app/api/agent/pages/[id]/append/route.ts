@@ -4,7 +4,6 @@
 // converted }. Journalisé.
 import { fail, readJson } from "@/lib/api";
 import { requireAgent } from "@/lib/agent_auth";
-import { logAgentAction } from "@/lib/agent_log";
 import { requestOrigin } from "@/lib/agent_rules";
 import { convertMarkdown, readMarkdown } from "@/lib/agent_write";
 import { appendBlocks, getPage } from "@/lib/pages";
@@ -23,6 +22,5 @@ export async function POST(request: Request, ctx: RouteContext<"/api/agent/pages
   if (!conversion.blocks.length) return fail(400, "Rien à ajouter : le Markdown ne donne aucun bloc.");
   const outcome = await appendBlocks(id, conversion.blocks);
   if (!outcome.ok) return fail(outcome.status, outcome.error);
-  await logAgentAction(agent, "ajout", id, { title: page.title, blocks: conversion.blocks.length });
   return Response.json({ id, blocks: conversion.blocks.length, ignored: conversion.ignored, converted: conversion.converted });
 }

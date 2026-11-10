@@ -3,11 +3,12 @@ import { AccountSection } from "@/components/settings/AccountSection";
 import { AgentSection } from "@/components/settings/AgentSection";
 import { BackupsSection } from "@/components/settings/BackupsSection";
 import { DevicesSection } from "@/components/settings/DevicesSection";
+import { ImportSection } from "@/components/settings/ImportSection";
 import { PublicViewSection } from "@/components/settings/PublicViewSection";
 import { SiteAddress } from "@/components/settings/SiteAddress";
 import { SyncSection } from "@/components/settings/SyncSection";
+import { TrashSection } from "@/components/settings/TrashSection";
 import { VersionSection } from "@/components/settings/VersionSection";
-import { listAgentLog } from "@/lib/agent_log";
 import { listAgentRequests } from "@/lib/agent_requests";
 import { listAgentTokens } from "@/lib/agent_tokens";
 import { canSwitchVersion } from "@/lib/app_version";
@@ -55,6 +56,10 @@ async function Section({ section, username }: { section: SettingsSection; userna
   switch (section) {
     case "compte":
       return <AccountSection username={username} />;
+    case "importer":
+      return <ImportSection />;
+    case "corbeille":
+      return <TrashSection />;
     case "version":
       return <VersionSection switchable={canSwitchVersion()} />;
     case "appareils": {
@@ -70,7 +75,7 @@ async function Section({ section, username }: { section: SettingsSection; userna
       );
     }
     case "agent": {
-      const [tokens, log, requests] = await Promise.all([listAgentTokens(), listAgentLog(), listAgentRequests()]);
+      const [tokens, requests] = await Promise.all([listAgentTokens(), listAgentRequests()]);
       return (
         <AgentSection
           tokens={tokens.map((token) => ({
@@ -79,14 +84,6 @@ async function Section({ section, username }: { section: SettingsSection; userna
             createdAt: token.createdAt.toISOString(),
             lastUsedAt: token.lastUsedAt?.toISOString() ?? null,
             revokedAt: token.revokedAt?.toISOString() ?? null,
-          }))}
-          log={log.map((entry) => ({
-            id: entry.id,
-            at: entry.at.toISOString(),
-            tokenName: entry.tokenName,
-            model: entry.model,
-            action: entry.action,
-            pageTitle: entry.pageTitle,
           }))}
           requests={requests.map((demand) => ({
             id: demand.id,

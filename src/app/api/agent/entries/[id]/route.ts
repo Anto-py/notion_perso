@@ -5,7 +5,6 @@
 // SPECS.md, « Accès agent », palier d.
 import { fail, readJson } from "@/lib/api";
 import { requireAgent } from "@/lib/agent_auth";
-import { logAgentAction } from "@/lib/agent_log";
 import { readAgentValues, resolveAgentValues } from "@/lib/agent_values";
 import { resolveRelationAnswers } from "@/lib/agent_write";
 import { configOf, updateEntry } from "@/lib/databases";
@@ -40,11 +39,5 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/agent/entr
     properties: resolved.created.length ? resolved.properties : undefined,
   });
   if (!outcome.ok) return fail(outcome.status, outcome.error);
-  await logAgentAction(agent, "modification", id, {
-    title: entry.title,
-    base: base.title,
-    properties: Object.keys(values),
-    ...(resolved.created.length ? { options: resolved.created } : {}),
-  });
   return Response.json({ ok: true, created: resolved.created });
 }

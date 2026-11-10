@@ -43,7 +43,6 @@ async function SidebarData() {
   return (
     <Sidebar
       rows={rows.filter((row) => canAccess(user, row, "read"))}
-      username={user.username}
       inboxCount={inboxCount}
       macSyncedAt={macSyncedAt?.toISOString() ?? null}
     />

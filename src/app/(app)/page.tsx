@@ -26,7 +26,7 @@ async function Recent() {
     return (
       <p>
         Aucune page pour l&apos;instant. Créez la première avec « + Nouvelle page », dans la barre de gauche, ou{" "}
-        <Link href="/import">importez un export Notion</Link>.
+        <Link href="/reglages#importer">importez un export Notion</Link>.
       </p>
     );
   }

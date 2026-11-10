@@ -6,7 +6,6 @@
 // d'une base ; sans paramètre, racines de l'arbre. SPECS.md, « Accès agent ».
 import { fail, optionalId, readJson } from "@/lib/api";
 import { requireAgent } from "@/lib/agent_auth";
-import { logAgentAction } from "@/lib/agent_log";
 import { listChildren, resolveAgentPath } from "@/lib/agent_read";
 import { requestOrigin } from "@/lib/agent_rules";
 import { convertMarkdown, readMarkdown, readTitle } from "@/lib/agent_write";
@@ -52,7 +51,6 @@ export async function POST(request: Request) {
   const conversion = await convertMarkdown(markdown.value, requestOrigin(request));
   const outcome = await createPage(parentId, "page", { title: title.value, body: conversion.blocks });
   if (!outcome.ok || !outcome.id) return fail(outcome.ok ? 500 : outcome.status, outcome.ok ? "Création impossible" : outcome.error);
-  await logAgentAction(agent, "création", outcome.id, { title: title.value, blocks: conversion.blocks.length });
   return Response.json(
     { id: outcome.id, blocks: conversion.blocks.length, ignored: conversion.ignored, converted: conversion.converted },
     { status: 201 },

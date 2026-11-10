@@ -4,7 +4,6 @@
 // entrée au journal.
 import { fail } from "@/lib/api";
 import { requireAgent } from "@/lib/agent_auth";
-import { logAgentAction } from "@/lib/agent_log";
 import { getPage } from "@/lib/pages";
 import { unpublishPage } from "@/lib/publication_query";
 
@@ -16,6 +15,5 @@ export async function POST(request: Request, ctx: RouteContext<"/api/agent/pages
   if (!page) return fail(404, "Page introuvable");
   if (!page.shareEnabled) return Response.json({ ok: true, changed: false });
   await unpublishPage(page);
-  await logAgentAction(agent, "dépublication", id, { title: page.title });
   return Response.json({ ok: true, changed: true });
 }

@@ -2,7 +2,6 @@
 // (restorePage, comme l'écran Corbeille). Journalisé.
 import { fail } from "@/lib/api";
 import { requireAgent } from "@/lib/agent_auth";
-import { logAgentAction } from "@/lib/agent_log";
 import { getPage, restorePage } from "@/lib/pages";
 
 export async function POST(request: Request, ctx: RouteContext<"/api/agent/pages/[id]/restore">) {
@@ -14,6 +13,5 @@ export async function POST(request: Request, ctx: RouteContext<"/api/agent/pages
   if (!page.trashedAt) return fail(409, "La page n'est pas en corbeille.");
   const outcome = await restorePage(id);
   if (!outcome.ok) return fail(outcome.status, outcome.error);
-  await logAgentAction(agent, "restauration", id, { title: page.title });
   return Response.json({ ok: true });
 }

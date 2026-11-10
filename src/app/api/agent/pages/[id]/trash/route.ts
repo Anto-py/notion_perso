@@ -3,7 +3,6 @@
 // Journalisé.
 import { fail } from "@/lib/api";
 import { requireAgent } from "@/lib/agent_auth";
-import { logAgentAction } from "@/lib/agent_log";
 import { getPage, trashPage } from "@/lib/pages";
 
 export async function POST(request: Request, ctx: RouteContext<"/api/agent/pages/[id]/trash">) {
@@ -14,6 +13,5 @@ export async function POST(request: Request, ctx: RouteContext<"/api/agent/pages
   if (!page || page.trashedAt) return fail(404, "Page introuvable hors corbeille");
   const outcome = await trashPage(id);
   if (!outcome.ok) return fail(outcome.status, outcome.error);
-  await logAgentAction(agent, "corbeille", id, { title: page.title });
   return Response.json({ ok: true });
 }

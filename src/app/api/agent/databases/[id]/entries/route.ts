@@ -6,7 +6,6 @@
 // SPECS.md, « Accès agent », palier d.
 import { fail, readJson } from "@/lib/api";
 import { requireAgent } from "@/lib/agent_auth";
-import { logAgentAction } from "@/lib/agent_log";
 import { requestOrigin } from "@/lib/agent_rules";
 import { readAgentValues, resolveAgentValues } from "@/lib/agent_values";
 import { convertMarkdown, readMarkdown, readTitle, resolveRelationAnswers } from "@/lib/agent_write";
@@ -42,12 +41,6 @@ export async function POST(request: Request, ctx: RouteContext<"/api/agent/datab
   if (!outcome.ok || !outcome.id) {
     return fail(outcome.ok ? 500 : outcome.status, outcome.ok ? "Création impossible" : outcome.error);
   }
-  await logAgentAction(agent, "création", outcome.id, {
-    title: title.value,
-    base: base.title,
-    blocks: conversion.blocks.length,
-    ...(resolved.created.length ? { options: resolved.created } : {}),
-  });
   return Response.json(
     {
       id: outcome.id,

@@ -255,9 +255,10 @@ export const agentTokens = pgTable("agent_tokens", {
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
 });
 
-// Journal des écritures de l'agent, 1000 dernières lignes. page_id sans clé
-// étrangère : la trace survit à la purge de la page. model : déclaré par
-// l'agent, non vérifié.
+// Journal des écritures de l'agent, retiré de l'app le 2026-11-10 : plus
+// personne n'y écrit ni ne le lit. La table reste déclarée pour que drizzle
+// ne réclame pas un DROP au prochain diff ; ses lignes d'avant sont inertes.
+// page_id sans clé étrangère, model déclaré par l'agent, non vérifié.
 export const agentLog = pgTable(
   "agent_log",
   {

@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import { newPasswordProblem, parseSettingWrite, readSettingValue, sectionsFor } from "@/lib/settings_rules";
 
 describe("sectionsFor", () => {
-  it("montre Appareils et Vue publique sur l'app web, jamais Synchronisation ni Sauvegardes", () => {
-    expect(sectionsFor("web")).toEqual(["compte", "version", "appareils", "agent", "vue_publique"]);
+  it("montre Importer, Corbeille, Appareils et Vue publique sur l'app web, jamais Synchronisation ni Sauvegardes", () => {
+    expect(sectionsFor("web")).toEqual(["compte", "importer", "corbeille", "version", "appareils", "agent", "vue_publique"]);
   });
 
-  it("montre Synchronisation et Sauvegardes sur le Mac, jamais Appareils ni Vue publique", () => {
-    expect(sectionsFor("mac")).toEqual(["compte", "synchronisation", "sauvegardes", "version"]);
+  it("montre Importer, Corbeille, Synchronisation et Sauvegardes sur le Mac, jamais Appareils ni Vue publique", () => {
+    expect(sectionsFor("mac")).toEqual(["compte", "importer", "corbeille", "synchronisation", "sauvegardes", "version"]);
   });
 });
 

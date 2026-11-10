@@ -1,14 +1,12 @@
 // POST { decision: "accepted" | "refused" } : traite une demande de l'agent
 // (Réglages › Agent). Sous session, sur l'instance web seulement. « Valider »
 // exécute le geste avec les droits d'Antonin ; « Refuser » ferme la demande
-// sans rien faire. Chaque décision entre au journal de l'agent. Si le geste
-// échoue (page disparue, exclusion du partage), la demande reste ouverte et
-// l'erreur est rendue telle quelle.
+// sans rien faire. Si le geste échoue (page disparue, exclusion du partage),
+// la demande reste ouverte et l'erreur est rendue telle quelle.
 // SPECS.md, « Accès agent », palier f.
 import { fail, readJson, requireUser } from "@/lib/api";
-import { logAgentAction } from "@/lib/agent_log";
 import { closeAgentRequest, openAgentRequest } from "@/lib/agent_requests";
-import { requestDecision, requestLogAction } from "@/lib/agent_rules";
+import { requestDecision } from "@/lib/agent_rules";
 import { purgeWithMedia } from "@/lib/media_cleanup_query";
 import { getPage } from "@/lib/pages";
 import { publishPage } from "@/lib/publication_query";
@@ -44,15 +42,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/acces_agent
     }
   }
 
-  const closed = await closeAgentRequest(demand.id, decision);
-  if (closed) {
-    await logAgentAction(
-      { tokenId: demand.tokenId, tokenName: demand.tokenName ?? "jeton supprimé", model: demand.model },
-      requestLogAction(demand.action),
-      demand.pageId,
-      { request: demand.id, decision: decision === "accepted" ? "validée" : "refusée" },
-    );
-  }
+  await closeAgentRequest(demand.id, decision);
   return Response.json({
     ok: true,
     action: demand.action,

@@ -6,7 +6,6 @@
 // SPECS.md, « Accès agent », palier e.
 import { fail } from "@/lib/api";
 import { requireAgent } from "@/lib/agent_auth";
-import { logAgentAction } from "@/lib/agent_log";
 import { newId } from "@/lib/ids";
 import { getPage, recordMedia } from "@/lib/pages";
 import { saveFile } from "@/lib/storage";
@@ -53,11 +52,6 @@ export async function POST(request: Request) {
     mime: file.type,
     size: file.size,
     pageId: typeof pageId === "string" && pageId !== "" ? pageId : null,
-  });
-  await logAgentAction(agent, "téléversement", typeof pageId === "string" && pageId !== "" ? pageId : null, {
-    name: file.name.slice(0, 255),
-    filename,
-    size: file.size,
   });
   return Response.json({ url: `/api/media/${filename}` }, { status: 201 });
 }

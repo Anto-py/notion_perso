@@ -5,12 +5,23 @@ import { parseBackupTrial, parseOpenBackup, parseServerCopy, type BackupTrial, t
 
 export type Instance = "mac" | "web";
 
-export type SettingsSection = "compte" | "synchronisation" | "sauvegardes" | "version" | "appareils" | "agent" | "vue_publique";
+export type SettingsSection =
+  | "compte"
+  | "importer"
+  | "corbeille"
+  | "synchronisation"
+  | "sauvegardes"
+  | "version"
+  | "appareils"
+  | "agent"
+  | "vue_publique";
 
-// Chaque instance n'affiche que ce qui la concerne, dans cet ordre.
+// Chaque instance n'affiche que ce qui la concerne, dans cet ordre. Importer et
+// Corbeille sont sur les deux : leurs menus ont quitté le pied de la barre
+// latérale le 2026-11-10.
 const SECTIONS: Record<Instance, SettingsSection[]> = {
-  web: ["compte", "version", "appareils", "agent", "vue_publique"],
-  mac: ["compte", "synchronisation", "sauvegardes", "version"],
+  web: ["compte", "importer", "corbeille", "version", "appareils", "agent", "vue_publique"],
+  mac: ["compte", "importer", "corbeille", "synchronisation", "sauvegardes", "version"],
 };
 
 export function sectionsFor(instance: Instance): SettingsSection[] {

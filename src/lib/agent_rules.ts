@@ -4,8 +4,6 @@
 
 export const MODEL_MAX = 80;
 export const TOKEN_NAME_MAX = 60;
-export const LOG_KEEP = 1000;
-export const LOG_SHOWN = 100;
 const TOUCH_EVERY_MS = 60_000;
 
 // Même forme que le jeton de synchronisation (lib/sync_server.ts) : les deux
@@ -15,8 +13,8 @@ export function parseBearer(header: string | null): string | null {
   return match ? match[1] : null;
 }
 
-// Nom du modèle annoncé par l'agent (`X-Agent-Model`). Déclaratif : il sert au
-// journal, jamais à une décision d'accès.
+// Nom du modèle annoncé par l'agent (`X-Agent-Model`). Déclaratif : il n'entre
+// dans aucune décision d'accès.
 export function parseModel(header: string | null): string | null {
   const clean = (header ?? "").replace(/[\u0000-\u001f\u007f]/g, "").trim();
   return clean === "" ? null : clean.slice(0, MODEL_MAX);
@@ -41,11 +39,6 @@ export function requestDecision(raw: unknown): RequestDecision | null {
 // Verbe de la demande, tel que le lit Antonin dans Réglages.
 export function requestActionLabel(action: RequestAction): string {
   return action === "publish" ? "Publier" : "Purger";
-}
-
-// Action du journal quand la demande est traitée.
-export function requestLogAction(action: RequestAction): string {
-  return action === "publish" ? "publication" : "purge";
 }
 
 export function checkTokenName(raw: unknown): { value: string } | { error: string } {

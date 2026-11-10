@@ -6,7 +6,7 @@
 // Jeton : trousseau macOS (service notion-perso-agent), jamais affiché ;
 // NP_JETON le remplace pour un essai contre une instance locale.
 // Serveur : --serveur ou NP_SERVEUR (défaut : production).
-// Modèle déclaré au journal : --modele ou NP_AGENT_MODELE.
+// Modèle déclaré : --modele ou NP_AGENT_MODELE.
 // Sortie : 0 succès, 1 refus du serveur, 2 erreur d'usage, 3 en attente de
 // validation.
 import { execFileSync } from "node:child_process";
@@ -15,7 +15,7 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 
 const DEFAULT_SERVER = "https://notion.antoninbareau.eu";
 const KEYCHAIN_SERVICE = "notion-perso-agent";
-const VALUE_OPTIONS = new Set(["--vers", "--medias", "--modele", "--serveur", "--sous", "--titre", "--nombre"]);
+const VALUE_OPTIONS = new Set(["--vers", "--medias", "--modele", "--serveur", "--sous", "--titre"]);
 const FLAG_OPTIONS = new Set(["--json", "--aide", "-h", "--help"]);
 
 const HELP = `np, accès agent à notion_perso
@@ -42,7 +42,6 @@ Lecture
   np publier <chemin|id>                                    demande de publication, validée dans Réglages › Agent
   np purger <id>                                            demande de suppression définitive (page en corbeille)
   np depublier <chemin|id>                                  dépublie aussitôt
-  np journal [--nombre n]                                   dernières écritures des agents
 
 Le front matter d'un fichier est ignoré, sauf pour « np entree ». Conversions et éléments ignorés
 sont signalés sur stderr. Une image ou un PDF seul sur sa ligne, chemin local, est téléversé avant
@@ -510,29 +509,6 @@ const COMMANDS = {
     const id = await target(call, args, "np depublier <chemin|id>");
     const result = await call(`/api/agent/pages/${encodeURIComponent(id)}/unpublish`, "POST", {});
     print(result.changed ? `${id} n'est plus publiée.` : `${id} n'était pas publiée.`);
-  },
-
-  async journal(call, args, options) {
-    const limit = options.nombre ? Number(options.nombre) : 20;
-    if (!Number.isInteger(limit) || limit < 1) throw usage("--nombre attend un entier positif");
-    const data = await call(`/api/agent/log?limit=${limit}`);
-    if (options.json) return print(JSON.stringify(data, null, 2));
-    const requests = data.requests ?? [];
-    if (!data.entries.length && !requests.length) return print("Journal vide.");
-    if (data.entries.length) {
-      print(
-        data.entries
-          .map((e) => `${new Date(e.at).toLocaleString("fr-BE", { timeZone: "Europe/Brussels", dateStyle: "short", timeStyle: "short" })}  ${e.action}  « ${e.pageTitle || "Sans titre"} »  (${e.model || "modèle non déclaré"}, ${e.tokenName || "jeton supprimé"})`)
-          .join("\n"),
-      );
-    }
-    if (requests.length) {
-      const lines = requests.map(
-        (r) =>
-          `  ${r.action === "publish" ? "Publier" : "Purger"}  « ${r.pageTitle || "Sans titre"} »  (${r.id}, ${r.tokenName || "jeton supprimé"}${r.model ? `, ${r.model}` : ""})`,
-      );
-      print(`${data.entries.length ? "\n" : ""}En attente de validation :\n${lines.join("\n")}`);
-    }
   },
 
   async "vide-cerveau"(call, args, options) {
