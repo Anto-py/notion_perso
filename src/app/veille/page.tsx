@@ -10,6 +10,8 @@ import { PageCover } from "@/components/PageCover";
 import { PageIcon } from "@/components/PageIcon";
 import { PublicFooter, siteName } from "@/components/PublicRenderer";
 import { Vitrine } from "@/components/vitrine/Vitrine";
+import { VitrineCorners } from "@/components/vitrine/VitrineCorner";
+import { VitrineFond } from "@/components/vitrine/VitrineRoot";
 import { VitrineWelcome } from "@/components/vitrine/VitrineWelcome";
 import { renderHtml } from "@/lib/blocks";
 import { faviconHref } from "@/lib/icons";
@@ -53,8 +55,11 @@ async function VitrinePage({ searchParams }: { searchParams: SearchParams }) {
   // Une recherche dans l'adresse est jouée au serveur : un lien partagé
   // s'ouvre sur ses résultats, sans clignotement.
   const search = state && state.q.trim().length >= SEARCH_MIN_LENGTH ? await searchVitrine(state.q) : null;
+  // .public est le cadre de la charte (§13) : bordure orange, coins ornés,
+  // pied signé compris ; le fond se voit dans ses marges.
   return (
     <div className="public">
+      <VitrineCorners />
       <main className="public-main">
         {vitrine && state ? (
           <VitrineContent vitrine={vitrine} state={state} search={search} missingFiche={resolved?.missing ?? false} />
@@ -63,6 +68,8 @@ async function VitrinePage({ searchParams }: { searchParams: SearchParams }) {
         )}
       </main>
       <PublicFooter />
+      {/* Après le contenu : le fond n'est demandé qu'une fois les cartes là. */}
+      <VitrineFond />
     </div>
   );
 }

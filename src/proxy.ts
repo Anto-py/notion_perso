@@ -39,6 +39,7 @@ export const config = {
   // routes vérifient elles-mêmes la session. api/sync, enfin, ne connaît pas
   // les cookies : l'app Mac s'y présente avec son jeton (lib/sync_server.ts).
   // api/agent non plus : le harnais s'y présente avec un jeton d'agent
-  // (lib/agent_auth.ts), vérifié par chaque route.
-  matcher: ["/((?!_next/static|_next/image|manifest.webmanifest|sw.js|icons/|api/upload|api/import|api/sync/|api/agent/).*)"],
+  // (lib/agent_auth.ts), vérifié par chaque route. vitrine/ porte le fond de
+  // /veille (public/vitrine/), demandé par des visiteurs sans session.
+  matcher: ["/((?!_next/static|_next/image|manifest.webmanifest|sw.js|icons/|vitrine/|api/upload|api/import|api/sync/|api/agent/).*)"],
 };

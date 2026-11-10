@@ -1,27 +1,150 @@
-/* Vitrine de veille (/veille), tout sous .vitrine. Étape 6 : mise en page
-   fonctionnelle (rangées défilantes, filtres, repli du mot d'accueil) sur les
-   couleurs du thème ; la charte complète allégée (fond, cadre, coins) vient à
-   l'étape 11. */
+/* Vitrine de veille (/veille) : charte rétrofuturisme complète, allégée
+   (BRAINSTORMING de la vitrine, §13). Toute règle commence par .vitrine :
+   ce fichier reste chargé après une navigation, il ne doit rien toucher
+   ailleurs dans l'app.
+
+   Asymétries (charte, « Alternance ») : le cadre en A, les cartes et menus
+   posés dessus en B, ce qu'une carte contient de nouveau en A ; une commande
+   prend l'orientation inverse de sa surface. */
+
+.vitrine {
+  --retro-teal: #127676;
+  --retro-orange: #e4632e;
+  --retro-jaune: #e3a535;
+  --retro-ink: #0d1617;
+  --retro-paper: #f2efe6;
+  --retro-teal-sombre: #0b4e4e;
+  --v-cadre: 24px 8px 24px 8px; /* A */
+  --v-carte: 8px 20px 8px 20px; /* B, posé sur le cadre */
+  --v-dans-carte: 9px 3px 9px 3px; /* A, dans une carte */
+  --v-btn: 5px 14px 5px 14px; /* B, commande posée sur le cadre */
+  --v-marge: 120px;
+  --v-coin: 56px;
+
+  /* Contexte d'empilement propre : sans lui, le fond du body (html et body
+     en portent un) recouvrirait les calques du fond en z-index négatif. */
+  isolation: isolate;
+  min-height: 100vh;
+  color: var(--retro-ink);
+}
+
+/* Fond (§13) : encre unie dès le premier rendu, image en fondu une fois la
+   classe vitrine-fond posée (VitrineRoot) ; l'image n'est demandée qu'alors. */
+.vitrine::before,
+.vitrine::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.vitrine::before {
+  background: var(--retro-ink);
+}
+
+.vitrine::after {
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+
+.vitrine.vitrine-fond::after {
+  background: url("/vitrine/fond.webp") center / cover no-repeat;
+  opacity: 0.4;
+}
+
+.vitrine .page-loading {
+  margin: var(--v-marge);
+  padding: 0;
+  color: var(--retro-paper);
+}
+
+/* Cadre : la page entière, pied signé compris ; le fond se voit autour. */
+.vitrine .public {
+  position: relative;
+  min-height: calc(100vh - 2 * var(--v-marge));
+  margin: var(--v-marge);
+  border: 3px solid var(--retro-orange);
+  border-radius: var(--v-cadre);
+  box-shadow: inset 0 0 0 2px var(--retro-teal);
+  background: var(--retro-paper);
+}
+
+.vitrine .vitrine-corner {
+  position: absolute;
+  width: var(--v-coin);
+  height: var(--v-coin);
+  color: var(--retro-teal);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.vitrine .vitrine-corner-top-left {
+  top: 10px;
+  left: 10px;
+}
+
+.vitrine .vitrine-corner-top-right {
+  top: 10px;
+  right: 10px;
+  transform: scaleX(-1);
+}
+
+.vitrine .vitrine-corner-bottom-left {
+  bottom: 10px;
+  left: 10px;
+  transform: scaleY(-1);
+}
+
+.vitrine .vitrine-corner-bottom-right {
+  right: 10px;
+  bottom: 10px;
+  transform: scale(-1);
+}
 
 .vitrine .public-main {
   max-width: 80rem;
+  padding: 3.5rem 4.5rem 2rem;
 }
 
-.vitrine-title {
+.vitrine .public-cover {
+  margin: 0 0 1.5rem;
+  border-radius: var(--v-carte);
+}
+
+.vitrine .public-footer {
+  padding-bottom: 2.5rem;
+}
+
+.vitrine .public-footer a {
+  color: var(--retro-teal);
+}
+
+/* Focus visible partout : contour ink de 2 px (§13). */
+.vitrine :focus-visible {
+  outline: 2px solid var(--retro-ink);
+  outline-offset: 2px;
+}
+
+.vitrine .vitrine-title {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin: 1rem 0 0.75rem;
-  font-size: 2rem;
+  margin: 0 0 0.75rem;
+  font-family: var(--font-label);
+  font-size: clamp(1.6rem, 1.2rem + 1.6vw, 2.4rem);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 /* Mot d'accueil, replié à 4 lignes dès le rendu serveur. */
-.vitrine-welcome-wrap {
+.vitrine .vitrine-welcome-wrap {
   max-width: var(--text-width);
   margin-bottom: 1.25rem;
 }
 
-.vitrine-welcome:not([data-open]) {
+.vitrine .vitrine-welcome:not([data-open]) {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 4;
@@ -29,56 +152,51 @@
   overflow: hidden;
 }
 
-.vitrine-welcome > :first-child {
+.vitrine .vitrine-welcome > :first-child {
   margin-top: 0;
 }
 
-.vitrine-more,
-.vitrine-pill-more,
-.vitrine-clear {
+.vitrine .vitrine-more,
+.vitrine .vitrine-pill-more,
+.vitrine .vitrine-clear {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--accent);
+  color: var(--retro-teal);
   font: inherit;
   text-decoration: underline;
   cursor: pointer;
 }
 
 /* Recherche */
-.vitrine-controls {
+.vitrine .vitrine-controls {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
   margin-bottom: 1.5rem;
 }
 
-.vitrine-search {
+.vitrine .vitrine-search {
   position: relative;
   max-width: 40rem;
 }
 
-.vitrine-search-input {
+.vitrine .vitrine-search-input {
   width: 100%;
   padding: 0.7rem 2.5rem 0.7rem 0.9rem;
-  border: 1.5px solid var(--line);
-  border-radius: var(--r-command);
+  border: 2px solid var(--retro-teal);
+  border-radius: var(--v-btn);
   background: var(--bg);
-  color: var(--ink);
+  color: var(--retro-ink);
   font: inherit;
   font-size: 1.05rem;
 }
 
-.vitrine-search-input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-.vitrine-search-input::-webkit-search-cancel-button {
+.vitrine .vitrine-search-input::-webkit-search-cancel-button {
   appearance: none;
 }
 
-.vitrine-search-clear {
+.vitrine .vitrine-search-clear {
   position: absolute;
   top: 0.45rem;
   right: 0.45rem;
@@ -91,24 +209,24 @@
   cursor: pointer;
 }
 
-.vitrine-search-clear:hover {
+.vitrine .vitrine-search-clear:hover {
   background: var(--hover);
 }
 
-.vitrine-search-error {
+.vitrine .vitrine-search-error {
   margin: 0.4rem 0 0;
   color: var(--danger);
   font-size: 0.9rem;
 }
 
-/* Panorama et menus */
-.vitrine-facets {
+/* Panorama et menus. Pastilles : teal pleine active, contour inactive. */
+.vitrine .vitrine-facets {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
 }
 
-.vitrine-panorama {
+.vitrine .vitrine-panorama {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -118,53 +236,59 @@
   list-style: none;
 }
 
-.vitrine-pill,
-.vitrine-chip,
-.vitrine-coeur,
-.vitrine-menu summary {
+.vitrine .vitrine-pill,
+.vitrine .vitrine-chip,
+.vitrine .vitrine-coeur,
+.vitrine .vitrine-menu summary {
   padding: 0.3rem 0.7rem;
-  border: 1.5px solid var(--accent);
-  border-radius: var(--r-command);
+  border: 1.5px solid var(--retro-teal);
+  border-radius: var(--v-btn);
   background: var(--bg);
-  color: var(--accent);
+  color: var(--retro-teal-sombre);
   font: inherit;
   font-size: 0.9rem;
   cursor: pointer;
 }
 
-.vitrine-pill[aria-pressed="true"],
-.vitrine-coeur[aria-pressed="true"],
-.vitrine-menu summary[data-active] {
-  background: var(--accent);
-  color: var(--bg);
+.vitrine .vitrine-pill:hover:not(:disabled),
+.vitrine .vitrine-coeur:hover,
+.vitrine .vitrine-menu summary:hover {
+  background: var(--accent-soft);
 }
 
-.vitrine-pill:disabled {
+.vitrine .vitrine-pill[aria-pressed="true"],
+.vitrine .vitrine-coeur[aria-pressed="true"],
+.vitrine .vitrine-menu summary[data-active] {
+  background: var(--retro-teal);
+  color: var(--retro-paper);
+}
+
+.vitrine .vitrine-pill:disabled {
   border-color: var(--line);
   color: var(--ink-soft);
   opacity: 0.6;
   cursor: default;
 }
 
-.vitrine-menus {
+.vitrine .vitrine-menus {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
 }
 
-.vitrine-menu {
+.vitrine .vitrine-menu {
   position: relative;
 }
 
-.vitrine-menu summary {
+.vitrine .vitrine-menu summary {
   list-style: none;
 }
 
-.vitrine-menu summary::-webkit-details-marker {
+.vitrine .vitrine-menu summary::-webkit-details-marker {
   display: none;
 }
 
-.vitrine-menu-list {
+.vitrine .vitrine-menu-list {
   position: absolute;
   z-index: 5;
   top: calc(100% + 0.3rem);
@@ -176,33 +300,33 @@
   max-height: 20rem;
   overflow-y: auto;
   padding: 0.5rem;
-  border: 1px solid var(--line);
-  border-radius: var(--r-surface);
+  border: 1.5px solid var(--retro-teal);
+  border-radius: var(--v-carte);
   background: var(--bg);
-  box-shadow: 4px 4px 0 var(--line);
+  box-shadow: 4px 4px 0 var(--retro-teal);
 }
 
-.vitrine-menu-item {
+.vitrine .vitrine-menu-item {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   padding: 0.25rem 0.3rem;
-  border-radius: var(--r-inner);
+  border-radius: var(--v-dans-carte);
   cursor: pointer;
 }
 
-.vitrine-menu-item:hover {
+.vitrine .vitrine-menu-item:hover {
   background: var(--hover);
 }
 
-.vitrine-menu-item[data-inert] {
+.vitrine .vitrine-menu-item[data-inert] {
   color: var(--ink-soft);
   opacity: 0.6;
   cursor: default;
 }
 
 /* Ligne des filtres actifs */
-.vitrine-active {
+.vitrine .vitrine-active {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -211,56 +335,84 @@
   color: var(--ink-soft);
 }
 
-.vitrine-chip {
+.vitrine .vitrine-chip {
   background: var(--accent-soft);
 }
 
-/* Rangées */
-.vitrine-row,
-.vitrine-all {
+/* Rangées : titres Oswald capitales teal, séparateur orné entre deux. */
+.vitrine .vitrine-row,
+.vitrine .vitrine-all {
   margin-bottom: 2rem;
 }
 
-.vitrine-row-head {
+.vitrine .vitrine-cards > section + section::before {
+  content: "❦";
+  content: "❦" / "";
+  display: block;
+  margin: 0 0 1.75rem;
+  color: var(--retro-teal);
+  font-size: 1.3rem;
+  line-height: 1;
+  text-align: center;
+  background: linear-gradient(
+      90deg,
+      transparent,
+      var(--retro-teal) 12%,
+      var(--retro-teal) calc(50% - 1.4rem),
+      transparent calc(50% - 1.4rem),
+      transparent calc(50% + 1.4rem),
+      var(--retro-teal) calc(50% + 1.4rem),
+      var(--retro-teal) 88%,
+      transparent
+    )
+    center / 100% 1px no-repeat;
+}
+
+.vitrine .vitrine-row-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
 }
 
-.vitrine-row-title {
+.vitrine .vitrine-row-title {
   margin: 0 0 0.6rem;
+  color: var(--retro-teal);
   font-family: var(--font-label);
-  font-size: 1.1rem;
+  font-size: 1.25rem;
   font-weight: 500;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
-.vitrine-row-arrows {
+.vitrine .vitrine-row-arrows {
   display: flex;
   gap: 0.3rem;
 }
 
-.vitrine-arrow {
-  width: 2.2rem;
-  height: 2.2rem;
-  border: 1.5px solid var(--accent);
+.vitrine .vitrine-arrow {
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1.5px solid var(--retro-teal);
   border-radius: 50%;
   background: var(--bg);
-  color: var(--accent);
+  color: var(--retro-teal);
   font-size: 1.3rem;
   line-height: 1;
   cursor: pointer;
   transition: opacity 0.2s;
 }
 
-.vitrine-arrow[data-faded] {
+.vitrine .vitrine-arrow:hover:not([data-faded]) {
+  background: var(--accent-soft);
+}
+
+.vitrine .vitrine-arrow[data-faded] {
   opacity: 0.3;
   cursor: default;
 }
 
-.vitrine-row-track {
+.vitrine .vitrine-row-track {
   display: flex;
   gap: 1rem;
   overflow-x: auto;
@@ -269,12 +421,7 @@
   padding: 0.25rem 0.25rem 1rem;
 }
 
-.vitrine-row-track:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.vitrine-row-track > .vitrine-card {
+.vitrine .vitrine-row-track > .vitrine-card {
   flex: 0 0 17rem;
   scroll-snap-align: start;
 }
@@ -282,22 +429,22 @@
 /* Sentinelles des bouts de rangée : points d'accroche elles aussi, sinon
    l'accrochage obligatoire aligne la première carte au chargement et cache
    la sentinelle de départ (piste décalée de 21 px, mesuré). */
-.vitrine-row-edge {
+.vitrine .vitrine-row-edge {
   flex: 0 0 1px;
   align-self: stretch;
   scroll-snap-align: start;
 }
 
-.vitrine-row-empty,
-.vitrine-empty {
+.vitrine .vitrine-row-empty,
+.vitrine .vitrine-empty {
   color: var(--ink-soft);
 }
 
-.vitrine-none p {
+.vitrine .vitrine-none p {
   margin: 0 0 0.6rem;
 }
 
-.vitrine-suggest {
+.vitrine .vitrine-suggest {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -305,24 +452,34 @@
 }
 
 /* Grille */
-.vitrine-grid {
+.vitrine .vitrine-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
   gap: 1rem;
 }
 
-/* Carte */
-.vitrine-card {
+/* Carte : coins asymétriques, liseré teal, ombre décalée au survol. Seul le
+   titre est un lien, étiré sur toute la carte. */
+.vitrine .vitrine-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
   padding: 0.9rem 1rem;
-  border: 1.5px solid var(--accent);
-  border-radius: var(--r-surface);
+  border: 1.5px solid var(--retro-teal);
+  border-radius: var(--v-carte);
   background: var(--bg);
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
 }
 
-.vitrine-card-title {
+.vitrine .vitrine-card:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 5px 5px 0 var(--retro-teal);
+}
+
+.vitrine .vitrine-card-title {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -330,13 +487,34 @@
   font-size: 1.05rem;
 }
 
-.vitrine-card-title .vitrine-heart {
+.vitrine .vitrine-card-title .vitrine-heart {
   margin-left: auto;
+}
+
+.vitrine .vitrine-card-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.vitrine .vitrine-card-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.vitrine .vitrine-card-link:focus-visible {
+  outline: none;
+}
+
+.vitrine .vitrine-card:has(.vitrine-card-link:focus-visible) {
+  outline: 2px solid var(--retro-ink);
+  outline-offset: 2px;
 }
 
 /* Logo, icône ou initiale (§12) : un carré de taille fixe, quel que soit le
    repli, pour que les titres restent alignés d'une carte à l'autre. */
-.vitrine-logo {
+.vitrine .vitrine-logo {
   flex-shrink: 0;
   width: 2rem;
   height: 2rem;
@@ -344,44 +522,46 @@
   object-fit: contain;
 }
 
-.vitrine-logo-big {
+.vitrine .vitrine-logo-big {
   width: 3rem;
   height: 3rem;
   border-radius: 0.6rem;
 }
 
-.vitrine-logo-emoji,
-.vitrine-logo-initial {
+.vitrine .vitrine-logo-emoji,
+.vitrine .vitrine-logo-initial {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
 }
 
-.vitrine-logo-emoji {
+.vitrine .vitrine-logo-emoji {
   font-size: 1.5rem;
 }
 
-.vitrine-logo-big.vitrine-logo-emoji {
+.vitrine .vitrine-logo-big.vitrine-logo-emoji {
   font-size: 2.2rem;
 }
 
-.vitrine-logo-initial {
+.vitrine .vitrine-logo-initial {
   border-radius: 50%;
   font-size: 1rem;
   font-weight: 700;
 }
 
-.vitrine-logo-big.vitrine-logo-initial {
+.vitrine .vitrine-logo-big.vitrine-logo-initial {
   font-size: 1.4rem;
 }
 
-.vitrine-heart {
-  color: var(--warm);
+/* Étoile en orange assombri : ni le jaune ni l'orange vif ne tiennent 3:1
+   sur paper (2,98 mesuré pour l'orange). */
+.vitrine .vitrine-heart {
+  color: var(--danger);
 }
 
-.vitrine-card-desc,
-.vitrine-card-snippet {
+.vitrine .vitrine-card-desc,
+.vitrine .vitrine-card-snippet {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
@@ -392,18 +572,18 @@
   font-size: 0.92rem;
 }
 
-.vitrine-card-snippet {
+.vitrine .vitrine-card-snippet {
   -webkit-line-clamp: 1;
   line-clamp: 1;
   font-style: italic;
 }
 
-.vitrine-card mark {
+.vitrine .vitrine-card mark {
   background: var(--hit);
   color: inherit;
 }
 
-.vitrine-tags {
+.vitrine .vitrine-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
@@ -413,14 +593,14 @@
   font-size: 0.8rem;
 }
 
-.vitrine-tags li {
+.vitrine .vitrine-tags li {
   padding: 0.1rem 0.45rem;
-  border-radius: var(--r-inner);
+  border-radius: var(--v-dans-carte);
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--retro-teal-sombre);
 }
 
-.vitrine-card-meta {
+.vitrine .vitrine-card-meta {
   display: flex;
   justify-content: space-between;
   gap: 0.5rem;
@@ -429,11 +609,14 @@
   font-size: 0.85rem;
 }
 
-.vitrine-new {
+/* « Nouveau » en contour orange : le jaune reste à la seule action de la
+   page, et un aplat répété sur chaque carte récente crierait plus fort
+   qu'elle. Texte en orange assombri, seul à tenir 4,5:1. */
+.vitrine .vitrine-new {
   padding: 0 0.4rem;
-  border-radius: var(--r-inner);
-  background: var(--warm);
-  color: var(--ink);
+  border: 1px solid var(--retro-orange);
+  border-radius: var(--v-dans-carte);
+  color: var(--danger);
   font-family: var(--font-label);
   font-size: 0.75rem;
   letter-spacing: 0.06em;
@@ -449,76 +632,47 @@
   pointer-events: auto;
 }
 
-/* Carte : seul le titre est un lien, étiré sur toute la carte. */
-.vitrine-card {
-  position: relative;
-}
-
-.vitrine-card-link {
-  color: inherit;
-  text-decoration: none;
-}
-
-.vitrine-card-link::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-}
-
-.vitrine-card-link:focus-visible {
-  outline: none;
-}
-
-.vitrine-card:has(.vitrine-card-link:focus-visible) {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.vitrine-card:hover {
-  box-shadow: 3px 3px 0 var(--accent);
-}
-
 /* Fiche inconnue au chargement (§6) */
-.vitrine-missing {
+.vitrine .vitrine-missing {
   margin: 0 0 1rem;
   padding: 0.6rem 0.9rem;
-  border-radius: var(--r-inner);
+  border-radius: var(--v-carte);
   background: var(--accent-soft);
 }
 
-/* Fiche superposée (§6). Le <dialog> défile ; son contenu le remplit, si
-   bien qu'un clic dont la cible est le <dialog> vient du fond assombri. */
-.vitrine-sheet {
+/* Fiche superposée et formulaire (§6, §11) : fond paper uni, sans ornement.
+   Le <dialog> défile ; son contenu le remplit, si bien qu'un clic dont la
+   cible est le <dialog> vient du fond assombri. */
+.vitrine .vitrine-sheet {
   width: min(46rem, calc(100vw - 2rem));
   max-height: calc(100dvh - 3rem);
   padding: 0;
-  border: 1.5px solid var(--accent);
-  border-radius: var(--r-surface);
-  background: var(--bg);
-  color: var(--ink);
+  border: 2px solid var(--retro-teal);
+  border-radius: var(--v-cadre);
+  background: var(--retro-paper);
+  color: var(--retro-ink);
   overflow-y: auto;
 }
 
-.vitrine-sheet::backdrop {
-  background: rgb(0 0 0 / 0.55);
+.vitrine .vitrine-sheet::backdrop {
+  background: rgb(13 22 23 / 0.6);
 }
 
-.vitrine-sheet-inner {
+.vitrine .vitrine-sheet-inner {
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
   padding: 1.25rem 1.5rem 1rem;
 }
 
-.vitrine-sheet-head {
+.vitrine .vitrine-sheet-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
 }
 
-.vitrine-sheet-title {
+.vitrine .vitrine-sheet-title {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -526,10 +680,10 @@
   font-size: 1.5rem;
 }
 
-.vitrine-sheet-close {
+.vitrine .vitrine-sheet-close {
   flex-shrink: 0;
-  width: 2.2rem;
-  height: 2.2rem;
+  width: 2.75rem;
+  height: 2.75rem;
   border: 0;
   border-radius: 50%;
   background: transparent;
@@ -538,11 +692,11 @@
   cursor: pointer;
 }
 
-.vitrine-sheet-close:hover {
+.vitrine .vitrine-sheet-close:hover {
   background: var(--accent-soft);
 }
 
-.vitrine-sheet-tags {
+.vitrine .vitrine-sheet-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
@@ -551,39 +705,40 @@
   list-style: none;
 }
 
-.vitrine-sheet-meta {
+.vitrine .vitrine-sheet-meta {
   margin: 0;
   color: var(--ink-soft);
 }
 
-.vitrine-sheet-actions {
+.vitrine .vitrine-sheet-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.6rem;
 }
 
-.vitrine-sheet-site {
+.vitrine .vitrine-sheet-site {
   padding: 0.35rem 0.8rem;
-  border: 1.5px solid var(--accent);
-  border-radius: var(--r-command);
-  color: var(--accent);
+  border: 1.5px solid var(--retro-teal);
+  border-radius: var(--v-btn);
+  color: var(--retro-teal);
   font-weight: 600;
   text-decoration: none;
 }
 
-.vitrine-sheet-site:hover {
+.vitrine .vitrine-sheet-site:hover {
   background: var(--accent-soft);
 }
 
-.vitrine-sheet-desc {
+.vitrine .vitrine-sheet-desc {
   margin: 0;
   max-width: var(--text-width);
 }
 
 /* Enfant direct : les titres du corps gardent le style de la vue publique. */
-.vitrine-sheet-notes > h3 {
+.vitrine .vitrine-sheet-notes > h3 {
   margin: 0.5rem 0 0.3rem;
+  color: var(--retro-teal);
   font-family: var(--font-label);
   font-size: 1rem;
   font-weight: 500;
@@ -591,117 +746,150 @@
   text-transform: uppercase;
 }
 
-.vitrine-sheet-wait {
+.vitrine .vitrine-sheet-wait {
   color: var(--ink-soft);
 }
 
-.vitrine-sheet-nav {
+.vitrine .vitrine-sheet-nav {
   display: flex;
   justify-content: space-between;
   padding-top: 0.5rem;
   border-top: 1px solid var(--line);
 }
 
-/* Proposition d'une ressource (§11) : même fenêtre que la fiche. Le bouton
-   « Proposer + » sera la seule action jaune de la charte (étape 11). */
-.vitrine-propose-line {
+/* Proposition d'une ressource (§11). « Proposer + » est la seule action
+   jaune de la page : bloc d'encre plein sans flou, le bouton glisse dessus à
+   l'appui (charte, « Commandes »). */
+.vitrine .vitrine-propose-line {
   display: flex;
   justify-content: flex-end;
   margin-bottom: 0.5rem;
 }
 
-.vitrine-propose,
-.vitrine-proposal-submit {
+.vitrine .vitrine-propose {
+  min-height: 2.75rem;
+  padding: 0.45rem 1.1rem;
+  border: 2px solid var(--retro-teal);
+  border-radius: var(--v-btn);
+  background: var(--retro-jaune);
+  box-shadow: 4px 4px 0 var(--retro-ink);
+  color: var(--retro-ink);
+  font-family: var(--font-label);
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    transform 0.1s,
+    box-shadow 0.1s;
+}
+
+.vitrine .vitrine-propose:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 6px 6px 0 var(--retro-ink);
+}
+
+.vitrine .vitrine-propose:active {
+  transform: translate(4px, 4px);
+  box-shadow: 0 0 0 var(--retro-ink);
+}
+
+.vitrine .vitrine-propose:focus-visible {
+  outline-offset: 4px;
+}
+
+.vitrine .vitrine-proposal-submit {
   padding: 0.45rem 1rem;
-  border: 1.5px solid var(--accent);
-  border-radius: var(--r-command);
-  background: var(--accent);
-  color: var(--bg);
+  border: 1.5px solid var(--retro-teal);
+  border-radius: var(--v-btn);
+  background: var(--retro-teal);
+  color: var(--retro-paper);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
 }
 
-.vitrine-proposal-submit:disabled {
+.vitrine .vitrine-proposal-submit:disabled {
   opacity: 0.6;
   cursor: progress;
 }
 
-.vitrine-proposal-form {
+.vitrine .vitrine-proposal-form {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
 }
 
-.vitrine-proposal-form > label,
-.vitrine-proposal-field > label {
+.vitrine .vitrine-proposal-form > label,
+.vitrine .vitrine-proposal-field > label {
   margin-top: 0.5rem;
   font-weight: 600;
 }
 
-.vitrine-proposal-form input,
-.vitrine-proposal-form textarea {
+.vitrine .vitrine-proposal-form input,
+.vitrine .vitrine-proposal-form textarea {
   width: 100%;
   padding: 0.5rem 0.65rem;
-  border: 1px solid var(--line);
-  border-radius: var(--r-inner);
+  border: 1.5px solid var(--ink-soft);
+  border-radius: var(--v-btn);
   background: var(--bg);
-  color: var(--ink);
+  color: var(--retro-ink);
   font: inherit;
 }
 
-.vitrine-proposal-form input[aria-invalid="true"] {
+.vitrine .vitrine-proposal-form input[aria-invalid="true"] {
   border-color: var(--danger);
 }
 
-.vitrine-proposal-field {
+.vitrine .vitrine-proposal-field {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
 }
 
-.vitrine-proposal-line {
+.vitrine .vitrine-proposal-line {
   display: flex;
   gap: 0.4rem;
 }
 
-.vitrine-proposal-remove,
-.vitrine-proposal-add,
-.vitrine-proposal-see {
+.vitrine .vitrine-proposal-remove,
+.vitrine .vitrine-proposal-add,
+.vitrine .vitrine-proposal-see {
   border: 0;
   background: transparent;
-  color: var(--accent);
+  color: var(--retro-teal);
   font: inherit;
   cursor: pointer;
 }
 
-.vitrine-proposal-add {
+.vitrine .vitrine-proposal-add {
   align-self: flex-start;
   padding: 0.25rem 0;
 }
 
-.vitrine-proposal-see {
+.vitrine .vitrine-proposal-see {
   padding: 0;
   text-decoration: underline;
 }
 
-.vitrine-proposal-note {
+.vitrine .vitrine-proposal-note {
   min-height: 1.3em;
   margin: 0;
   color: var(--ink-soft);
   font-size: 0.9rem;
 }
 
-.vitrine-proposal-note[data-tone="error"],
-.vitrine-proposal-notice[data-tone="error"] {
+.vitrine .vitrine-proposal-note[data-tone="error"],
+.vitrine .vitrine-proposal-notice[data-tone="error"] {
   color: var(--danger);
 }
 
-.vitrine-proposal-note[data-tone="ok"] {
-  color: var(--accent);
+.vitrine .vitrine-proposal-note[data-tone="ok"] {
+  color: var(--retro-teal);
 }
 
-.vitrine-proposal-send {
+.vitrine .vitrine-proposal-send {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -709,12 +897,12 @@
   margin-top: 0.75rem;
 }
 
-.vitrine-proposal-notice {
+.vitrine .vitrine-proposal-notice {
   margin: 0;
 }
 
 /* Piège à robots : présent dans le formulaire, invisible et hors du clavier. */
-.vitrine-trap {
+.vitrine .vitrine-trap {
   position: absolute;
   left: -10000px;
   width: 1px;
@@ -722,13 +910,50 @@
   overflow: hidden;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .vitrine::after,
+  .vitrine .vitrine-card,
+  .vitrine .vitrine-propose {
+    transition: none;
+  }
+
+  .vitrine .vitrine-card:hover {
+    transform: none;
+  }
+}
+
+/* Tablette : marges réduites, le cadre garde ses coins. */
+@media (max-width: 1100px) {
+  .vitrine {
+    --v-marge: 40px;
+  }
+
+  .vitrine .public-main {
+    padding-inline: 3.5rem;
+  }
+}
+
+/* Téléphone (sous 760 px) : fond réduit à un liseré, coins plus petits,
+   rangées à 80 % de la largeur, fiche et formulaire plein écran. */
 @media (max-width: 760px) {
-  .vitrine-row-track > .vitrine-card {
+  .vitrine {
+    --v-marge: 16px;
+    --v-coin: 34px;
+  }
+
+  .vitrine .public-main {
+    padding: 2.75rem 1rem 1.5rem;
+  }
+
+  .vitrine .vitrine-propose-line {
+    justify-content: flex-start;
+  }
+
+  .vitrine .vitrine-row-track > .vitrine-card {
     flex-basis: 80%;
   }
 
-  /* Plein écran sous 760 px. */
-  .vitrine-sheet {
+  .vitrine .vitrine-sheet {
     width: 100vw;
     max-width: none;
     height: 100dvh;
@@ -738,12 +963,12 @@
     border-radius: 0;
   }
 
-  .vitrine-sheet-inner {
+  .vitrine .vitrine-sheet-inner {
     min-height: 100%;
     padding: 1rem;
   }
 
-  .vitrine-sheet-nav {
+  .vitrine .vitrine-sheet-nav {
     margin-top: auto;
   }
 }
