@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  appendAtEnd,
   appendOrphans,
   bodyHasContent,
   columnHasContent,
@@ -490,5 +491,19 @@ describe("mention", () => {
     ]);
     expect(html).not.toContain("javascript:");
     expect(html).toContain('<span class="mention">Piège</span>');
+  });
+});
+
+describe("appendAtEnd", () => {
+  const para = (text: string) => ({ type: "paragraph", content: text ? [{ type: "text", text, styles: {} }] : [], children: [] });
+
+  it("ajoute en bas, avant les paragraphes vides qui terminent le corps", () => {
+    expect(appendAtEnd([para("a"), para(""), para("")], [para("b")])).toEqual([para("a"), para("b"), para(""), para("")]);
+  });
+
+  it("ajoute à la fin d'un corps sans vide final, et dans un corps absent", () => {
+    expect(appendAtEnd([para("a")], [para("b")])).toEqual([para("a"), para("b")]);
+    expect(appendAtEnd(null, [para("b")])).toEqual([para("b")]);
+    expect(appendAtEnd([para("")], [para("b")])).toEqual([para("b"), para("")]);
   });
 });

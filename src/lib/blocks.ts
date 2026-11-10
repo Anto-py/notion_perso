@@ -107,6 +107,23 @@ export function appendOrphans(body: Json, orphans: readonly Orphan[]): Json[] {
   return blocks;
 }
 
+// --- Ajout en bas -------------------------------------------------------------
+//
+// Accès agent et Vide-cerveau ajoutent des blocs au bas d'un corps sans rien
+// remplacer. Les paragraphes vides qui le terminent (celui que l'éditeur garde
+// pour le curseur) restent derniers : l'ajout se range juste avant eux.
+
+function isEmptyParagraph(block: Json): boolean {
+  return isObject(block) && block.type === "paragraph" && inlineText(block.content).trim() === "" && childrenOf(block).length === 0;
+}
+
+export function appendAtEnd(body: Json, blocks: readonly Json[]): Json[] {
+  const current: Json[] = Array.isArray(body) ? [...body] : [];
+  let cut = current.length;
+  while (cut > 0 && isEmptyParagraph(current[cut - 1])) cut--;
+  return [...current.slice(0, cut), ...blocks, ...current.slice(cut)];
+}
+
 // --- Listes de colonnes ---------------------------------------------------------
 //
 // Deux blocs de mise en page, sans contenu propre : « columnList » tient deux à

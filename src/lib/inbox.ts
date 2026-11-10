@@ -5,11 +5,10 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { pages } from "@/db/schema";
-import { flattenToText } from "./blocks";
 import { CAPTURE_TITLE_MAX, mentionBlock, noteBlock } from "./capture";
 import { newId } from "./ids";
 import { runInboxPageMove } from "./inbox_page_move_query";
-import type { Page } from "./pages";
+import { appendBlocks, type Page } from "./pages";
 import { domainOf } from "./unfurl";
 
 export const INBOX_TITLE = "Vide-cerveau";
@@ -54,20 +53,12 @@ export async function ensureInbox(): Promise<Page> {
   return convertLegacyInbox(inbox);
 }
 
-// Ajout en fin de corps sous verrou : deux captures simultanées ne se perdent
-// pas, et l'éditeur resté ouvert fusionne par bloc à son prochain
-// enregistrement (lib/web_save.ts).
+// Une capture s'ajoute en bas, sous verrou (appendBlocks, partagé avec
+// l'accès agent) : deux captures simultanées ne se perdent pas, et l'éditeur
+// resté ouvert fusionne par bloc à son prochain enregistrement.
 async function appendBlock(inboxId: string, block: unknown): Promise<string> {
-  await db.transaction(async (tx) => {
-    const [row] = await tx
-      .select({ body: pages.body })
-      .from(pages)
-      .where(eq(pages.id, inboxId))
-      .for("update");
-    const body = Array.isArray(row?.body) ? row.body : [];
-    const next = [...body, block];
-    await tx.update(pages).set({ body: next, bodyText: flattenToText(next) }).where(eq(pages.id, inboxId));
-  });
+  const outcome = await appendBlocks(inboxId, [block]);
+  if (!outcome.ok) throw new Error(`Vide-cerveau : ${outcome.error}`);
   return inboxId;
 }
 

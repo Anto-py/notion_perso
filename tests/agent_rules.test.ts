@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkTokenName, MODEL_MAX, parseBearer, parseModel, touchDue } from "@/lib/agent_rules";
+import { checkTokenName, MODEL_MAX, parseBearer, parseModel, publicOrigin, touchDue } from "@/lib/agent_rules";
 
 describe("parseBearer", () => {
   it("lit un jeton base64url", () => {
@@ -55,5 +55,20 @@ describe("touchDue", () => {
   it("ne redate pas avant une minute, redate ensuite", () => {
     expect(touchDue(new Date("2026-11-10T11:59:30Z"), now)).toBe(false);
     expect(touchDue(new Date("2026-11-10T11:59:00Z"), now)).toBe(true);
+  });
+});
+
+describe("publicOrigin", () => {
+  it("bâtit l'origine sur l'hôte demandé, https par défaut", () => {
+    expect(publicOrigin("notion.antoninbareau.eu", null)).toBe("https://notion.antoninbareau.eu");
+    expect(publicOrigin("notion.antoninbareau.eu", "https,http")).toBe("https://notion.antoninbareau.eu");
+    expect(publicOrigin("localhost:3000", null)).toBe("http://localhost:3000");
+    expect(publicOrigin("exemple.be", "http")).toBe("http://exemple.be");
+  });
+
+  it("refuse un hôte absent ou malformé", () => {
+    expect(publicOrigin(null, null)).toBeNull();
+    expect(publicOrigin("ex.be/chemin", null)).toBeNull();
+    expect(publicOrigin("ex.be@autre", null)).toBeNull();
   });
 });

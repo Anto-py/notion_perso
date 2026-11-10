@@ -35,3 +35,21 @@ export function checkTokenName(raw: unknown): { value: string } | { error: strin
 export function touchDue(lastUsedAt: Date | null, now: Date): boolean {
   return lastUsedAt === null || now.getTime() - lastUsedAt.getTime() >= TOUCH_EVERY_MS;
 }
+
+// Origine publique d'une requête, pour les liens absolus du Markdown exporté.
+// En production, request.url porte l'adresse d'écoute du conteneur
+// (lib/redirect.ts) ; l'en-tête Host, transmis tel quel par le proxy de
+// Coolify, porte le domaine. Un hôte malformé ne donne aucune origine : les
+// liens restent alors relatifs.
+export function publicOrigin(host: string | null, forwardedProto: string | null): string | null {
+  const name = (host ?? "").trim();
+  if (!/^[A-Za-z0-9.-]+(:\d{1,5})?$/.test(name)) return null;
+  const proto = (forwardedProto ?? "").split(",")[0].trim().toLowerCase();
+  const local = /^(localhost|127\.0\.0\.1)(:|$)/.test(name);
+  const scheme = proto === "http" || proto === "https" ? proto : local ? "http" : "https";
+  return `${scheme}://${name}`;
+}
+
+export function requestOrigin(request: Request): string | null {
+  return publicOrigin(request.headers.get("host"), request.headers.get("x-forwarded-proto"));
+}

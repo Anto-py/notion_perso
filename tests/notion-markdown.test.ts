@@ -142,3 +142,91 @@ describe("markdownToBlocks", () => {
     expect(blocks.map((block) => block.type)).toEqual(["quote", "divider"]);
   });
 });
+
+describe("markdownToBlocks, profil agent", () => {
+  const agent = (markdown: string, overrides: Partial<MarkdownContext> = {}) => parse(markdown, { profile: "agent", ...overrides });
+
+  it("fait d'un tableau pipe un tableau natif, en-tête en première ligne", () => {
+    const [table] = agent("| Marque | Touche |\n| --- | --- |\n| HP | **F9** |\n| Dell \\| Alienware | F12<br>F2 |\n| Asus |");
+    expect(table.type).toBe("table");
+    const content = table.content as { headerRows: number; rows: { cells: { content: { text: string }[] }[] }[] };
+    expect(content.headerRows).toBe(1);
+    const texts = content.rows.map((row) => row.cells.map((cell) => cell.content.map((item) => item.text).join("")));
+    expect(texts).toEqual([["Marque", "Touche"], ["HP", "F9"], ["Dell | Alienware", "F12\nF2"], ["Asus", ""]]);
+  });
+
+  it("fait d'une adresse nue un lien, sans la ponctuation qui suit, et laisse le code", () => {
+    const [block] = agent("Voir https://ex.be/a?b=1. Et `https://code.be` aussi.");
+    expect(block.content).toEqual([
+      { type: "text", text: "Voir ", styles: {} },
+      { type: "link", href: "https://ex.be/a?b=1", content: [{ type: "text", text: "https://ex.be/a?b=1", styles: {} }] },
+      { type: "text", text: ". Et ", styles: {} },
+      { type: "text", text: "https://code.be", styles: { code: true } },
+      { type: "text", text: " aussi.", styles: {} },
+    ]);
+  });
+
+  it("pose start sur une liste numérotée qui reprend, pas sur sa suite ni sur une liste qui part de 1", () => {
+    const blocks = agent("1. un\n2. deux\n\n```\ncode\n```\n\n3. trois\n4. quatre\n\n1. neuf");
+    const numbered = blocks.filter((block) => block.type === "numberedListItem");
+    expect(numbered.map((block) => block.props.start)).toEqual([undefined, undefined, 3, undefined, undefined]);
+  });
+
+  it("fait d'un lien seul vers une page connue un bloc-lien sans pouvoir sur sa cible", () => {
+    const resolveLink = (href: string) => (href === "pg_0123456789abcdef" ? { href: "/page/pg_0123456789abcdef", pageId: "pg_0123456789abcdef", kind: "page" as const } : null);
+    const [block] = agent("[Linux](pg_0123456789abcdef)", { resolveLink });
+    expect(block.type).toBe("subpage");
+    expect(block.props).toEqual({ pageId: "pg_0123456789abcdef", kind: "page", link: true });
+  });
+
+  it("garde en lien une image distante et signale la conversion", () => {
+    const converted: string[] = [];
+    const [block] = agent("![Logo](https://ex.be/logo.png)", { onConverted: (reason) => converted.push(reason) });
+    expect(block.type).toBe("paragraph");
+    expect(block.content).toEqual([{ type: "link", href: "https://ex.be/logo.png", content: [{ type: "text", text: "Logo", styles: {} }] }]);
+    expect(converted).toEqual(["média distant laissé en lien"]);
+  });
+
+  it("le profil import garde le tableau en liste et l'adresse en texte", () => {
+    const blocks = parse("| a | b |\n| --- | --- |\n| 1 | 2 |\n\nVoir https://ex.be");
+    expect(blocks.map((block) => block.type)).toEqual(["bulletListItem", "paragraph"]);
+    expect(blocks[1].content).toEqual([{ type: "text", text: "Voir https://ex.be", styles: {} }]);
+  });
+});
+
+describe("markdownToBlocks, profil agent, listes aérées", () => {
+  const agent = (markdown: string) => parse(markdown, { profile: "agent" });
+
+  it("rattache à son élément le texte en retrait et la sous-liste séparés par des lignes vides", () => {
+    const blocks = agent(
+      [
+        "1. Télécharge.",
+        "2. Calcule l'empreinte :",
+        "   - **Sur Mac**, tape :",
+        "",
+        "     shasum fichier.iso",
+        "",
+        "   - **Sur Windows**, tape :",
+        "",
+        "     ```",
+        "     Get-FileHash fichier.iso",
+        "     ```",
+        "",
+        "3. Compare.",
+        "",
+        "Fin.",
+      ].join("\n"),
+    );
+    expect(blocks.map((block) => block.type)).toEqual(["numberedListItem", "numberedListItem", "numberedListItem", "paragraph"]);
+    const [mac, windows] = blocks[1].children;
+    expect([mac.type, windows.type]).toEqual(["bulletListItem", "bulletListItem"]);
+    expect(mac.children.map((child) => [child.type, textOf(child)])).toEqual([["paragraph", "shasum fichier.iso"]]);
+    expect(windows.children.map((child) => [child.type, textOf(child)])).toEqual([["codeBlock", "Get-FileHash fichier.iso"]]);
+    expect(blocks[2].props.start).toBeUndefined();
+  });
+
+  it("le profil import arrête la liste à la ligne vide, comme avant", () => {
+    const blocks = parse("- a\n\n  suite\n\n- b");
+    expect(blocks.map((block) => block.type)).toEqual(["bulletListItem", "paragraph", "bulletListItem"]);
+  });
+});

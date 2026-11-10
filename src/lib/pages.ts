@@ -5,7 +5,7 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, ne, sql } from "dri
 import { db } from "@/db";
 import { media, pages } from "@/db/schema";
 import { FOLDER_ICON, fallbackParent, placementError, trashError, type PageKind } from "./bases";
-import { flattenToText } from "./blocks";
+import { appendAtEnd, flattenToText } from "./blocks";
 import { newId } from "./ids";
 import { removeCitedEntries } from "./relation_query";
 import { emptyConfig } from "./views";
@@ -137,8 +137,13 @@ async function checkParent(child: { type: PageKind; isBasesRoot?: boolean }, par
 export type CreatedKind = "page" | "database" | "folder";
 
 // Page vierge, base vide ou dossier. Sans parentId, une page naît à la racine
-// de l'arbre, une base ou un dossier sous la racine des bases.
-export async function createPage(parentId: string | null, type: CreatedKind = "page"): Promise<Outcome & { id?: string }> {
+// de l'arbre, une base ou un dossier sous la racine des bases. init : titre et
+// corps d'une page créée par l'agent, écrits dans la même insertion.
+export async function createPage(
+  parentId: string | null,
+  type: CreatedKind = "page",
+  init: { title?: string; body?: unknown[] } = {},
+): Promise<Outcome & { id?: string }> {
   const parent = parentId ?? fallbackParent({ type }, await basesRootId());
   const check = await checkParent({ type }, parent);
   if (!check.ok) return check;
@@ -149,8 +154,36 @@ export async function createPage(parentId: string | null, type: CreatedKind = "p
     type,
     icon: type === "folder" ? FOLDER_ICON : null,
     dbConfig: type === "database" ? emptyConfig() : null,
+    ...(init.title !== undefined ? { title: init.title } : {}),
+    ...(init.body !== undefined ? { body: init.body, bodyText: flattenToText(init.body) } : {}),
   });
   return { ok: true, id };
+}
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// Ajout en bas d'un corps, sous verrou de ligne : deux ajouts simultanés ne se
+// perdent pas, et l'éditeur resté ouvert, dont la révision est dépassée,
+// fusionne par bloc à son prochain enregistrement (lib/web_save.ts). Jamais de
+// remplacement. tx : la transaction d'un appelant qui crée la page avant d'y
+// écrire (entrée de base, palier d).
+export async function appendBlocks(pageId: string, blocks: readonly unknown[], tx?: Tx): Promise<Outcome> {
+  const run = async (t: Tx): Promise<Outcome> => {
+    const [row] = await t
+      .select({ type: pages.type, body: pages.body, trashedAt: pages.trashedAt })
+      .from(pages)
+      .where(eq(pages.id, pageId))
+      .for("update");
+    if (!row) return NOT_FOUND;
+    if (row.trashedAt) return { ok: false, status: 409, error: "Page en corbeille : restaurez-la d'abord." };
+    if (row.type === "folder" || row.type === "database") {
+      return { ok: false, status: 400, error: "Un dossier ou une base n'a pas de corps où ajouter." };
+    }
+    const next = appendAtEnd(row.body, blocks);
+    await t.update(pages).set({ body: next, bodyText: flattenToText(next) }).where(eq(pages.id, pageId));
+    return { ok: true };
+  };
+  return tx ? run(tx) : db.transaction(run);
 }
 
 export type PagePatch = {

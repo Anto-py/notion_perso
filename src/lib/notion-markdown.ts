@@ -5,6 +5,12 @@
 // Ce que l'export porte et que le schéma ne connaît pas est converti et
 // signalé : tableau pipe → liste à puces, <aside> → citation, colonnes et
 // toggles déjà aplatis par Notion. Rien n'est inventé.
+//
+// Profil « agent » (accès agent, SPECS.md) : le Markdown d'un fichier du
+// vault. Tableau pipe → tableau natif, adresse nue → lien, liste numérotée qui
+// reprend → `start`, lien seul vers une page connue → bloc-lien sans pouvoir
+// sur sa cible (`link: true`), image ou PDF distant → lien. Le profil
+// « import », par défaut, reste celui de l'export Notion.
 
 export type Styles = Record<string, boolean>;
 
@@ -30,6 +36,7 @@ export type MarkdownContext = {
   resolveMedia: (href: string) => string | null;
   onIgnored: (reason: string) => void;
   onConverted: (reason: string) => void;
+  profile?: "import" | "agent";
 };
 
 export type ParsedMarkdown = { blocks: Block[] };
@@ -39,7 +46,9 @@ const BLOCK_START = /^(#{1,6}\s|```|>\s?|\s*([-*+]|\d+\.)\s|\s*<aside|\s*<detail
 
 type ListKind = "bullet" | "numbered" | "check";
 
-type ListLine = { indent: number; kind: ListKind; checked: boolean; text: string };
+// content : colonne où commence le texte de l'élément ; une ligne en retrait
+// d'au moins autant lui appartient (profil agent).
+type ListLine = { indent: number; content: number; kind: ListKind; checked: boolean; number: number; text: string };
 
 function textItem(text: string, styles: Styles = {}): InlineItem {
   return { type: "text", text, styles };
@@ -168,12 +177,39 @@ export function parseInline(text: string, ctx: MarkdownContext, inherited: Style
   return items.filter((item) => item.type === "link" || item.text !== "");
 }
 
+// Adresse nue dans le texte : sans la ponctuation qui la suit dans la phrase.
+const BARE_URL = /https?:\/\/[^\s<>"]*[^\s<>".,;:!?')\]»]/g;
+
+// Profil agent : une adresse écrite telle quelle devient un lien. Le code et
+// le texte d'un lien restent tels quels.
+export function autolink(items: InlineItem[]): InlineItem[] {
+  return items.flatMap((item): InlineItem[] => {
+    if (item.type !== "text" || item.styles.code) return [item];
+    const out: InlineItem[] = [];
+    let last = 0;
+    for (const match of item.text.matchAll(BARE_URL)) {
+      const at = match.index ?? 0;
+      if (at > last) out.push(textItem(item.text.slice(last, at), item.styles));
+      out.push({ type: "link", href: match[0], content: [{ type: "text", text: match[0], styles: item.styles }] });
+      last = at + match[0].length;
+    }
+    if (last === 0) return [item];
+    if (last < item.text.length) out.push(textItem(item.text.slice(last), item.styles));
+    return out;
+  });
+}
+
+function inlineContent(text: string, ctx: MarkdownContext): InlineItem[] {
+  const items = parseInline(text, ctx);
+  return ctx.profile === "agent" ? autolink(items) : items;
+}
+
 function inlineBlock(type: string, text: string, ctx: MarkdownContext, props: Record<string, unknown> = {}): Block {
   return {
     id: ctx.newBlockId(),
     type,
     props: { ...DEFAULT_PROPS, ...props },
-    content: parseInline(text, ctx),
+    content: inlineContent(text, ctx),
     children: [],
   };
 }
@@ -193,6 +229,47 @@ function isTableSeparator(line: string): boolean {
 function splitRow(line: string): string[] {
   const trimmed = line.trim().replace(/^\|/, "").replace(/\|$/, "");
   return trimmed.split("|").map((cell) => cell.trim());
+}
+
+// Profil agent : « \| » est une barre dans la cellule (lib/markdown_export.ts
+// l'écrit ainsi), « <br> » un saut de ligne.
+function splitEscapedRow(line: string): string[] {
+  const trimmed = line.trim().replace(/^\|/, "").replace(/(?<!\\)\|$/, "");
+  return trimmed
+    .split(/(?<!\\)\|/)
+    .map((cell) => cell.trim().replace(/\\\|/g, "|").replace(/<br\s*\/?>/gi, "\n"));
+}
+
+// Tableau natif, comme celui que pose l'import HTML (notion-html.ts) : la
+// ligne d'en-tête du Markdown est sa première ligne.
+function tableBlock(rows: string[][], ctx: MarkdownContext): Block {
+  const width = Math.max(...rows.map((row) => row.length));
+  const cell = (text: string) => ({
+    type: "tableCell",
+    props: { ...DEFAULT_PROPS },
+    content: inlineContent(text, ctx),
+  });
+  const content = {
+    type: "tableContent",
+    columnWidths: [],
+    headerRows: 1,
+    rows: rows.map((row) => ({ cells: Array.from({ length: width }, (_, i) => cell(row[i] ?? "")) })),
+  };
+  return { id: ctx.newBlockId(), type: "table", props: { textColor: "default" }, content, children: [] };
+}
+
+// Profil agent : une image ou un PDF distant reste un lien, plutôt que de
+// perdre son adresse.
+function remoteLinkBlock(label: string, href: string, ctx: MarkdownContext): Block | null {
+  if (!/^https?:\/\//.test(href)) return null;
+  ctx.onConverted("média distant laissé en lien");
+  return {
+    id: ctx.newBlockId(),
+    type: "paragraph",
+    props: { ...DEFAULT_PROPS },
+    content: [{ type: "link", href, content: [textItem(label || href)] }],
+    children: [],
+  };
 }
 
 // Destination d'un lien : Notion laisse les parenthèses brutes dans les noms
@@ -237,7 +314,9 @@ function readListLine(line: string): ListLine | null {
   const match = /^(\s*)([-*+]|\d+\.)\s+(.*)$/.exec(line);
   if (!match) return null;
   const indent = match[1].replace(/\t/g, "  ").length;
+  const content = indent + line.length - match[1].length - match[3].length;
   let kind: ListKind = /^\d+\.$/.test(match[2]) ? "numbered" : "bullet";
+  const number = kind === "numbered" ? Number.parseInt(match[2], 10) : 0;
   let checked = false;
   let text = match[3];
   const check = /^\[([ xX])\]\s+(.*)$/.exec(text);
@@ -246,7 +325,47 @@ function readListLine(line: string): ListLine | null {
     checked = check[1].toLowerCase() === "x";
     text = check[2];
   }
-  return { indent, kind, checked, text };
+  return { indent, content, kind, checked, number, text };
+}
+
+type ListEntry = { indent: number; content: number; block: Block };
+
+function leadingWidth(line: string): number {
+  return (/^[ \t]*/.exec(line)?.[0] ?? "").replace(/\t/g, "  ").length;
+}
+
+function dedent(line: string, width: number): string {
+  const lead = /^[ \t]*/.exec(line)?.[0] ?? "";
+  const expanded = lead.replace(/\t/g, "  ");
+  return expanded.slice(Math.min(width, expanded.length)) + line.slice(lead.length);
+}
+
+// Profil agent : une liste du vault est souvent aérée (lignes vides entre les
+// éléments) et porte du texte en retrait sous un élément. La liste continue
+// au-delà d'une ligne vide si une ligne de liste suit ; un passage en retrait
+// d'au moins la colonne du texte d'un élément devient son enfant, converti par
+// le même parseur (paragraphe, code clôturé, citation…).
+function listContinuation(lines: string[], start: number, stack: ListEntry[], ctx: MarkdownContext): { index: number; line: ListLine | null } {
+  let i = start;
+  for (;;) {
+    let j = i;
+    while (j < lines.length && lines[j].trim() === "") j++;
+    if (j >= lines.length) return { index: i, line: null };
+    const listLine = readListLine(lines[j]);
+    if (listLine) return { index: j, line: listLine };
+    const width = leadingWidth(lines[j]);
+    const owner = [...stack].reverse().find((entry) => width >= entry.content);
+    if (!owner) return { index: i, line: null };
+    const collected: string[] = [];
+    let k = j;
+    while (k < lines.length && (lines[k].trim() === "" || (leadingWidth(lines[k]) >= owner.content && !readListLine(lines[k])))) {
+      collected.push(dedent(lines[k], owner.content));
+      k++;
+    }
+    owner.block.children.push(...markdownToBlocks(collected.join("\n"), ctx).blocks);
+    while (stack.length > 0 && stack[stack.length - 1] !== owner) stack.pop();
+    i = k;
+  }
 }
 
 export function markdownToBlocks(markdown: string, ctx: MarkdownContext): ParsedMarkdown {
@@ -314,6 +433,17 @@ export function markdownToBlocks(markdown: string, ctx: MarkdownContext): Parsed
       continue;
     }
 
+    if (ctx.profile === "agent" && /^\s*\|/.test(line) && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
+      const rows = [splitEscapedRow(line)];
+      i += 2;
+      while (i < lines.length && /^\s*\|/.test(lines[i])) {
+        rows.push(splitEscapedRow(lines[i]));
+        i++;
+      }
+      blocks.push(tableBlock(rows, ctx));
+      continue;
+    }
+
     if (/^\s*\|/.test(line) && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
       const header = splitRow(line);
       i += 2;
@@ -341,24 +471,45 @@ export function markdownToBlocks(markdown: string, ctx: MarkdownContext): Parsed
 
     const list = readListLine(line);
     if (list) {
-      const stack: { indent: number; block: Block }[] = [];
+      const stack: ListEntry[] = [];
       let current: ListLine | null = list;
       while (current) {
         while (stack.length > 0 && current.indent <= stack[stack.length - 1].indent) stack.pop();
         const parent = stack.length > 0 ? stack[stack.length - 1].block : null;
         const type = current.kind === "check" ? "checkListItem" : current.kind === "numbered" ? "numberedListItem" : "bulletListItem";
-        const props = current.kind === "check" ? { checked: current.checked } : {};
+        const props: Record<string, unknown> = current.kind === "check" ? { checked: current.checked } : {};
+        // Profil agent : une liste numérotée qui ne suit pas une autre garde
+        // son premier numéro (« 3. » après un bloc de code).
+        const siblings = parent ? parent.children : blocks;
+        if (ctx.profile === "agent" && type === "numberedListItem" && current.number > 1 && siblings.at(-1)?.type !== type) {
+          props.start = current.number;
+        }
         const block = inlineBlock(type, current.text, ctx, props);
         if (parent) parent.children.push(block);
         else blocks.push(block);
-        stack.push({ indent: current.indent, block });
+        stack.push({ indent: current.indent, content: current.content, block });
         i++;
         current = i < lines.length ? readListLine(lines[i]) : null;
+        if (!current && ctx.profile === "agent") {
+          const next = listContinuation(lines, i, stack, ctx);
+          i = next.index;
+          current = next.line;
+        }
       }
       continue;
     }
 
     const standalone = standaloneLink(line);
+    // Profil agent : un lien seul vers une page connue devient un bloc-lien,
+    // jamais une sous-page possédée, dont l'effacement jetterait la cible.
+    if (ctx.profile === "agent" && standalone && !standalone.image) {
+      const target = ctx.resolveLink(standalone.href);
+      if (target) {
+        blocks.push(plainBlock("subpage", ctx, { pageId: target.pageId, kind: target.kind, link: true }));
+        i++;
+        continue;
+      }
+    }
     if (standalone?.image) {
       const url = ctx.resolveMedia(standalone.href);
       if (url) {
@@ -372,8 +523,9 @@ export function markdownToBlocks(markdown: string, ctx: MarkdownContext): Parsed
           }),
         );
       } else {
-        ctx.onIgnored("image absente de l'archive");
-        blocks.push(inlineBlock("paragraph", standalone.label || standalone.href, ctx));
+        const remote = ctx.profile === "agent" ? remoteLinkBlock(standalone.label, standalone.href, ctx) : null;
+        if (!remote) ctx.onIgnored("image absente de l'archive");
+        blocks.push(remote ?? inlineBlock("paragraph", standalone.label || standalone.href, ctx));
       }
       i++;
       continue;
@@ -384,8 +536,9 @@ export function markdownToBlocks(markdown: string, ctx: MarkdownContext): Parsed
       if (url) {
         blocks.push(plainBlock("file", ctx, { url, name: standalone.label, caption: "", backgroundColor: "default" }));
       } else {
-        ctx.onIgnored("fichier absent de l'archive");
-        blocks.push(inlineBlock("paragraph", standalone.label, ctx));
+        const remote = ctx.profile === "agent" ? remoteLinkBlock(standalone.label, standalone.href, ctx) : null;
+        if (!remote) ctx.onIgnored("fichier absent de l'archive");
+        blocks.push(remote ?? inlineBlock("paragraph", standalone.label, ctx));
       }
       i++;
       continue;
