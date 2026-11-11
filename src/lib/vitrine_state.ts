@@ -2,7 +2,7 @@
 // basculés, effacement, suggestion appliquée, pastilles actives, recherche
 // affichée. Les règles de lecture (filtres, facettes, rangées, adresse)
 // vivent dans vitrine.ts.
-import { FAMILIES, allRow, serializeVitrineState, type Facets, type Family, type VitrineEntry, type VitrineState, type VitrineView } from "./vitrine";
+import { FAMILIES, allRow, serializeVitrineState, type Facet, type Facets, type Family, type VitrineEntry, type VitrineState, type VitrineView } from "./vitrine";
 import type { VitrineSearch, VitrineSearchMode } from "./vitrine_search";
 import { SEARCH_MIN_LENGTH } from "./search";
 
@@ -27,7 +27,15 @@ export function applySuggestion(state: VitrineState, slug: string): VitrineState
   return { ...state, q: "", domaine };
 }
 
-export type ActiveFilter = { family: Family | "coeur"; slug: string; label: string };
+// Valeur affichée dans un menu Niveau, Prix ou Type (« Prix : Gratuit ») :
+// la case se lit comme un réglage, pas comme une étiquette de plus.
+export function menuValue(facets: readonly Facet[]): string {
+  const chosen = facets.filter((facet) => facet.active).map((facet) => facet.label);
+  if (!chosen.length) return "tous";
+  return chosen.length > 2 ? `${chosen.length} choisis` : chosen.join(", ");
+}
+
+export type ActiveFilter ={ family: Family | "coeur"; slug: string; label: string };
 
 // Ligne des filtres actifs (§4), dans l'ordre de l'adresse. La recherche n'y
 // figure pas : le ✕ du champ l'efface.

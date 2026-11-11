@@ -1,14 +1,16 @@
 "use client";
-// Filtres de la vitrine (§4, §7, §9) : panorama des domaines en pastilles
-// (12 plus fournis, « + n autres » déplie le reste), menus à cases Niveau,
-// Prix et Type, bascule des coups de cœur, puis la ligne des filtres actifs
+// Filtres de la vitrine (§4, §7, §9) : sous « Domaines », le panorama en
+// pastilles (12 plus fournis, « + n autres » déplie le reste) ; sous
+// « Affiner », les menus Niveau, Prix et Type, rendus en champs de choix
+// (« Prix : tous ▾ ») pour ne pas passer pour des étiquettes, et la bascule
+// des coups de cœur ; puis la ligne des filtres actifs
 // avec le compte, « Tout effacer » et « Copier le lien ». Une pastille ou une
 // case à 0 est grisée et inerte, sauf si elle est active (on doit pouvoir
 // la retirer).
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { CopyUrlButton } from "@/components/CopyUrlButton";
 import { panorama, type Facet, type Facets, type Family } from "@/lib/vitrine";
-import type { ActiveFilter } from "@/lib/vitrine_state";
+import { menuValue, type ActiveFilter } from "@/lib/vitrine_state";
 
 type Props = {
   facets: Facets;
@@ -31,37 +33,49 @@ const MENUS: { family: Exclude<Family, "domaine">; label: string }[] = [
 
 export function VitrineFacets({ facets, coeur, hasHearts, narrowed, shown, active, url, onToggle, onCoeur, onClear }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const domainesId = useId();
+  const affinerId = useId();
   const { top, rest } = panorama(facets.domaine);
   const pills = expanded ? [...top, ...rest] : top;
   return (
     <div className="vitrine-facets">
       {facets.domaine.length ? (
-        <ul className="vitrine-panorama" aria-label="Domaines">
-          {pills.map((facet) => (
-            <li key={facet.slug}>
-              <Pill facet={facet} onClick={() => onToggle("domaine", facet.slug)} />
-            </li>
-          ))}
-          {rest.length ? (
-            <li>
-              <button type="button" className="vitrine-pill-more" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
-                {expanded ? "Réduire" : `+ ${rest.length} autres`}
-              </button>
-            </li>
-          ) : null}
-        </ul>
+        <div className="vitrine-facet-group">
+          <p id={domainesId} className="vitrine-facet-heading">
+            Domaines
+          </p>
+          <ul className="vitrine-panorama" aria-labelledby={domainesId}>
+            {pills.map((facet) => (
+              <li key={facet.slug}>
+                <Pill facet={facet} onClick={() => onToggle("domaine", facet.slug)} />
+              </li>
+            ))}
+            {rest.length ? (
+              <li>
+                <button type="button" className="vitrine-pill-more" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
+                  {expanded ? "Réduire" : `+ ${rest.length} autres`}
+                </button>
+              </li>
+            ) : null}
+          </ul>
+        </div>
       ) : null}
-      <div className="vitrine-menus">
-        {MENUS.map(({ family, label }) =>
-          facets[family].length ? (
-            <FacetMenu key={family} label={label} facets={facets[family]} onToggle={(slug) => onToggle(family, slug)} />
-          ) : null,
-        )}
-        {hasHearts ? (
-          <button type="button" className="vitrine-coeur" aria-pressed={coeur} onClick={onCoeur}>
-            ★ Coups de cœur
-          </button>
-        ) : null}
+      <div className="vitrine-facet-group">
+        <p id={affinerId} className="vitrine-facet-heading">
+          Affiner
+        </p>
+        <div className="vitrine-menus" role="group" aria-labelledby={affinerId}>
+          {MENUS.map(({ family, label }) =>
+            facets[family].length ? (
+              <FacetMenu key={family} label={label} facets={facets[family]} onToggle={(slug) => onToggle(family, slug)} />
+            ) : null,
+          )}
+          {hasHearts ? (
+            <button type="button" className="vitrine-coeur" aria-pressed={coeur} onClick={onCoeur}>
+              ★ Coups de cœur
+            </button>
+          ) : null}
+        </div>
       </div>
       {narrowed ? (
         <div className="vitrine-active">
@@ -126,8 +140,10 @@ function FacetMenu({ label, facets, onToggle }: { label: string; facets: readonl
       }}
     >
       <summary data-active={activeCount > 0 || undefined}>
-        {label}
-        {activeCount ? ` (${activeCount})` : ""} ▾
+        <span className="vitrine-menu-name">{label} :</span> <span className="vitrine-menu-value">{menuValue(facets)}</span>
+        <span className="vitrine-menu-caret" aria-hidden="true">
+          ▾
+        </span>
       </summary>
       <div className="vitrine-menu-list">
         {facets.map((facet) => (

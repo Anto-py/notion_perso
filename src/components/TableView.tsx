@@ -30,6 +30,7 @@ import {
 import { useRef, useState, type KeyboardEvent } from "react";
 import { TITLE_PROP, type EntryRow, type OrderPlace, type Property, type Sort, type Value } from "@/lib/properties";
 import { CALC_LABELS, calcOpsFor, calcText, computeCalc, type CalcOp } from "@/lib/views";
+import { fixedColumnWidths } from "@/lib/table_layout";
 import { ColumnResizer } from "./ColumnResizer";
 import { ExpandableCell } from "./ExpandableCell";
 import { PageLabel } from "./PageIcon";
@@ -111,6 +112,10 @@ export function TableView({
   // Le passage en table fixe dès la première largeur posée est ce qui rend la
   // valeur exacte : en largeur automatique, le contenu peut l'emporter.
   const fixed = preview !== null || Object.keys(columnWidths).length > 0;
+  const layout = fixedColumnWidths(
+    [TITLE_PROP.id, ...properties.map((prop) => prop.id)],
+    preview ? { ...columnWidths, [preview.propId]: preview.width } : columnWidths,
+  );
 
   function previewWidth(propId: string, width: number | null) {
     setPreview(width === null ? null : { propId, width });
@@ -217,11 +222,15 @@ export function TableView({
     >
       <div className="table-block">
         <div className={wrapClass}>
-          <table ref={tableRef} className={fixed ? "db-table col-fixed" : "db-table"}>
+          <table
+            ref={tableRef}
+            className={fixed ? "db-table col-fixed" : "db-table"}
+            style={fixed ? { width: `${layout.total}px` } : undefined}
+          >
             <colgroup>
-              <col style={widthOf(TITLE_PROP.id) ? { width: `${widthOf(TITLE_PROP.id)}px` } : undefined} />
-              {properties.map((prop) => (
-                <col key={prop.id} style={widthOf(prop.id) ? { width: `${widthOf(prop.id)}px` } : undefined} />
+              <col style={fixed ? { width: `${layout.widths[0]}px` } : undefined} />
+              {properties.map((prop, index) => (
+                <col key={prop.id} style={fixed ? { width: `${layout.widths[index + 1]}px` } : undefined} />
               ))}
             </colgroup>
             <thead>

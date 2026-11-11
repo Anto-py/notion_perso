@@ -205,18 +205,23 @@ function familySlugs(entry: VitrineEntry, family: Family): string[] {
   return labels.map(slugify);
 }
 
+// Domaine cumule (IA et Ludification) ; Niveau, Prix et Type proposent des
+// alternatives (Gratuit ou Payant). Choix d'Antonin du 2026-11-11.
+const CUMULATIVE: ReadonlySet<Family> = new Set(["domaine"]);
+
 function passes(entry: VitrineEntry, state: VitrineState, skip: Family | null): boolean {
   if (state.coeur && !entry.coeur) return false;
   for (const family of FAMILIES) {
     if (family === skip || !state[family].length) continue;
     const slugs = familySlugs(entry, family);
-    if (!state[family].some((slug) => slugs.includes(slug))) return false;
+    const has = (slug: string) => slugs.includes(slug);
+    if (!(CUMULATIVE.has(family) ? state[family].every(has) : state[family].some(has))) return false;
   }
   return true;
 }
 
-// OU dans une famille, ET entre familles. La recherche n'y entre pas : elle
-// est faite au serveur, le navigateur croise ensuite.
+// ET dans Domaine, OU dans Niveau, Prix et Type, ET entre familles. La
+// recherche n'y entre pas : elle est faite au serveur, le navigateur croise ensuite.
 export function applyFilters(entries: readonly VitrineEntry[], state: VitrineState): VitrineEntry[] {
   return entries.filter((entry) => passes(entry, state, null));
 }
@@ -226,8 +231,9 @@ export type Facets = Record<Family, Facet[]>;
 
 const collator = new Intl.Collator("fr", { sensitivity: "base", numeric: true });
 
-// Chaque famille est comptée avec les filtres des autres seulement : cocher IA
-// laisse visibles les autres domaines, qu'on peut ajouter en OU. Les libellés
+// Chaque pastille dit ce que donnerait son ajout. Domaine (ET) se compte avec
+// tous les filtres ; une famille en OU, avec ceux des autres seulement, ses
+// valeurs voisines s'ajoutant au lieu de resserrer. Les libellés
 // viennent de `universe` (toute la base par défaut) : une étiquette que
 // personne ne porte n'apparaît pas, une étiquette sans résultat reste à 0.
 export function facetCounts(
@@ -246,7 +252,7 @@ export function facetCounts(
     }
     const counts = new Map<string, number>();
     for (const entry of entries) {
-      if (!passes(entry, state, family)) continue;
+      if (!passes(entry, state, CUMULATIVE.has(family) ? null : family)) continue;
       for (const slug of new Set(familySlugs(entry, family))) counts.set(slug, (counts.get(slug) ?? 0) + 1);
     }
     const facets = [...labels].map(([slug, label]) => ({

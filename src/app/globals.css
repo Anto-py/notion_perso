@@ -1570,12 +1570,15 @@ body.sidebar-resizing {
   user-select: none;
 }
 
+/* La largeur du tableau est la somme de ses colonnes (TableView, en ligne) :
+   plus large que le cadre, il défile ; plus étroit, il le remplit. */
 .db-table.col-fixed {
   table-layout: fixed;
+  min-width: 100%;
 }
 
 /* Une largeur réglée n'est plus écrêtée à 22rem ; une colonne sans largeur
-   garde son calcul automatique et se partage le reste. */
+   reçoit la largeur par défaut de lib/table_layout.ts, jamais 0 px. */
 .db-table.col-fixed th,
 .db-table.col-fixed td {
   max-width: none;

@@ -228,9 +228,19 @@ const POOL: VitrineEntry[] = [
 ];
 
 describe("applyFilters", () => {
-  it("OU dans une famille, ET entre familles", () => {
-    const state = { ...emptyVitrineState(), domaine: ["ia", "quiz-exerciseurs"], prix: ["gratuit"] };
-    expect(applyFilters(POOL, state).map((e) => e.id)).toEqual(["2", "3"]);
+  it("ET dans Domaine : l'entrée porte tous les domaines cochés", () => {
+    const state = { ...emptyVitrineState(), domaine: ["ia", "quiz-exerciseurs"] };
+    expect(applyFilters(POOL, state).map((e) => e.id)).toEqual(["2"]);
+  });
+
+  it("OU dans Niveau, Prix et Type : une des valeurs cochées suffit", () => {
+    expect(applyFilters(POOL, { ...emptyVitrineState(), prix: ["gratuit", "freemium"] })).toHaveLength(4);
+    expect(applyFilters(POOL, { ...emptyVitrineState(), niveau: ["debutant", NON_PRECISE] })).toHaveLength(4);
+  });
+
+  it("ET entre familles", () => {
+    const state = { ...emptyVitrineState(), domaine: ["ia"], prix: ["gratuit", "freemium"], niveau: ["debutant"] };
+    expect(applyFilters(POOL, state).map((e) => e.id)).toEqual(["1"]);
   });
 
   it("« non-precise » prend les entrées sans valeur", () => {
@@ -248,13 +258,21 @@ describe("applyFilters", () => {
 });
 
 describe("facetCounts", () => {
-  it("compte une famille avec les filtres des autres seulement", () => {
-    const facets = facetCounts(POOL, { ...emptyVitrineState(), domaine: ["ia"], prix: ["gratuit"] });
+  it("compte chaque étiquette parmi les entrées qui passent tous les filtres", () => {
+    const facets = facetCounts(POOL, { ...emptyVitrineState(), domaine: ["ia"] });
     const dom = Object.fromEntries(facets.domaine.map((f) => [f.slug, f.count]));
-    expect(dom).toEqual({ ia: 1, "quiz-exerciseurs": 2, "mind-map": 0 });
+    expect(dom).toEqual({ ia: 2, "quiz-exerciseurs": 1, "mind-map": 0 });
     const prix = Object.fromEntries(facets.prix.map((f) => [f.slug, f.count]));
     expect(prix).toEqual({ freemium: 1, gratuit: 1 });
     expect(facets.domaine.find((f) => f.slug === "ia")?.active).toBe(true);
+  });
+
+  it("Domaine compté avec tous les filtres, Prix avec ceux des autres familles", () => {
+    const facets = facetCounts(POOL, { ...emptyVitrineState(), domaine: ["ia"], prix: ["gratuit"] });
+    const dom = Object.fromEntries(facets.domaine.map((f) => [f.slug, f.count]));
+    expect(dom).toEqual({ ia: 1, "quiz-exerciseurs": 1, "mind-map": 0 });
+    const prix = Object.fromEntries(facets.prix.map((f) => [f.slug, f.count]));
+    expect(prix).toEqual({ freemium: 1, gratuit: 1 });
   });
 
   it("compte « Non précisé » et omet les étiquettes que personne ne porte", () => {

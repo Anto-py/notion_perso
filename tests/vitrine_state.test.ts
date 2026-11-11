@@ -7,6 +7,7 @@ import {
   clearAll,
   ficheFromHref,
   findFiche,
+  menuValue,
   resolveFiche,
   resultsTitle,
   searchKey,
@@ -194,5 +195,22 @@ describe("ficheFromHref", () => {
     expect(ficheFromHref("/p/abc", origin)).toBeNull();
     expect(ficheFromHref("/veille?domaine=ia", origin)).toBeNull();
     expect(ficheFromHref("http://[mal", origin)).toBeNull();
+  });
+});
+
+describe("menuValue", () => {
+  const facet = (label: string, active: boolean) => ({ label, slug: slugify(label), count: 1, active });
+
+  it("rien de coché : « tous »", () => {
+    expect(menuValue([facet("Gratuit", false), facet("Payant", false)])).toBe("tous");
+  });
+
+  it("une ou deux valeurs : leurs noms, dans l'ordre du menu", () => {
+    expect(menuValue([facet("Gratuit", true), facet("Payant", false)])).toBe("Gratuit");
+    expect(menuValue([facet("Freemium", true), facet("Gratuit", false), facet("Payant", true)])).toBe("Freemium, Payant");
+  });
+
+  it("au-delà de deux : le nombre", () => {
+    expect(menuValue([facet("A", true), facet("B", true), facet("C", true)])).toBe("3 choisis");
   });
 });
