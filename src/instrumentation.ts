@@ -8,6 +8,8 @@
 //    tourne qu'une fois, tant que le rôle est porté par un dossier : après elle,
 //    `basesPageConverted` est vrai et plus rien ne se rejoue. Le Mac reçoit le
 //    résultat par la synchronisation. Un échec n'empêche pas le démarrage.
+//    Ensuite, une seule fois (marqueur `conversion.bases_liens`), les bases
+//    encastrées de cette page deviennent des liens icône + nom (2026-11-11).
 // 2. Purge de la corbeille (éléments de plus de 30 jours). L'autre déclencheur
 //    est l'ouverture de la corbeille (api/trash). Un échec n'empêche pas le
 //    serveur de démarrer.
@@ -43,6 +45,15 @@ export async function register() {
       await runBasesPageMove(db, { write: true }).then(
         (run) => console.log(describeConversion(run)),
         (error) => console.error("Conversion de la racine des bases impossible :", error),
+      );
+    }
+    // Après la racine : les bases encastrées de la page deviennent des liens
+    // icône + nom (2026-11-11). Une fois, le marqueur l'empêche de se rejouer.
+    const { basesLinksDone, describeLinksRun, runBasesLinks } = await import("./lib/bases_links_query");
+    if (!(await basesLinksDone(db))) {
+      await runBasesLinks(db, { write: true }).then(
+        (run) => console.log(describeLinksRun(run)),
+        (error) => console.error("Bases en liens impossibles :", error),
       );
     }
     if (!(await inboxPageConverted(db))) {

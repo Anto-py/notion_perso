@@ -26,7 +26,7 @@ import { conflictBlock } from "./conflictBlock";
 import { linkedBlock } from "./linkedBlock";
 import { youtubeBlock } from "./mediaBlocks";
 import { mentionSpec } from "./mention_inline";
-import { markFreshLink, subpageBlock } from "./subpageBlock";
+import { getPageDirectory, markFreshLink, subpageBlock } from "./subpageBlock";
 
 // Blocs proposés : ceux de BRAINSTORMING §2. Ni audio ni vidéo déposée (la
 // vidéo passe par YouTube), d'où une liste explicite plutôt que tout le défaut.
@@ -167,9 +167,11 @@ const MEDIA_GROUP = "Médias";
 
 // Le bloc s'insère aussitôt, en attente, puis reçoit l'id de l'enfant créé :
 // le curseur reste à sa place pendant la requête. Un échec retire le bloc.
-// Une base naît sous « Bases de données » (étapes 16 et 17) : le bloc en attente cède la place
-// à une vue liée de même position, qui n'a aucun pouvoir sur sa base.
-function childItems(editor: EditorInstance, onCreateChild: (kind: ChildKind) => Promise<string | null>) {
+// Une base naît sous « Bases de données » (étapes 16 et 17) : ailleurs, le bloc
+// en attente cède la place à une base encastrée de même position, qui n'a aucun
+// pouvoir sur sa base ; dans « Bases de données » même, il reste un lien icône
+// + nom, comme une sous-page (choix d'Antonin du 2026-11-11).
+function childItems(editor: EditorInstance, pageId: string, onCreateChild: (kind: ChildKind) => Promise<string | null>) {
   const item = (kind: ChildKind, title: string, subtext: string, aliases: string[], icon: string) => ({
     title,
     subtext,
@@ -178,10 +180,11 @@ function childItems(editor: EditorInstance, onCreateChild: (kind: ChildKind) => 
     icon: <span aria-hidden>{icon}</span>,
     onItemClick: () => {
       const inserted = insertOrUpdateBlockForSlashMenu(editor, { type: "subpage", props: { kind } });
+      const inBasesRoot = getPageDirectory().get(pageId)?.basesRoot === true;
       void onCreateChild(kind).then((id) => {
         const block = editor.getBlock(inserted.id);
         if (!block) return;
-        if (id && kind === "database") editor.replaceBlocks([block], [{ type: "linked", props: { databaseId: id, embed: true } }]);
+        if (id && kind === "database" && !inBasesRoot) editor.replaceBlocks([block], [{ type: "linked", props: { databaseId: id, embed: true } }]);
         else if (id) editor.updateBlock(block, { props: { pageId: id } });
         else editor.removeBlocks([block]);
       });
@@ -250,7 +253,7 @@ function slashItems(
   // Pages, le lien, la base encastrée ou la vue liée, puis colonnes, puis les
   // blocs courants.
   items.unshift(
-    ...(onCreateChild ? childItems(editor, onCreateChild) : []),
+    ...(onCreateChild ? childItems(editor, pageId, onCreateChild) : []),
     pageLinkItem(editor),
     embedItem(editor),
     linkedItem(editor),
