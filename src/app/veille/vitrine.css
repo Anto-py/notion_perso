@@ -478,6 +478,17 @@
   scroll-snap-align: start;
 }
 
+/* Pause du défilement : glyphes ⏸ et ▶ plus pleins que les flèches. */
+.vitrine .vitrine-pause {
+  font-size: 1rem;
+}
+
+/* Rangée qui défile seule : l'accrochage ramènerait la piste sur une carte
+   après chaque pas d'une fraction de pixel. */
+.vitrine .vitrine-row-track[data-marquee] {
+  scroll-snap-type: none;
+}
+
 /* Sentinelles des bouts de rangée : points d'accroche elles aussi, sinon
    l'accrochage obligatoire aligne la première carte au chargement et cache
    la sentinelle de départ (piste décalée de 21 px, mesuré). */

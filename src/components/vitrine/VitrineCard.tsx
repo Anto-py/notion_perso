@@ -27,17 +27,29 @@ function Text({ text, query }: { text: string; query: string | null }) {
   return query ? <Marked segments={highlightTerms(text, query)} /> : text;
 }
 
-export function VitrineCard({ entry, row, highlight }: { entry: VitrineEntry; row: SheetRow; highlight?: CardHighlight }) {
+// clone : copie d'une rangée qui défile en boucle (VitrineRow), cachée aux
+// lecteurs d'écran et hors du parcours au clavier, cliquable à la souris.
+export function VitrineCard({
+  entry,
+  row,
+  highlight,
+  clone,
+}: {
+  entry: VitrineEntry;
+  row: SheetRow;
+  highlight?: CardHighlight;
+  clone?: boolean;
+}) {
   const tags = entry.domaines.slice(0, TAGS_SHOWN);
   const more = entry.domaines.length - tags.length;
   const meta = [entry.niveau, ...entry.prix].filter(Boolean).join(" · ");
   const query = highlight?.query ?? null;
   const snippet = highlight?.snippets.get(entry.slug);
   return (
-    <article className="vitrine-card">
+    <article className="vitrine-card" aria-hidden={clone || undefined} data-clone={clone || undefined}>
       <h3 className="vitrine-card-title">
         <VitrineLogo entry={entry} />
-        <a className="vitrine-card-link" href={ficheHref(entry.slug)} data-fiche={entry.slug} data-row={row}>
+        <a className="vitrine-card-link" href={ficheHref(entry.slug)} data-fiche={entry.slug} data-row={row} tabIndex={clone ? -1 : undefined}>
           <Text text={entry.title || "Sans titre"} query={query} />
         </a>
         {entry.coeur ? (

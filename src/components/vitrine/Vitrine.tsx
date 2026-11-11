@@ -235,8 +235,8 @@ export function Vitrine({ entries, initialState, initialSearch, missingFiche }: 
       <div className="vitrine-cards" onClick={onCardClick}>
         {view.kind === "vitrine" ? (
           <>
-            {view.heart.length ? <VitrineRow id="coeur" title="★ Coups de cœur" entries={view.heart} /> : null}
-            <VitrineRow id="recent" title="✦ Ajoutés récemment" entries={view.recent} />
+            {view.heart.length ? <VitrineRow id="coeur" title="★ Coups de cœur" entries={view.heart} autoScroll="gauche" /> : null}
+            <VitrineRow id="recent" title="✦ Ajoutés récemment" entries={view.recent} autoScroll="droite" />
             <VitrineGrid entries={view.all} />
           </>
         ) : (
