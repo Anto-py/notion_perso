@@ -190,12 +190,14 @@ const READERS = {
 // d'avant : le champ absent prend cette valeur, sans quoi la base serait
 // refusée, ou passerait pour un changement du Mac à la fusion (sameJson tient
 // une clé absente pour différente de false). La ligne envoyée, elle, reste
-// exigée complète.
+// exigée complète. Le Mac complète aussi ses instantanés avant de comparer
+// une empreinte (sync_client_plan.ts, baseHash) : sans cela, une ligne
+// intacte passait pour modifiée et le changement du serveur était perdu.
 const BASE_DEFAULTS: Partial<Record<SyncKind, Record<string, unknown>>> = {
   page: { shareClosed: false, isBasesRoot: false, rootException: false }, // migrations 0011_ne_pas_partager, 0012_bases, 0013_exception_to_do
 };
 
-function withBaseDefaults(kind: SyncKind, base: unknown): unknown {
+export function withBaseDefaults(kind: SyncKind, base: unknown): unknown {
   const defaults = BASE_DEFAULTS[kind];
   if (!defaults || !isObj(base)) return base;
   const filled: Record<string, unknown> = { ...base };

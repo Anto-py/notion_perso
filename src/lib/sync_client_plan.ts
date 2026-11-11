@@ -5,7 +5,16 @@
 import { createHash } from "node:crypto";
 import { bodyHasContent } from "./blocks";
 import type { SyncPage } from "./sync_merge";
-import { SYNC_BATCH, writeOrder, type Change, type PushItem, type SyncIconImage, type SyncKind, type SyncMedia } from "./sync_protocol";
+import {
+  SYNC_BATCH,
+  withBaseDefaults,
+  writeOrder,
+  type Change,
+  type PushItem,
+  type SyncIconImage,
+  type SyncKind,
+  type SyncMedia,
+} from "./sync_protocol";
 
 export type SyncRow = SyncPage | SyncMedia | SyncIconImage;
 export type RowKey = string;
@@ -31,6 +40,13 @@ export function rowHash(row: SyncRow): string {
 // La dernière version reçue du serveur pour une ligne (table sync_base).
 export type BaseEntry = { kind: SyncKind; id: string; rev: number; hash: string; snapshot: SyncRow };
 
+// Empreinte à laquelle comparer la ligne locale : celle de l'instantané
+// complété des champs ajoutés depuis par migration (BASE_DEFAULTS). Le `hash`
+// gardé en base date de l'instantané et ne les compte pas.
+export function baseHash(base: BaseEntry): string {
+  return rowHash(withBaseDefaults(base.kind, base.snapshot) as SyncRow);
+}
+
 // Une ligne locale à examiner : sa version actuelle (null si effacée sur le
 // Mac) et sa base (null si créée sur le Mac).
 export type Candidate = { kind: SyncKind; id: string; row: SyncRow | null; base: BaseEntry | null };
@@ -39,7 +55,7 @@ export type Candidate = { kind: SyncKind; id: string; row: SyncRow | null; base:
 // version reçue. Une écriture qui ne change rien (même empreinte) n'attend pas.
 export function isPending(candidate: Candidate): boolean {
   if (!candidate.row) return candidate.base !== null;
-  return !candidate.base || rowHash(candidate.row) !== candidate.base.hash;
+  return !candidate.base || rowHash(candidate.row) !== baseHash(candidate.base);
 }
 
 // --- Envoi ----------------------------------------------------------------------
@@ -135,7 +151,7 @@ export function decideIncoming(
   sent: string | null | undefined,
 ): IncomingDecision {
   if (sent === undefined && base && change.rev <= base.rev) return "same";
-  const expected = sent !== undefined ? sent : (base?.hash ?? null);
+  const expected = sent !== undefined ? sent : base ? baseHash(base) : null;
   return localHash === expected ? "apply" : "keep";
 }
 

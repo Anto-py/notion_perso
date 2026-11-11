@@ -95,6 +95,12 @@ describe("isPending", () => {
     expect(isPending(candidate({ ...row }, base(row)))).toBe(false);
   });
 
+  it("instantané d'avant une migration qui ajoute un champ : la ligne intacte n'attend pas", () => {
+    const { rootException: _absent, ...old } = row;
+    const oldEntry: BaseEntry = { kind: "page", id: row.id, rev: 5, hash: rowHash(old as SyncPage), snapshot: old as SyncPage };
+    expect(isPending(candidate({ ...row }, oldEntry))).toBe(false);
+  });
+
   it("modifiée, créée ou effacée sur le Mac : elle attend", () => {
     expect(isPending(candidate({ ...row, title: "Autre" }, base(row)))).toBe(true);
     expect(isPending(candidate(row, null))).toBe(true);
@@ -200,6 +206,16 @@ describe("decideIncoming", () => {
 
   it("révision déjà reçue : rien à écrire", () => {
     expect(decideIncoming({ ...incoming, rev: 5 }, entry.hash, entry, undefined)).toBe("same");
+  });
+
+  // Mesuré le 2026-11-11 : 1066 instantanés d'avant la migration 0013 n'ont pas
+  // rootException ; la ligne locale l'a. Le Mac gardait sa version, sans jamais
+  // l'envoyer (révision locale inchangée), et perdait le changement du serveur.
+  it("instantané d'avant une migration qui ajoute un champ : la ligne intacte reçoit le changement", () => {
+    const { rootException: _absent, ...old } = page();
+    const oldEntry: BaseEntry = { kind: "page", id: "pg_1", rev: 5, hash: rowHash(old as SyncPage), snapshot: old as SyncPage };
+    expect(decideIncoming(incoming, rowHash(page()), oldEntry, undefined)).toBe("apply");
+    expect(decideIncoming(incoming, rowHash(page({ title: "Du Mac" })), oldEntry, undefined)).toBe("keep");
   });
 
   it("réponse à un envoi : on écrit si la ligne n'a pas bougé depuis l'envoi", () => {
