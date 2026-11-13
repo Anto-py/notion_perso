@@ -288,6 +288,24 @@ function LinkedDatabase({ databaseId, config, embed, onPick, onConfig }: Props) 
     else reload();
   }
 
+  // Carte-brouillon du Kanban : l'entrée naît sous le titre tapé, dans la
+  // colonne d'où l'on part, sans quitter la page hôte.
+  async function createCard(values: Values, title: string): Promise<boolean> {
+    if (!loaded) return false;
+    setMessage(null);
+    const result = await send("/api/entries", "POST", {
+      dbId: loaded.database.id,
+      title,
+      values: { ...prefillValues(view, properties), ...values },
+    });
+    if (!result.ok) {
+      setMessage(result.error);
+      return false;
+    }
+    reload();
+    return true;
+  }
+
   // Créer une entrée depuis le sélecteur d'une relation : elle naît dans la
   // base cible, sans quitter la page hôte.
   async function createLinkedEntry(prop: Property, title: string): Promise<string | null> {
@@ -443,7 +461,7 @@ function LinkedDatabase({ databaseId, config, embed, onPick, onConfig }: Props) 
             collapsedKeys={view.collapsed_columns[groupProp.id] ?? []}
             entries={visible}
             allIds={loaded.entries.map((entry) => entry.id)}
-            onCreate={(values) => void createEntry(values)}
+            onCreate={createCard}
             onMove={moveCard}
             onRename={renameEntry}
             onColumns={(patch) => changeView(withBoardColumns(view, groupProp.id, patch))}

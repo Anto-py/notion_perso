@@ -35,8 +35,10 @@ import {
   type Value,
   type Values,
 } from "@/lib/properties";
+import { isBeforeMiddle, pointerAt } from "@/lib/drag_pointer";
 import type { BoardColumnsPatch } from "@/lib/views";
 import { KanbanCard } from "./KanbanCard";
+import { KanbanDraft } from "./KanbanDraft";
 import { PageLabel } from "./PageIcon";
 import { OptionChip } from "./propertyUi";
 
@@ -54,7 +56,8 @@ type Props = {
   collapsedKeys: string[]; // colonnes repliées
   entries: EntryRow[]; // visibles, dans l'ordre manuel
   allIds: string[]; // toutes les entrées de la base, masquées comprises
-  onCreate: (values: Values) => void;
+  // Crée l'entrée sous le titre tapé sur la carte-brouillon, sans ouvrir sa page.
+  onCreate: (values: Values, title: string) => Promise<boolean>;
   onMove: (entryId: string, value: Value | null, order: string[]) => Promise<void>;
   onRename: (entryId: string, title: string) => Promise<boolean>;
   onColumns: (patch: BoardColumnsPatch) => void;
@@ -239,19 +242,25 @@ export function KanbanView({
   );
 }
 
-// Avant ou après la cible, selon le centre de l'élément tiré : vertical pour
-// une carte devant une carte, horizontal pour une colonne devant une colonne.
-// Une carte au-dessus d'une colonne n'a pas de trait (dépôt en fin).
+// Avant ou après la cible, selon le pointeur : vertical pour une carte devant
+// une carte, horizontal pour une colonne devant une colonne. Le centre de
+// l'élément tiré ne sert qu'en repli (clavier) : la poignée est en haut à
+// gauche, ce centre est bien plus bas que le pointeur et la première place
+// restait inatteignable. Une carte au-dessus d'une colonne n'a pas de trait
+// (dépôt en fin).
 function hintOf(event: DragOverEvent | DragEndEvent): Hint | null {
-  const { active, over } = event;
+  const { active, over, activatorEvent, delta } = event;
   if (!over || over.id === active.id) return null;
   const id = String(over.id);
   const rect = active.rect.current.translated;
+  const pointer = pointerAt(activatorEvent, delta);
   if (isColumnDrag(active.id)) {
     if (!isColumnTarget(id) || id.slice(COLUMN_PREFIX.length) === String(active.id).slice(MOVE_PREFIX.length)) return null;
+    if (pointer) return { id, before: isBeforeMiddle(pointer.x, over.rect.left, over.rect.width) };
     return { id, before: rect ? rect.left + rect.width / 2 < over.rect.left + over.rect.width / 2 : true };
   }
   if (isColumnTarget(id)) return null;
+  if (pointer) return { id, before: isBeforeMiddle(pointer.y, over.rect.top, over.rect.height) };
   return { id, before: rect ? rect.top + rect.height / 2 < over.rect.top + over.rect.height / 2 : true };
 }
 
@@ -261,7 +270,7 @@ type ColumnProps = {
   properties: Property[];
   hint: Hint | null;
   collapsed: boolean;
-  onCreate: (values: Values) => void;
+  onCreate: (values: Values, title: string) => Promise<boolean>;
   onRename: (entryId: string, title: string) => Promise<boolean>;
   onToggle: () => void;
   onHandleKey: (event: KeyboardEvent) => void;
@@ -271,7 +280,10 @@ function BoardColumn({ column, groupProp, properties, hint, collapsed, onCreate,
   const key = columnKey(column);
   const drop = useDroppable({ id: COLUMN_PREFIX + key });
   const drag = useDraggable({ id: MOVE_PREFIX + key });
-  const create = () => onCreate(column.value === null ? {} : { [groupProp.id]: column.value });
+  // « + » ouvre une carte-brouillon en bas de colonne, là où l'entrée naîtra.
+  const [drafting, setDrafting] = useState(false);
+  const create = () => setDrafting(true);
+  const submit = (title: string) => onCreate(column.value === null ? {} : { [groupProp.id]: column.value }, title);
 
   const classes = ["board-column"];
   if (collapsed) classes.push("collapsed");
@@ -341,6 +353,7 @@ function BoardColumn({ column, groupProp, properties, hint, collapsed, onCreate,
               onRename={onRename}
             />
           ))}
+          {drafting && <KanbanDraft onSubmit={submit} onClose={() => setDrafting(false)} />}
         </div>
       )}
     </section>

@@ -249,6 +249,23 @@ export function DatabaseView({ database, config, entries, databases, initialView
     router.push(`/page/${String(result.data.id)}`);
   }
 
+  // Carte-brouillon du Kanban : l'entrée naît sous le titre tapé, dans la
+  // colonne d'où l'on part, et l'on reste sur le tableau.
+  async function createCard(values: Values, title: string): Promise<boolean> {
+    setMessage(null);
+    const result = await send("/api/entries", "POST", {
+      dbId: database.id,
+      title,
+      values: { ...prefillValues(view, properties), ...values },
+    });
+    if (!result.ok) {
+      setMessage(result.error);
+      return false;
+    }
+    router.refresh();
+    return true;
+  }
+
   // Titre écrit sur une carte : le PATCH de la page suffit, sans ouvrir l'entrée.
   async function renameEntry(entryId: string, title: string): Promise<boolean> {
     setMessage(null);
@@ -545,7 +562,7 @@ export function DatabaseView({ database, config, entries, databases, initialView
             collapsedKeys={view.collapsed_columns[groupProp.id] ?? []}
             entries={visible}
             allIds={entries.map((entry) => entry.id)}
-            onCreate={createEntry}
+            onCreate={createCard}
             onMove={moveCard}
             onRename={renameEntry}
             onColumns={(patch) => changeView(withBoardColumns(view, groupProp.id, patch))}

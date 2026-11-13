@@ -2329,6 +2329,17 @@ body.sidebar-resizing {
   opacity: 0.4;
 }
 
+/* Brouillon de création : une carte pas encore enregistrée. */
+.board-card-draft {
+  border-style: dashed;
+  border-color: var(--accent);
+}
+
+.board-card-draft .board-card-input {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* Trait de dépôt : la carte prendra la place juste avant ou juste après. */
 .board-card.drop-before {
   box-shadow: 0 -2px 0 var(--accent);
