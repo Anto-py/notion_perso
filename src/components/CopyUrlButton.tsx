@@ -5,6 +5,7 @@
 // confirme un instant. Repli sur un champ temporaire quand l'API presse-papiers
 // n'est pas disponible (contexte non sécurisé, navigateur ancien).
 import { useEffect, useRef, useState } from "react";
+import { copyText } from "./copy_text";
 
 type CopyState = "idle" | "copied" | "failed";
 
@@ -15,13 +16,7 @@ export function CopyUrlButton({ url, label = "Copier" }: { url: string; label?: 
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
   async function copy() {
-    let ok = false;
-    try {
-      await navigator.clipboard.writeText(url);
-      ok = true;
-    } catch {
-      ok = legacyCopy(url);
-    }
+    const ok = await copyText(url);
     setState(ok ? "copied" : "failed");
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => setState("idle"), 1500);
@@ -38,23 +33,4 @@ export function CopyUrlButton({ url, label = "Copier" }: { url: string; label?: 
       {state === "copied" ? "Copié" : state === "failed" ? "Échec" : label}
     </button>
   );
-}
-
-// Repli : un champ hors écran, sélectionné, copié par la commande du navigateur.
-function legacyCopy(text: string): boolean {
-  const field = document.createElement("textarea");
-  field.value = text;
-  field.setAttribute("readonly", "");
-  field.style.position = "fixed";
-  field.style.opacity = "0";
-  document.body.appendChild(field);
-  field.select();
-  let ok = false;
-  try {
-    ok = document.execCommand("copy");
-  } catch {
-    ok = false;
-  }
-  field.remove();
-  return ok;
 }

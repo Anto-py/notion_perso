@@ -559,3 +559,50 @@ describe("bloc propriétaire d'une sous-page déplacée", () => {
     expect(body).toEqual(start);
   });
 });
+
+describe("renderHtml, identifiants de bloc", () => {
+  const withId = (id: string, type: string, content: unknown = [], props: Record<string, unknown> = {}, children: unknown[] = []) => ({
+    id,
+    ...block(type, content, props, children),
+  });
+
+  it("ne pose aucun id sans l'option (la vitrine rend plusieurs corps dans une page)", () => {
+    expect(renderHtml([withId("b1", "paragraph", [text("a")])])).toBe("<p>a</p>");
+  });
+
+  it("pose l'id du bloc sur son élément quand l'option est active", () => {
+    const body = [withId("b1", "paragraph", [text("a")]), withId("b2", "heading", [text("T")], { level: 1 })];
+    expect(renderHtml(body, { blockIds: true })).toBe('<p id="b1">a</p><h2 id="b2">T</h2>');
+  });
+
+  it("garde les classes d'alignement et de couleur", () => {
+    const body = [withId("b1", "paragraph", [text("a")], { textAlignment: "center" })];
+    expect(renderHtml(body, { blockIds: true })).toBe('<p id="b1" class="align-center">a</p>');
+  });
+
+  it("pose l'id de chaque élément d'une liste sur son <li>, pas sur la liste", () => {
+    const body = [withId("l1", "bulletListItem", [text("un")]), withId("l2", "bulletListItem", [text("deux")])];
+    expect(renderHtml(body, { blockIds: true })).toBe('<ul><li id="l1">un</li><li id="l2">deux</li></ul>');
+  });
+
+  it("atteint les blocs enfants", () => {
+    const body = [withId("b1", "paragraph", [text("père")], {}, [withId("b2", "paragraph", [text("fils")])])];
+    expect(renderHtml(body, { blockIds: true })).toBe('<p id="b1">père</p><div class="block-children"><p id="b2">fils</p></div>');
+  });
+
+  it("pose l'id sur un séparateur et un bloc dépliable", () => {
+    expect(renderHtml([withId("d1", "divider")], { blockIds: true })).toBe('<hr id="d1">');
+    const toggle = withId("t1", "toggleListItem", [text("titre")], {}, [withId("t2", "paragraph", [text("dedans")])]);
+    expect(renderHtml([toggle], { blockIds: true })).toBe('<details id="t1"><summary>titre</summary><p id="t2">dedans</p></details>');
+  });
+
+  it("ignore un bloc sans id ou dont l'id est douteux", () => {
+    const body = [block("paragraph", [text("a")]), withId('x"y', "paragraph", [text("b")])];
+    expect(renderHtml(body, { blockIds: true })).toBe("<p>a</p><p>b</p>");
+  });
+
+  it("ne rend toujours rien pour un bloc qui ne rend rien", () => {
+    const box = { id: "c1", type: "conflict", props: {}, children: [] };
+    expect(renderHtml([box], { blockIds: true })).toBe("");
+  });
+});

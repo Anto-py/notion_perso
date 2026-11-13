@@ -4858,6 +4858,60 @@ button.link.icon-danger {
   z-index: 5;
 }
 
+/* Bloc visé par un lien `#<bloc>` (étape 21, palier d) : calque posé à côté de
+   l'éditeur par components/useBlockAnchor.ts, jamais sur un nœud de ProseMirror
+   qui réécrirait la classe. Sur la page publique, `:target` fait la même chose
+   sans script ; l'id n'y est posé que par renderHtml({ blockIds }). */
+.block-flash {
+  position: absolute;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  pointer-events: none;
+  z-index: 4;
+  animation: block-flash 2.4s ease-out forwards;
+}
+
+.public-body [id] {
+  scroll-margin-top: 25vh;
+}
+
+.public-body :target {
+  border-radius: 4px;
+  animation: block-target 2.4s ease-out;
+}
+
+@keyframes block-flash {
+  0%,
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes block-target {
+  0%,
+  55% {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+/* Sans animation, le bloc visé reste simplement teinté. */
+@media (prefers-reduced-motion: reduce) {
+  .block-flash {
+    animation: none;
+  }
+
+  .public-body :target {
+    animation: none;
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+}
+
 /* Section « Vitrine » du panneau « Partager » d'une base (étape 20). */
 .share-vitrine {
   display: flex;

@@ -22,7 +22,9 @@ import { planBlockRuns } from "@/lib/web_save";
 import { youtubeId } from "@/lib/youtube";
 import { columnBlock, columnListBlock } from "./columnsBlock";
 import { BlockSideMenu } from "./BlockMenu";
+import { BlockLinkProvider } from "./BlockLink";
 import { BlockMoveProvider } from "./BlockMove";
+import { useBlockAnchor } from "./useBlockAnchor";
 import { bookmarkBlock } from "./bookmarkBlock";
 import { conflictBlock } from "./conflictBlock";
 import { linkedBlock } from "./linkedBlock";
@@ -95,6 +97,11 @@ type Props = {
   // Message d'un geste refusé ou raté (déplacement d'un bloc), affiché en haut
   // de la page ; chaîne vide pour l'effacer.
   onError: (message: string) => void;
+  // Message de réussite (« Lien copié »), affiché en haut de la page.
+  onNotice: (message: string) => void;
+  // Adresse du site que copie « Copier le lien du bloc » : celle du serveur
+  // distant sur le Mac, vide ailleurs (l'origine de la page fait foi).
+  siteOrigin: string;
   // Poignée tendue à PageView, qui n'importe rien de ce module chargé
   // seulement dans le navigateur ; null quand l'éditeur disparaît.
   onReady?: (handle: EditorHandle | null) => void;
@@ -278,12 +285,14 @@ function slashItems(
   return items;
 }
 
-export default function Editor({ pageId, initialBody, onCreateChild, onChange, onUploadState, onError, onReady }: Props) {
+export default function Editor({ pageId, initialBody, onCreateChild, onChange, onUploadState, onError, onNotice, siteOrigin, onReady }: Props) {
   // uploadFile n'est appelé qu'après la création de l'éditeur : la ref est
   // alors remplie (effet ci-dessous).
   const editorRef = useRef<EditorInstance | null>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   useEdgeScroll(hostRef);
+  // Arrivée par un lien de bloc : défilement et éclat (useBlockAnchor).
+  const flash = useBlockAnchor(hostRef, pageId);
   const editor = useCreateBlockNote({
     schema,
     dictionary: fr,
@@ -347,13 +356,22 @@ export default function Editor({ pageId, initialBody, onCreateChild, onChange, o
   return (
     <div ref={hostRef} className="editor-host" data-drop-page={acceptsSubpages ? pageId : undefined}>
       {spot && <div className="editor-drop-line" style={{ top: spot.top, left: spot.left, width: spot.width }} aria-hidden />}
+      {flash && <div className="block-flash" style={{ top: flash.top, left: flash.left, width: flash.width, height: flash.height }} aria-hidden />}
       <BlockNoteView editor={editor} theme="light" slashMenu={false} sideMenu={false} onChange={() => onChange(editor.document)}>
         <SuggestionMenuController
           triggerCharacter="/"
           getItems={async (query) => filterSuggestionItems(slashItems(editor, pageId, onCreateChild), query)}
         />
         <BlockMoveProvider pageId={pageId} onError={onError}>
-          <SideMenuController sideMenu={BlockSideMenu} />
+          <BlockLinkProvider
+            pageId={pageId}
+            siteOrigin={siteOrigin}
+            initialBody={initialBody}
+            onNotice={onNotice}
+            onSave={() => onChange(editor.document)}
+          >
+            <SideMenuController sideMenu={BlockSideMenu} />
+          </BlockLinkProvider>
         </BlockMoveProvider>
       </BlockNoteView>
     </div>

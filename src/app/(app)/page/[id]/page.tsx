@@ -8,6 +8,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { configOf, linksForValues } from "@/lib/databases";
 import { countFolderBases, getPage, linkTargets, listDatabases, listFolder, listTreeRows } from "@/lib/pages";
 import { normalizeValues, withTimes } from "@/lib/properties";
+import { syncConfig } from "@/lib/sync_config";
 import { fillRollups, fillTwins } from "@/lib/relation_query";
 import { ancestorRows } from "@/lib/tree";
 
@@ -87,6 +88,7 @@ async function PageLoader({ params }: Pick<PageProps<"/page/[id]">, "params">) {
       entry={entry}
       directory={directory}
       absent={targets.absent}
+      siteOrigin={syncConfig()?.remote ?? ""}
     />
   );
 }

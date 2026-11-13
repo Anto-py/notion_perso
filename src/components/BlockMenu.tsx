@@ -23,6 +23,7 @@ import {
 import type { ReactNode } from "react";
 import { duplicateBlocks, type DupBlock } from "@/lib/block_duplicate";
 import { transformTargets } from "@/lib/block_transform";
+import { useCopyBlockLink } from "./BlockLink";
 import { useAskBlockMove } from "./BlockMove";
 
 // Ouvre le sélecteur de page, tenu hors du menu (BlockMove.tsx) : le menu de la
@@ -35,6 +36,21 @@ function MoveBlockItem({ children }: { children: ReactNode }) {
   if (block === undefined || !ask) return null;
   return (
     <Components.Generic.Menu.Item className="bn-menu-item" onClick={() => ask(block.id)}>
+      {children}
+    </Components.Generic.Menu.Item>
+  );
+}
+
+// Copie `<site>/page/<page>#<bloc>` ; le fournisseur de BlockLink.tsx mène la copie
+// hors du menu, qui se ferme au clic, et annonce « Lien copié ».
+function CopyBlockLinkItem({ children }: { children: ReactNode }) {
+  const Components = useComponentsContext()!;
+  const editor = useBlockNoteEditor();
+  const copy = useCopyBlockLink();
+  const block = useExtensionState(SideMenuExtension, { editor, selector: (state) => state?.block });
+  if (block === undefined || !copy) return null;
+  return (
+    <Components.Generic.Menu.Item className="bn-menu-item" onClick={() => copy(block.id)}>
       {children}
     </Components.Generic.Menu.Item>
   );
@@ -102,6 +118,7 @@ function BlockDragHandleMenu() {
       <RemoveBlockItem>{dictionary.drag_handle.delete_menuitem}</RemoveBlockItem>
       <MoveBlockItem>Déplacer vers…</MoveBlockItem>
       <DuplicateBlockItem>Dupliquer</DuplicateBlockItem>
+      <CopyBlockLinkItem>Copier le lien du bloc</CopyBlockLinkItem>
       <BlockColorsItem>{dictionary.drag_handle.colors_menuitem}</BlockColorsItem>
       <TransformBlockItem>Transformer en</TransformBlockItem>
       <TableRowHeaderItem>{dictionary.drag_handle.header_row_menuitem}</TableRowHeaderItem>

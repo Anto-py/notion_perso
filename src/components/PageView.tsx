@@ -4,7 +4,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { EditorHandle, UploadState } from "./Editor";
 import type { LinkRef, Property, Values } from "@/lib/properties";
 import type { SaveStatus } from "@/lib/saver";
@@ -55,12 +55,26 @@ type Props = {
   directory: TreeRow[];
   // Cibles de blocs-liens absentes de l'arbre : en corbeille ou purgées.
   absent: Readonly<Record<string, AbsentTarget>>;
+  // Adresse du serveur distant sur le Mac (`SYNC_REMOTE_URL`), vide sur le web :
+  // « Copier le lien du bloc » ne doit jamais copier localhost.
+  siteOrigin: string;
 };
 
-export function PageView({ page, entry, directory, absent }: Props) {
+// Durée d'un message de réussite (« Lien copié ») en haut de la page.
+const NOTICE_MS = 2500;
+
+export function PageView({ page, entry, directory, absent, siteOrigin }: Props) {
   const router = useRouter();
   const [upload, setUpload] = useState<UploadState>(null);
   const [trashError, setTrashError] = useState<string | null>(null);
+  const [notice, setNotice] = useState("");
+  const noticeTimer = useRef<number | undefined>(undefined);
+  const showNotice = useCallback((message: string) => {
+    window.clearTimeout(noticeTimer.current);
+    setNotice(message);
+    noticeTimer.current = window.setTimeout(() => setNotice(""), NOTICE_MS);
+  }, []);
+  useEffect(() => () => window.clearTimeout(noticeTimer.current), []);
   const mainRef = useRef<HTMLElement>(null);
   useSearchHighlight(mainRef);
   const editor = useRef<EditorHandle | null>(null);
@@ -131,6 +145,11 @@ export function PageView({ page, entry, directory, absent }: Props) {
         <SaveIndicator status={status} pending={pagePending} />
         <UploadIndicator state={upload} onDismiss={() => setUpload(null)} />
         {trashError && <span className="status status-error">{trashError}</span>}
+        {notice && (
+          <span className="status" role="status">
+            {notice}
+          </span>
+        )}
         <SharePanel pageId={page.id} initialPublicId={page.publicId} initialClosed={page.shareClosed} />
         <button type="button" className="ghost" onClick={moveToTrash}>
           Supprimer
@@ -166,6 +185,8 @@ export function PageView({ page, entry, directory, absent }: Props) {
         }}
         onUploadState={setUpload}
         onError={setTrashError}
+        onNotice={showNotice}
+        siteOrigin={siteOrigin}
         onReady={onEditorReady}
       />
     </main>

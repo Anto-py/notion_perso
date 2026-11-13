@@ -4,6 +4,7 @@
 //
 // Le corps arrive du navigateur : on le parcourt sans lui faire confiance,
 // chaque champ inattendu est simplement ignoré.
+import { withBlockId } from "./block_link.ts";
 import { iconSrc, resolveIcon } from "./icons.ts";
 import { mentionProps } from "./mention.ts";
 import type { Orphan } from "./properties.ts";
@@ -431,6 +432,10 @@ export type RenderOptions = {
   // HTML d'une vue liée, calculé à part : il demande les entrées de la base
   // source. Absent : le bloc ne rend rien (écran de sauvegarde, par exemple).
   linked?: (databaseId: string, config: unknown) => string | null;
+  // Pose l'identifiant de chaque bloc en `id` HTML, pour qu'un lien `#<bloc>`
+  // défile jusqu'à lui (page publiée, sauvegarde). Absent par défaut : la vitrine
+  // rend plusieurs corps dans une même page, où un id pourrait se répéter.
+  blockIds?: boolean;
 };
 
 // Double HTML de PageIcon (components/PageIcon.tsx) pour le corps public.
@@ -567,6 +572,11 @@ function blockHtml(block: Json, options: RenderOptions): string {
   }
 }
 
+// Pose l'identifiant du bloc sur l'élément qu'il vient de rendre (option blockIds).
+function tagged(html: string, block: Json, options: RenderOptions): string {
+  return options.blockIds && isObject(block) && typeof block.id === "string" ? withBlockId(html, block.id) : html;
+}
+
 // Les éléments de liste consécutifs de même type forment une seule liste.
 function blocksHtml(blocks: Json[], options: RenderOptions): string {
   let html = "";
@@ -575,7 +585,7 @@ function blocksHtml(blocks: Json[], options: RenderOptions): string {
     const first = blocks[i];
     const list = isObject(first) && typeof first.type === "string" ? LISTS[first.type] : undefined;
     if (!list || !isObject(first)) {
-      html += blockHtml(first, options);
+      html += tagged(blockHtml(first, options), first, options);
       i++;
       continue;
     }
@@ -583,7 +593,7 @@ function blocksHtml(blocks: Json[], options: RenderOptions): string {
     while (i < blocks.length) {
       const item = blocks[i];
       if (!isObject(item) || item.type !== first.type) break;
-      items += listItemHtml(item, options);
+      items += tagged(listItemHtml(item, options), item, options);
       i++;
     }
     const start = propsOf(first).start;

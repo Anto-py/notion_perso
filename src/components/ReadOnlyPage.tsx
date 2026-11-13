@@ -13,6 +13,7 @@ import { crumbTrail } from "@/lib/publication";
 import { publicDatabaseData, type PublicDatabaseData } from "@/lib/public_view";
 import { linkedViews, parseLinkedConfig, pickView, type View } from "@/lib/views";
 import { PageCover } from "./PageCover";
+import { PublicBlockAnchor } from "./PublicBlockAnchor";
 import { PublicDatabaseView } from "./PublicDatabaseView";
 import { PublicLinkedIslands, type LinkedIsland } from "./PublicLinkedIslands";
 import { PageIcon, PageLabel } from "./PageIcon";
@@ -90,6 +91,7 @@ export async function ReadOnlyPage({
       {body ? (
         <>
           <div className="public-body" dangerouslySetInnerHTML={{ __html: body.html }} />
+          <PublicBlockAnchor />
           {body.islands.length > 0 && <PublicLinkedIslands islands={body.islands} />}
         </>
       ) : (
@@ -135,6 +137,8 @@ async function bodyHtml(
     },
     internal: (id) => (!reach || reach.node(id) ? href(id) : null),
     linked: (databaseId, config) => linkedHtml.get(linkedKey(databaseId, config)) ?? null,
+    // Un lien `#<bloc>` défile jusqu'au bloc (le corps d'une page, seul dans sa page).
+    blockIds: true,
   });
   return { html: mediaBase === MEDIA_BASE ? html : html.replaceAll(MEDIA_BASE, mediaBase), islands };
 }

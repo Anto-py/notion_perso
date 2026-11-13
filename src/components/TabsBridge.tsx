@@ -4,6 +4,7 @@
 // Ne rend rien : la barre et les écrans lisent le magasin.
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useSyncExternalStore } from "react";
+import { blockIdFromHash } from "@/lib/block_link";
 import { appPathname, startPathname } from "@/lib/tabs";
 import {
   getServerSnapshot,
@@ -77,7 +78,10 @@ export function TabsBridge() {
   useEffect(() => {
     if (!state.ready) return;
     syncPathname(pathname);
-    restoreScroll(scrollFor(appPathname(pathname) ?? "/"));
+    // Un lien de bloc (#<bloc>) place lui-même la page (useBlockAnchor) : lui
+    // opposer la position mémorisée de l'onglet l'écraserait pendant 1,5 s.
+    const anchored = blockIdFromHash(window.location.hash) !== null;
+    restoreScroll(anchored ? 0 : scrollFor(appPathname(pathname) ?? "/"));
   }, [pathname, state.ready]);
 
   // Défilement courant de l'onglet actif, sans rendu.
