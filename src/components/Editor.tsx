@@ -22,6 +22,7 @@ import { planBlockRuns } from "@/lib/web_save";
 import { youtubeId } from "@/lib/youtube";
 import { columnBlock, columnListBlock } from "./columnsBlock";
 import { BlockSideMenu } from "./BlockMenu";
+import { BlockMoveProvider } from "./BlockMove";
 import { bookmarkBlock } from "./bookmarkBlock";
 import { conflictBlock } from "./conflictBlock";
 import { linkedBlock } from "./linkedBlock";
@@ -91,6 +92,9 @@ type Props = {
   onCreateChild?: (kind: ChildKind) => Promise<string | null>;
   onChange: (body: EditorBlocks) => void;
   onUploadState: (state: UploadState) => void;
+  // Message d'un geste refusé ou raté (déplacement d'un bloc), affiché en haut
+  // de la page ; chaîne vide pour l'effacer.
+  onError: (message: string) => void;
   // Poignée tendue à PageView, qui n'importe rien de ce module chargé
   // seulement dans le navigateur ; null quand l'éditeur disparaît.
   onReady?: (handle: EditorHandle | null) => void;
@@ -274,7 +278,7 @@ function slashItems(
   return items;
 }
 
-export default function Editor({ pageId, initialBody, onCreateChild, onChange, onUploadState, onReady }: Props) {
+export default function Editor({ pageId, initialBody, onCreateChild, onChange, onUploadState, onError, onReady }: Props) {
   // uploadFile n'est appelé qu'après la création de l'éditeur : la ref est
   // alors remplie (effet ci-dessous).
   const editorRef = useRef<EditorInstance | null>(null);
@@ -348,7 +352,9 @@ export default function Editor({ pageId, initialBody, onCreateChild, onChange, o
           triggerCharacter="/"
           getItems={async (query) => filterSuggestionItems(slashItems(editor, pageId, onCreateChild), query)}
         />
-        <SideMenuController sideMenu={BlockSideMenu} />
+        <BlockMoveProvider pageId={pageId} onError={onError}>
+          <SideMenuController sideMenu={BlockSideMenu} />
+        </BlockMoveProvider>
       </BlockNoteView>
     </div>
   );

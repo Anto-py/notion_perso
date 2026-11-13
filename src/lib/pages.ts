@@ -124,10 +124,14 @@ export async function getPage(id: string, executor: Pick<typeof db, "select"> = 
 // (lib/bases.ts) : une page sous une page (racine comprise) ou à la racine de
 // l'arbre, une base ou un dossier sous la racine des bases ou un de ses
 // dossiers.
-async function checkParent(child: { type: PageKind; isBasesRoot?: boolean }, parentId: string | null): Promise<Outcome> {
+async function checkParent(
+  child: { type: PageKind; isBasesRoot?: boolean },
+  parentId: string | null,
+  executor: Pick<typeof db, "select"> = db,
+): Promise<Outcome> {
   let parent: Page | null = null;
   if (parentId) {
-    parent = await getPage(parentId);
+    parent = await getPage(parentId, executor);
     if (!parent || parent.trashedAt) return { ok: false, status: 404, error: "Page parente introuvable" };
   }
   const error = placementError(child, parent);
@@ -138,17 +142,21 @@ export type CreatedKind = "page" | "database" | "folder";
 
 // Page vierge, base vide ou dossier. Sans parentId, une page naît à la racine
 // de l'arbre, une base ou un dossier sous la racine des bases. init : titre et
-// corps d'une page créée par l'agent, écrits dans la même insertion.
+// corps d'une page créée par l'agent, écrits dans la même insertion. tx : la
+// transaction d'un appelant qui écrit d'autres lignes avec cette page (bloc
+// envoyé à la racine, lib/block_move_query.ts) ; tout se lit alors par elle.
 export async function createPage(
   parentId: string | null,
   type: CreatedKind = "page",
   init: { title?: string; body?: unknown[] } = {},
+  tx?: Tx,
 ): Promise<Outcome & { id?: string }> {
-  const parent = parentId ?? fallbackParent({ type }, await basesRootId());
-  const check = await checkParent({ type }, parent);
+  const q = tx ?? db;
+  const parent = parentId ?? fallbackParent({ type }, await basesRootId(q));
+  const check = await checkParent({ type }, parent, q);
   if (!check.ok) return check;
   const id = newId("pg");
-  await db.insert(pages).values({
+  await q.insert(pages).values({
     id,
     parentId: parent,
     type,
@@ -248,29 +256,33 @@ export async function updatePage(id: string, patch: PagePatch, check?: SaveCheck
 // une base ou un dossier ne quitte jamais « Bases ». beforeId (facultatif)
 // insère la page devant cette sœur, null la met en fin de liste ; absent, la
 // page garde sa clé d'ordre et se range selon elle. placeBlock faux : le bloc
-// quitte l'ancienne mère mais n'est pas ajouté à la nouvelle, l'appelant le
 // posant lui-même (page déposée à un endroit précis de l'éditeur ouvert).
+// leaveBlock vrai : le bloc propriétaire reste aussi dans l'ancienne mère, dont
+// l'éditeur ouvert le retire lui-même (menu de bloc, lib/block_move_query.ts) ;
+// le serveur n'écrit alors pas son corps. tx : la transaction d'un appelant,
+// où tout se lit et s'écrit (lignes créées plus tôt dans la même transaction).
 export async function movePage(
   id: string,
   newParentId: string | null,
   beforeId?: string | null,
-  { placeBlock = true }: { placeBlock?: boolean } = {},
+  { placeBlock = true, leaveBlock = false, tx }: { placeBlock?: boolean; leaveBlock?: boolean; tx?: Tx } = {},
 ): Promise<Outcome> {
-  const page = await getPage(id);
+  const q = tx ?? db;
+  const page = await getPage(id, q);
   if (!page || page.trashedAt || page.type === "entry") return NOT_FOUND;
   // La racine des bases reste sous « Ressources » : elle porte le rangement de
   // toutes les bases, la déplacer le rendrait invisible de sa page d'accueil.
   if (page.isBasesRoot) return { ok: false, status: 400, error: "« Bases de données » reste sous « Ressources »." };
-  const check = await checkParent(page, newParentId);
+  const check = await checkParent(page, newParentId, q);
   if (!check.ok) return check;
-  const rows = await db.select({ id: pages.id, parentId: pages.parentId }).from(pages);
+  const rows = await q.select({ id: pages.id, parentId: pages.parentId }).from(pages);
   const parentOf = new Map(rows.map((row) => [row.id, row.parentId]));
   if (wouldCreateCycle(parentOf, id, newParentId)) {
     return { ok: false, status: 409, error: "Une page ne peut pas aller sous elle-même ni sous l'une de ses sous-pages" };
   }
   const set: { parentId: string | null; manualOrder?: string } = { parentId: newParentId };
   if (beforeId !== undefined) {
-    const siblings = await db
+    const siblings = await q
       .select({ id: pages.id, manualOrder: pages.manualOrder })
       .from(pages)
       .where(
@@ -287,12 +299,14 @@ export async function movePage(
     }
     set.manualOrder = orderBefore(siblings, beforeId);
   }
-  await db.transaction(async (tx) => {
-    await tx.update(pages).set(set).where(eq(pages.id, id));
+  const write = async (t: Tx) => {
+    await t.update(pages).set(set).where(eq(pages.id, id));
     if (page.type === "page" && page.parentId !== newParentId) {
-      await carryOwnerBlock(tx, id, page.parentId, placeBlock ? newParentId : null);
+      await carryOwnerBlock(t, id, leaveBlock ? null : page.parentId, placeBlock ? newParentId : null);
     }
-  });
+  };
+  if (tx) await write(tx);
+  else await db.transaction(write);
   return { ok: true };
 }
 

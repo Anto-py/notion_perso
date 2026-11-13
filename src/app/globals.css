@@ -4903,3 +4903,28 @@ button.link.icon-danger {
   gap: 0.3rem;
   flex-shrink: 0;
 }
+
+/* Confirmation d'un déplacement de bloc qui change ce que le public lit
+   (components/BlockMoveConfirm.tsx). Après .picker-menu : ses listes redeviennent
+   à puces et sa hauteur suit le texte. */
+.block-move-confirm .block-move-confirm-title {
+  margin: 0.2rem 0.3rem 0;
+  font-weight: 600;
+}
+
+.block-move-confirm ul {
+  list-style: disc;
+  max-height: 14rem;
+  margin: 0.4rem 0;
+  padding: 0 0.4rem 0 1.5rem;
+}
+
+.block-move-confirm li {
+  margin-bottom: 0.4rem;
+}
+
+.block-move-confirm .block-move-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}

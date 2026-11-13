@@ -23,6 +23,22 @@ import {
 import type { ReactNode } from "react";
 import { duplicateBlocks, type DupBlock } from "@/lib/block_duplicate";
 import { transformTargets } from "@/lib/block_transform";
+import { useAskBlockMove } from "./BlockMove";
+
+// Ouvre le sélecteur de page, tenu hors du menu (BlockMove.tsx) : le menu de la
+// poignée se ferme au clic et emporterait son propre sélecteur.
+function MoveBlockItem({ children }: { children: ReactNode }) {
+  const Components = useComponentsContext()!;
+  const editor = useBlockNoteEditor();
+  const ask = useAskBlockMove();
+  const block = useExtensionState(SideMenuExtension, { editor, selector: (state) => state?.block });
+  if (block === undefined || !ask) return null;
+  return (
+    <Components.Generic.Menu.Item className="bn-menu-item" onClick={() => ask(block.id)}>
+      {children}
+    </Components.Generic.Menu.Item>
+  );
+}
 
 function DuplicateBlockItem({ children }: { children: ReactNode }) {
   const Components = useComponentsContext()!;
@@ -84,6 +100,7 @@ function BlockDragHandleMenu() {
   return (
     <DragHandleMenu>
       <RemoveBlockItem>{dictionary.drag_handle.delete_menuitem}</RemoveBlockItem>
+      <MoveBlockItem>Déplacer vers…</MoveBlockItem>
       <DuplicateBlockItem>Dupliquer</DuplicateBlockItem>
       <BlockColorsItem>{dictionary.drag_handle.colors_menuitem}</BlockColorsItem>
       <TransformBlockItem>Transformer en</TransformBlockItem>

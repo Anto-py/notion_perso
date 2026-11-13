@@ -165,6 +165,7 @@ export function PageView({ page, entry, directory, absent }: Props) {
           if (!entry) subpages.bodyChanged(body);
         }}
         onUploadState={setUpload}
+        onError={setTrashError}
         onReady={onEditorReady}
       />
     </main>

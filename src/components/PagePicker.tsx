@@ -18,14 +18,33 @@ type Props = {
   // Restreint les choix (page d'accueil de la vitrine : des pages seulement).
   accept?: (row: TreeRow) => boolean;
   label?: string;
+  // « Racine » en tête de liste (déplacement d'un bloc vers la barre latérale) :
+  // présente quand onPickRoot l'est, filtrée par la recherche comme une page.
+  rootLabel?: string;
+  onPickRoot?: () => void;
+  // Un choix part vers le serveur : le champ se fige, le message prend la liste.
+  busy?: string;
 };
+
+type Entry = { kind: "root" } | { kind: "page"; choice: { row: TreeRow; path: string[] } };
 
 // Au-delà, la liste demande de préciser la recherche plutôt que de tout peindre.
 const SHOWN_MAX = 50;
 const MENU_WIDTH = 420;
 const VIEWPORT_MARGIN = 12;
 
-export function PagePicker({ anchor, pages, hostId, onPick, onCancel, accept, label = "Chercher la page à lier" }: Props) {
+export function PagePicker({
+  anchor,
+  pages,
+  hostId,
+  onPick,
+  onCancel,
+  accept,
+  label = "Chercher la page à lier",
+  rootLabel = "Racine",
+  onPickRoot,
+  busy,
+}: Props) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   // Le menu suit le bloc quand la page défile, au lieu de flotter à côté.
@@ -36,6 +55,13 @@ export function PagePicker({ anchor, pages, hostId, onPick, onCancel, accept, la
   const all = linkChoices([...pages.values()], hostId, query);
   const choices = accept ? all.filter((choice) => accept(choice.row)) : all;
   const shown = choices.slice(0, SHOWN_MAX);
+  const rootShown = !!onPickRoot && rootLabel.toLowerCase().includes(query.trim().toLowerCase());
+  const entries: Entry[] = [...(rootShown ? [{ kind: "root" as const }] : []), ...shown.map((choice) => ({ kind: "page" as const, choice }))];
+  const pick = (entry: Entry | undefined) => {
+    if (!entry || busy) return;
+    if (entry.kind === "root") onPickRoot?.();
+    else onPick(entry.choice.row);
+  };
 
   useEffect(() => {
     const follow = () => setRect(anchor.getBoundingClientRect());
@@ -73,6 +99,7 @@ export function PagePicker({ anchor, pages, hostId, onPick, onCancel, accept, la
         placeholder="Chercher une page ou une base"
         value={query}
         maxLength={500}
+        disabled={!!busy}
         onChange={(event) => {
           setQuery(event.target.value);
           setActive(0);
@@ -84,34 +111,41 @@ export function PagePicker({ anchor, pages, hostId, onPick, onCancel, accept, la
           } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
             event.preventDefault();
             const step = event.key === "ArrowDown" ? 1 : -1;
-            setActive((current) => (shown.length ? (current + step + shown.length) % shown.length : 0));
+            setActive((current) => (entries.length ? (current + step + entries.length) % entries.length : 0));
           } else if (event.key === "Enter") {
             event.preventDefault();
-            const choice = shown[active];
-            if (choice) onPick(choice.row);
+            pick(entries[active]);
           }
         }}
       />
       <ul role="listbox" aria-label="Pages et bases">
-        {shown.map((choice, index) => (
-          <li key={choice.row.id} role="option" aria-selected={index === active}>
-            <button
-              type="button"
-              className={`picker-option page-picker-option${index === active ? " is-active" : ""}`}
-              onClick={() => onPick(choice.row)}
-              onPointerEnter={() => setActive(index)}
-            >
-              <span className="page-picker-title">
-                <PageLabel row={choice.row} />
-              </span>
-              {choice.path.length > 0 && <span className="page-picker-path">{choice.path.join(" / ")}</span>}
-            </button>
-          </li>
-        ))}
-        {choices.length > SHOWN_MAX && (
+        {busy && <li className="hint picker-hint">{busy}</li>}
+        {!busy &&
+          entries.map((entry, index) => (
+            <li key={entry.kind === "root" ? "root" : entry.choice.row.id} role="option" aria-selected={index === active}>
+              <button
+                type="button"
+                className={`picker-option page-picker-option${index === active ? " is-active" : ""}`}
+                onClick={() => pick(entry)}
+                onPointerEnter={() => setActive(index)}
+              >
+                {entry.kind === "root" ? (
+                  <span className="page-picker-title">{rootLabel}</span>
+                ) : (
+                  <>
+                    <span className="page-picker-title">
+                      <PageLabel row={entry.choice.row} />
+                    </span>
+                    {entry.choice.path.length > 0 && <span className="page-picker-path">{entry.choice.path.join(" / ")}</span>}
+                  </>
+                )}
+              </button>
+            </li>
+          ))}
+        {!busy && choices.length > SHOWN_MAX && (
           <li className="hint picker-hint">{choices.length - SHOWN_MAX} autres : précisez la recherche.</li>
         )}
-        {choices.length === 0 && <li className="hint picker-hint">Aucune page ne porte ce titre.</li>}
+        {!busy && entries.length === 0 && <li className="hint picker-hint">Aucune page ne porte ce titre.</li>}
       </ul>
     </div>,
     document.body,

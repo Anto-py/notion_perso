@@ -55,7 +55,7 @@ export function usePageDirectory(): ReadonlyMap<string, TreeRow> {
   return useSyncExternalStore(subscribe, () => state.pages, () => state.pages);
 }
 
-function useDirectory(): Directory {
+export function useDirectory(): Directory {
   return useSyncExternalStore(subscribe, () => state, () => state);
 }
 
