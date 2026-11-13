@@ -16,11 +16,13 @@ import {
   useBlockNoteEditor,
   useComponentsContext,
   useDictionary,
+  usePortalElement,
   useExtensionState,
   type SideMenuProps,
 } from "@blocknote/react";
 import type { ReactNode } from "react";
 import { duplicateBlocks, type DupBlock } from "@/lib/block_duplicate";
+import { transformTargets } from "@/lib/block_transform";
 
 function DuplicateBlockItem({ children }: { children: ReactNode }) {
   const Components = useComponentsContext()!;
@@ -42,6 +44,41 @@ function DuplicateBlockItem({ children }: { children: ReactNode }) {
   );
 }
 
+// Sous-menu des types de texte, sur le motif de BlockColorsItem. Masqué sur un
+// bloc qui n'est pas du texte (image, tableau, vue liée…). Le type actuel est
+// coché. Le bloc garde texte, styles en ligne et enfants : seul le type change,
+// et Cmd + Z rend l'original (updateBlock passe par l'historique de l'éditeur).
+function TransformBlockItem({ children }: { children: ReactNode }) {
+  const Components = useComponentsContext()!;
+  const portal = usePortalElement();
+  const editor = useBlockNoteEditor();
+  const block = useExtensionState(SideMenuExtension, { editor, selector: (state) => state?.block });
+  if (block === undefined) return null;
+  const choices = transformTargets(block.type, block.props as Record<string, unknown>);
+  if (choices.length === 0) return null;
+  const apply = (choice: (typeof choices)[number]) => {
+    // Le bloc du menu date du survol : on relit la version du document.
+    const current = editor.getBlock(block.id) ?? block;
+    editor.updateBlock(current, { type: choice.type, props: choice.props } as never);
+  };
+  return (
+    <Components.Generic.Menu.Root position="right" sub portalElement={portal}>
+      <Components.Generic.Menu.Trigger sub>
+        <Components.Generic.Menu.Item className="bn-menu-item" subTrigger>
+          {children}
+        </Components.Generic.Menu.Item>
+      </Components.Generic.Menu.Trigger>
+      <Components.Generic.Menu.Dropdown sub className="bn-menu-dropdown">
+        {choices.map((choice) => (
+          <Components.Generic.Menu.Item key={choice.key} className="bn-menu-item" checked={choice.current} onClick={() => apply(choice)}>
+            {choice.label}
+          </Components.Generic.Menu.Item>
+        ))}
+      </Components.Generic.Menu.Dropdown>
+    </Components.Generic.Menu.Root>
+  );
+}
+
 function BlockDragHandleMenu() {
   const dictionary = useDictionary();
   return (
@@ -49,6 +86,7 @@ function BlockDragHandleMenu() {
       <RemoveBlockItem>{dictionary.drag_handle.delete_menuitem}</RemoveBlockItem>
       <DuplicateBlockItem>Dupliquer</DuplicateBlockItem>
       <BlockColorsItem>{dictionary.drag_handle.colors_menuitem}</BlockColorsItem>
+      <TransformBlockItem>Transformer en</TransformBlockItem>
       <TableRowHeaderItem>{dictionary.drag_handle.header_row_menuitem}</TableRowHeaderItem>
       <TableColumnHeaderItem>{dictionary.drag_handle.header_column_menuitem}</TableColumnHeaderItem>
     </DragHandleMenu>

@@ -3413,9 +3413,17 @@ mark.hit {
   margin: 1rem 0;
 }
 
-.public-body .body-table td {
+.public-body .body-table td,
+.public-body .body-table th {
   border: 1px solid var(--line);
   padding: 0.35rem 0.6rem;
+}
+
+/* En-tête de ligne ou de colonne (headerRows, headerCols) : en gras, comme les
+   cellules d'en-tête de l'éditeur (BlockNote ne leur donne pas de fond). */
+.public-body .body-table th {
+  font-weight: 600;
+  text-align: left;
 }
 
 .public-body .body-table {

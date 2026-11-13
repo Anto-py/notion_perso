@@ -7,6 +7,7 @@
 import { iconSrc, resolveIcon } from "./icons.ts";
 import { mentionProps } from "./mention.ts";
 import type { Orphan } from "./properties.ts";
+import { tableHtml } from "./table_html.ts";
 import { domainOf, faviconUrl } from "./unfurl.ts";
 import { isStoredName } from "./upload_rules.ts";
 import { youtubeEmbedUrl, youtubeId } from "./youtube.ts";
@@ -559,16 +560,7 @@ function blockHtml(block: Json, options: RenderOptions): string {
     default: {
       // Bloc inconnu (tableau importé, type futur) : son texte, s'il en a.
       const { content } = block;
-      if (isObject(content) && content.type === "tableContent") {
-        const rows = Array.isArray(content.rows) ? content.rows : [];
-        const body = rows
-          .map((row) => {
-            const cells = isObject(row) && Array.isArray(row.cells) ? row.cells : [];
-            return `<tr>${cells.map((cell) => `<td>${inlineHtml(isObject(cell) ? cell.content : cell, options)}</td>`).join("")}</tr>`;
-          })
-          .join("");
-        return `<table class="body-table"><tbody>${body}</tbody></table>`;
-      }
+      if (isObject(content) && content.type === "tableContent") return tableHtml(content, (cell) => inlineHtml(cell, options));
       const inner = inlineHtml(content, options);
       return inner ? `<p>${inner}</p>${nested}` : nested;
     }

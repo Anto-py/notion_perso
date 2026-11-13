@@ -283,6 +283,9 @@ export default function Editor({ pageId, initialBody, onCreateChild, onChange, o
   const editor = useCreateBlockNote({
     schema,
     dictionary: fr,
+    // « En-tête de ligne » et « En-tête de colonne » du menu de bloc d'un
+    // tableau, et des poignées de ligne et de colonne : éteints par défaut.
+    tables: { headers: true },
     initialContent: initialBody.length ? (initialBody as (typeof schema.PartialBlock)[]) : undefined,
     // BlockNote insère le bloc avant d'appeler l'envoi : en cas d'échec, on
     // retire ce bloc resté vide, le message d'erreur s'affiche en haut de page.
