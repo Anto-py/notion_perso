@@ -18,11 +18,12 @@ import {
 } from "@dnd-kit/core";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { placementError } from "@/lib/bases";
 import { ancestorsOf, buildTree, GAP_PREFIX, parseGapId, wouldCreateCycle, type TreeRow } from "@/lib/tree";
 import { AUTHOR_NAME, CV_URL } from "@/lib/branding";
 import { formatClock } from "@/lib/sync_status";
+import { BlockMoveConfirm } from "./BlockMoveConfirm";
 import { PageLabel } from "./PageIcon";
 import { RefreshControl } from "./RefreshControl";
 import { SearchBar } from "./SearchBar";
@@ -33,6 +34,7 @@ import { setTreeMeta } from "./tabs_store";
 import { TreeGap, TreeItem } from "./TreeItem";
 import { announceEditorDrop, announceEditorHover, dropHostAt, pointOf, type DropPoint } from "./editor_drop";
 import { announcePageMoved } from "./page_moved";
+import { send } from "./request";
 
 export const ROOT_DROP_ID = "__racine__";
 
@@ -141,6 +143,30 @@ export function Sidebar({ rows, inboxCount, macSyncedAt }: Props) {
   // (editor_drop.ts). Seule une page se dépose dans un corps.
   const pointer = useRef<DropPoint | null>(null);
   const stopTracking = useRef<(() => void) | null>(null);
+  const aside = useRef<HTMLElement>(null);
+  // Déplacement qui change ce que le public lit, refusé par le serveur sans
+  // accord : la carte montre ses phrases sous la ligne de la page, resolve dit
+  // si Antonin l'accepte.
+  const [confirming, setConfirming] = useState<{
+    anchor: HTMLElement;
+    warnings: string[];
+    resolve: (accepted: boolean) => void;
+  } | null>(null);
+
+  function askConfirm(pageId: string, warnings: string[]): Promise<boolean> {
+    const anchor = document.querySelector<HTMLElement>(`[data-tree-id="${CSS.escape(pageId)}"]`) ?? aside.current;
+    if (!anchor) return Promise.resolve(false);
+    return new Promise((resolve) => setConfirming({ anchor, warnings, resolve }));
+  }
+
+  const settleConfirm = useCallback(
+    (accepted: boolean) => {
+      confirming?.resolve(accepted);
+      setConfirming(null);
+    },
+    [confirming],
+  );
+  const cancelConfirm = useCallback(() => settleConfirm(false), [settleConfirm]);
 
   function trackPointer(row: TreeRow | null, start: Event) {
     stopTracking.current?.();
@@ -226,7 +252,20 @@ export function Sidebar({ rows, inboxCount, macSyncedAt }: Props) {
     }
     const body: Record<string, unknown> = before === undefined ? { parentId: target } : { parentId: target, before };
     if (!placeBlock) body.placeBlock = false;
-    if (!(await post(`/api/pages/${pageId}/move`, body))) return false;
+    setMessage(null);
+    const url = `/api/pages/${pageId}/move`;
+    let result = await send(url, "POST", body);
+    // 409 et phrases : le déplacement changerait ce que le public lit ; il ne
+    // repart qu'avec l'accord donné sur la carte.
+    const warnings = result.ok ? [] : readWarnings(result.data);
+    if (warnings.length) {
+      if (!(await askConfirm(pageId, warnings))) return false;
+      result = await send(url, "POST", { ...body, confirmed: true });
+    }
+    if (!result.ok) {
+      setMessage(result.error);
+      return false;
+    }
     if (target && !expanded.has(target)) setExpanded(new Set([...expanded, target]));
     // Le bloc de la page a quitté l'ancienne mère et rejoint la nouvelle :
     // l'éditeur ouvert sur l'une d'elles se relit.
@@ -266,7 +305,7 @@ export function Sidebar({ rows, inboxCount, macSyncedAt }: Props) {
       <button type="button" className="menu-toggle" aria-expanded={mobileOpen} onClick={() => setMobileOpen(!mobileOpen)}>
         {mobileOpen ? "Fermer" : "Menu"}
       </button>
-      <aside id="barre-laterale" className={mobileOpen ? "sidebar open" : "sidebar"}>
+      <aside ref={aside} id="barre-laterale" className={mobileOpen ? "sidebar open" : "sidebar"}>
         <a href={CV_URL} className="sidebar-home" target="_blank" rel="noopener noreferrer">
           {AUTHOR_NAME}
         </a>
@@ -343,8 +382,23 @@ export function Sidebar({ rows, inboxCount, macSyncedAt }: Props) {
         </div>
         <SidebarResizer />
       </aside>
+      {confirming && (
+        <BlockMoveConfirm
+          anchor={confirming.anchor}
+          warnings={confirming.warnings}
+          busy={false}
+          label="Confirmer le déplacement de la page"
+          onConfirm={() => settleConfirm(true)}
+          onCancel={cancelConfirm}
+        />
+      )}
     </>
   );
+}
+
+function readWarnings(data: Record<string, unknown> | undefined): string[] {
+  const raw = data?.warnings;
+  return Array.isArray(raw) ? raw.filter((line): line is string => typeof line === "string") : [];
 }
 
 function RootDropZone() {

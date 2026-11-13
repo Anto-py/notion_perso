@@ -14,6 +14,8 @@ import { listAgentTokens } from "@/lib/agent_tokens";
 import { canSwitchVersion } from "@/lib/app_version";
 import { getCurrentUser } from "@/lib/auth";
 import { backupDir, listBackups, readOpenBackup } from "@/lib/backups";
+import { pageMoveWarnings } from "@/lib/block_move_share";
+import { loadShareGraph } from "@/lib/publication_query";
 import { serverDumpConfigured } from "@/lib/server_dump";
 import { currentInstance, getSetting } from "@/lib/settings";
 import { sectionsFor, SYNC_THRESHOLD_DEFAULT, type SettingsSection } from "@/lib/settings_rules";
@@ -76,6 +78,9 @@ async function Section({ section, username }: { section: SettingsSection; userna
     }
     case "agent": {
       const [tokens, requests] = await Promise.all([listAgentTokens(), listAgentRequests()]);
+      // Un déplacement demandé montre ce qu'il ferait au public, lu à
+      // l'affichage : la publication a pu changer depuis la demande.
+      const graph = requests.some((demand) => demand.action === "move") ? await loadShareGraph() : null;
       return (
         <AgentSection
           tokens={tokens.map((token) => ({
@@ -90,6 +95,12 @@ async function Section({ section, username }: { section: SettingsSection; userna
             action: demand.action,
             pageId: demand.pageId,
             pageTitle: demand.pageTitle,
+            targetId: demand.targetId,
+            targetTitle: demand.targetTitle,
+            warnings:
+              graph && demand.action === "move"
+                ? pageMoveWarnings({ graph, pageId: demand.pageId, targetId: demand.targetId })
+                : [],
             tokenName: demand.tokenName,
             model: demand.model,
             createdAt: demand.createdAt.toISOString(),

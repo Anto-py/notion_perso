@@ -1,15 +1,17 @@
 // POST { decision: "accepted" | "refused" } : traite une demande de l'agent
 // (Réglages › Agent). Sous session, sur l'instance web seulement. « Valider »
 // exécute le geste avec les droits d'Antonin ; « Refuser » ferme la demande
-// sans rien faire. Si le geste échoue (page disparue, exclusion du partage),
-// la demande reste ouverte et l'erreur est rendue telle quelle.
+// sans rien faire. Si le geste échoue (page disparue, exclusion du partage,
+// destination devenue impossible), la demande reste ouverte et l'erreur est
+// rendue telle quelle. Un déplacement validé ne redemande pas confirmation :
+// Réglages a montré ses phrases.
 // SPECS.md, « Accès agent », palier f.
 import { fail, readJson, requireUser } from "@/lib/api";
 import { closeAgentRequest, openAgentRequest } from "@/lib/agent_requests";
 import { requestDecision } from "@/lib/agent_rules";
 import { purgeWithMedia } from "@/lib/media_cleanup_query";
-import { getPage } from "@/lib/pages";
-import { publishPage } from "@/lib/publication_query";
+import { getPage, movePage } from "@/lib/pages";
+import { forgetPublicReach, publishPage } from "@/lib/publication_query";
 import { currentInstance } from "@/lib/settings";
 
 export async function POST(request: Request, ctx: RouteContext<"/api/acces_agent/requests/[id]">) {
@@ -28,14 +30,19 @@ export async function POST(request: Request, ctx: RouteContext<"/api/acces_agent
   let publicId: string | undefined;
   if (decision === "accepted") {
     const page = await getPage(demand.pageId);
-    // Une purge vise une page en corbeille ; une publication, une page vivante.
-    if (!page || (demand.action === "publish" && page.trashedAt)) {
+    // Une purge vise une page en corbeille ; une publication ou un
+    // déplacement, une page vivante.
+    if (!page || (demand.action !== "purge" && page.trashedAt)) {
       return fail(409, "Page introuvable : la demande reste ouverte.");
     }
     if (demand.action === "publish") {
       const outcome = await publishPage(page);
       if (!outcome.ok) return fail(outcome.status, outcome.error);
       publicId = outcome.publicId;
+    } else if (demand.action === "move") {
+      const outcome = await movePage(demand.pageId, demand.targetId);
+      if (!outcome.ok) return fail(outcome.status, `${outcome.error} : la demande reste ouverte.`);
+      forgetPublicReach();
     } else {
       const outcome = await purgeWithMedia(demand.pageId);
       if (!outcome.ok) return fail(outcome.status, outcome.error);

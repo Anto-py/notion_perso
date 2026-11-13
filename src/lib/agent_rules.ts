@@ -20,10 +20,12 @@ export function parseModel(header: string | null): string | null {
   return clean === "" ? null : clean.slice(0, MODEL_MAX);
 }
 
-// Gestes qui passent par une validation humaine (palier f) : publication et
-// suppression définitive. Dépublier, corbeille et restauration restent
-// immédiats.
-export const REQUEST_ACTIONS = ["publish", "purge"] as const;
+// Gestes qui passent par une validation humaine (palier f) : publication,
+// suppression définitive, et depuis le 2026-11-13 le déplacement qui change ce
+// que le public lit (lib/block_move_share.ts, pageMoveWarnings ; un déplacement
+// sans effet public reste immédiat). Dépublier, corbeille et restauration
+// restent immédiats.
+export const REQUEST_ACTIONS = ["publish", "purge", "move"] as const;
 export type RequestAction = (typeof REQUEST_ACTIONS)[number];
 export const REQUEST_DECISIONS = ["accepted", "refused"] as const;
 export type RequestDecision = (typeof REQUEST_DECISIONS)[number];
@@ -38,7 +40,7 @@ export function requestDecision(raw: unknown): RequestDecision | null {
 
 // Verbe de la demande, tel que le lit Antonin dans Réglages.
 export function requestActionLabel(action: RequestAction): string {
-  return action === "publish" ? "Publier" : "Purger";
+  return action === "publish" ? "Publier" : action === "purge" ? "Purger" : "Déplacer";
 }
 
 export function checkTokenName(raw: unknown): { value: string } | { error: string } {

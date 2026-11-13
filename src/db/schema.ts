@@ -283,6 +283,9 @@ export const agentRequests = pgTable(
     model: text("model"),
     action: text("action").notNull(),
     pageId: text("page_id").notNull(),
+    // Déplacement (action « move ») : la nouvelle mère, null pour la racine.
+    // Toujours null pour une publication ou une purge.
+    targetId: text("target_id"),
     createdAt: createdAt(),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
     decision: text("decision"),

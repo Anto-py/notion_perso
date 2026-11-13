@@ -1,6 +1,8 @@
 // PATCH { title?, icon?, parentId? } : renomme, change l'icône, déplace (null :
 // racine). Tout autre champ est refusé, `body` d'abord : l'agent n'ajoute
-// qu'en bas (append), il ne remplace jamais un corps. Journalisé.
+// qu'en bas (append), il ne remplace jamais un corps. Un déplacement qui
+// change ce que le public lit dépose une demande (202 { pending, warnings }),
+// exécutée par « Valider » dans Réglages › Agent.
 // GET ?format=md : une page en Markdown (SPECS.md, « Accès agent », « Blocs →
 // Markdown »). Le seul format servi ; une page en corbeille se lit encore,
 // marquée `trashed`.
@@ -9,7 +11,10 @@ import { requireAgent } from "@/lib/agent_auth";
 import { readTitle } from "@/lib/agent_write";
 import { isLibraryFile } from "@/lib/icon_library";
 import { checkIconValue } from "@/lib/icons";
+import { requestAgentAction } from "@/lib/agent_requests";
+import { pageMoveWarningsFor } from "@/lib/page_move_query";
 import { getPage, movePage, updatePage, type PagePatch } from "@/lib/pages";
+import { forgetPublicReach } from "@/lib/publication_query";
 import { readPageMarkdown } from "@/lib/agent_read";
 import { requestOrigin } from "@/lib/agent_rules";
 
@@ -60,8 +65,27 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/agent/page
     if (page.type === "entry") return fail(400, "Une entrée vit dans sa base.");
     const parentId = optionalId(body.parentId);
     if (parentId === undefined) return fail(400, "parentId invalide");
+    const changesParent = parentId !== page.parentId;
+    // Un déplacement qui change ce que le public lit vaut publication ou
+    // dépublication : il attend la validation d'Antonin, comme np publier
+    // (202, rien d'écrit). Il se demande seul, pour que rien ne s'écrive à
+    // moitié.
+    const warnings = changesParent ? await pageMoveWarningsFor(id, parentId) : [];
+    if (warnings.length) {
+      if (Object.keys(patch).length) {
+        return fail(409, "Ce déplacement change ce que le public lit et attend une validation : demandez-le seul, sans title ni icon.");
+      }
+      const check = await movePage(id, parentId, undefined, { dryRun: true });
+      if (!check.ok) return fail(check.status, check.error);
+      const demand = await requestAgentAction(agent, "move", id, parentId);
+      return Response.json(
+        { ok: true, pending: true, request: demand.id, action: "move", page: { id, title: page.title }, parentId, warnings },
+        { status: 202 },
+      );
+    }
     const moved = await movePage(id, parentId);
     if (!moved.ok) return fail(moved.status, moved.error);
+    if (changesParent) forgetPublicReach();
   }
   if (Object.keys(patch).length) {
     const saved = await updatePage(id, patch);

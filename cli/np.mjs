@@ -35,7 +35,7 @@ Lecture
   np modifier <entrée> Nom=valeur …                         valeurs d'une entrée (Sélection par nom, Date AAAA-MM-JJ,
                                                             Case oui/non, Relation par titres, Nom= pour effacer)
   np renommer <chemin|id> <titre…>
-  np deplacer <chemin|id> <destination|/>                   « / » : racine de l'arbre
+  np deplacer <chemin|id> <destination|/>                   « / » : racine ; validé dans Réglages s'il change ce que lit le public
   np icone <chemin|id> <emoji|aucune>
   np corbeille <chemin|id>
   np restaurer <id>                                         une page en corbeille n'a plus de chemin : son id
@@ -461,7 +461,13 @@ const COMMANDS = {
     if (args.length !== 2) throw usage("np deplacer <chemin|id> <destination|/>");
     const id = await resolveId(call, args[0]);
     const parentId = args[1].trim() === "/" ? null : await resolveId(call, args[1]);
-    await call(`/api/agent/pages/${encodeURIComponent(id)}`, "PATCH", { parentId });
+    const result = await call(`/api/agent/pages/${encodeURIComponent(id)}`, "PATCH", { parentId });
+    // Un déplacement qui change ce que le public lit attend la validation
+    // d'Antonin, comme une publication.
+    if (result.pending) {
+      const lines = (result.warnings ?? []).map((line) => `  ${line}`).join("\n");
+      throw new Exit(3, `Déplacement en attente de validation dans Réglages › Agent (demande ${result.request}) :\n${lines}`);
+    }
     print(`${id} déplacée ${parentId ? `sous ${parentId}` : "à la racine"}.`);
   },
 

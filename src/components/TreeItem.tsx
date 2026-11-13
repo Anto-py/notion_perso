@@ -72,6 +72,7 @@ export function TreeItem({ node, depth, activeId, expanded, onToggle, onCreate }
           drop.setNodeRef(element);
         }}
         className={classes.join(" ")}
+        data-tree-id={node.id}
         style={{ paddingLeft: `${Math.min(depth, MAX_INDENT_DEPTH) * 14 + 4}px` }}
         {...drag.attributes}
         {...drag.listeners}

@@ -1,12 +1,15 @@
-// Ce qu'un déplacement de bloc change pour le public (étape 21, palier c).
+// Ce qu'un déplacement de bloc ou de page change pour le public (étape 21,
+// palier c ; la page, par la barre latérale ou par l'agent, depuis le
+// 2026-11-13).
 //
 // Une publication rend lisible une page, ce qui est rangé dessous (sauf une
 // sous-page exclue) et, de lien en lien, des pages déjà lisibles ; une vue liée
-// ouvre sa base entière. Déplacer un bloc peut donc faire entrer du contenu
-// dans une publication (une page privée devient publique) ou l'en faire sortir.
-// Cette fonction simule le graphe après le déplacement et compare ce qui est
-// lisible avant et après : elle ne rend que des phrases à montrer avant d'écrire.
-// Pure : le graphe vient de publication_query (loadShareGraph).
+// ouvre sa base entière. Déplacer un bloc ou une page peut donc faire entrer du
+// contenu dans une publication (une page privée devient publique) ou l'en
+// faire sortir. Ces fonctions simulent le graphe après le déplacement et
+// comparent ce qui est lisible avant et après : elles ne rendent que des
+// phrases à montrer avant d'écrire.
+// Pures : le graphe vient de publication_query (loadShareGraph).
 
 import { linkTargets, publicationOf, shareReach, type ShareGraph, type ShareNode } from "./publication.ts";
 
@@ -83,9 +86,11 @@ function removeOnce(list: readonly string[], values: readonly string[]): string[
 
 const titleOf = (node: ShareNode | undefined) => node?.title || "Sans titre";
 
+// sourceId : la page d'où part le bloc, null pour une page de la racine
+// (pageMoveWarnings).
 export function sharingWarnings(input: {
   graph: ShareGraph;
-  sourceId: string;
+  sourceId: string | null;
   targetId: string | null;
   carried: readonly string[];
   blocks: readonly unknown[];
@@ -101,8 +106,8 @@ export function sharingWarnings(input: {
     const page = next.get(id);
     if (page) next.set(id, { ...page, parentId: targetId });
   }
-  const source = next.get(sourceId);
-  if (source) next.set(sourceId, { ...source, links: removeOnce(source.links, refs.links), opens: removeOnce(source.opens, refs.opens) });
+  const source = sourceId === null ? undefined : next.get(sourceId);
+  if (source) next.set(source.id, { ...source, links: removeOnce(source.links, refs.links), opens: removeOnce(source.opens, refs.opens) });
   const target = targetId ? next.get(targetId) : undefined;
   if (target) next.set(target.id, { ...target, links: [...target.links, ...refs.links], opens: [...target.opens, ...refs.opens] });
 
@@ -153,11 +158,22 @@ export function sharingWarnings(input: {
     );
   }
 
-  if (!onlySubpages(blocks)) {
+  if (sourceId !== null && !onlySubpages(blocks)) {
     const was = before.has(sourceId);
     const now = targetId !== null && after.has(targetId);
     if (!was && now) lines.push(`Le contenu de ce bloc deviendra lisible par le public : ${arrival()}.`);
     if (was && !now) lines.push(`Le contenu de ce bloc ne sera plus lisible par le public : il quitte ${departure(sourceId)}.`);
   }
   return lines;
+}
+
+// Déplacement d'une page (barre latérale, agent) : la page change de mère et
+// son bloc propriétaire la suit, comme un bloc qui n'est que cette sous-page.
+// Le lien que ce bloc pose n'expose rien (shareReach ne suit un lien que vers
+// une page déjà lisible) : simuler le changement de mère suffit.
+export function pageMoveWarnings(input: { graph: ShareGraph; pageId: string; targetId: string | null }): string[] {
+  const { graph, pageId, targetId } = input;
+  const page = graph.get(pageId);
+  if (!page || page.parentId === targetId) return [];
+  return sharingWarnings({ graph, sourceId: page.parentId, targetId, carried: [pageId], blocks: [] });
 }

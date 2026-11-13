@@ -551,6 +551,23 @@ a {
   gap: 0.4rem;
 }
 
+/* Réglages › Agent : ce qu'un déplacement demandé ferait au public, sous la
+   ligne de la demande (le li est un flex qui passe à la ligne). */
+.settings-list li .agent-request-warnings {
+  flex-basis: 100%;
+  margin: 0;
+  padding-left: 1.2rem;
+  list-style: disc;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.settings-list li .agent-request-warnings li {
+  display: list-item;
+  padding: 0;
+  border-bottom: none;
+}
+
 /* Réglages › Sauvegardes : choix dans un menu déroulant, puis ouvrir ou
    effacer. */
 .backup-picker {

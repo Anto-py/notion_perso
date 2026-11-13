@@ -261,11 +261,18 @@ export async function updatePage(id: string, patch: PagePatch, check?: SaveCheck
 // l'éditeur ouvert le retire lui-même (menu de bloc, lib/block_move_query.ts) ;
 // le serveur n'écrit alors pas son corps. tx : la transaction d'un appelant,
 // où tout se lit et s'écrit (lignes créées plus tôt dans la même transaction).
+// dryRun vrai : tous les refus, aucune écriture (une demande de l'agent ne se
+// dépose que pour un déplacement qui passerait, lib/page_move_query.ts).
 export async function movePage(
   id: string,
   newParentId: string | null,
   beforeId?: string | null,
-  { placeBlock = true, leaveBlock = false, tx }: { placeBlock?: boolean; leaveBlock?: boolean; tx?: Tx } = {},
+  {
+    placeBlock = true,
+    leaveBlock = false,
+    dryRun = false,
+    tx,
+  }: { placeBlock?: boolean; leaveBlock?: boolean; dryRun?: boolean; tx?: Tx } = {},
 ): Promise<Outcome> {
   const q = tx ?? db;
   const page = await getPage(id, q);
@@ -299,6 +306,7 @@ export async function movePage(
     }
     set.manualOrder = orderBefore(siblings, beforeId);
   }
+  if (dryRun) return { ok: true };
   const write = async (t: Tx) => {
     await t.update(pages).set(set).where(eq(pages.id, id));
     if (page.type === "page" && page.parentId !== newParentId) {

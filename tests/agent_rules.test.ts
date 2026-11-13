@@ -59,6 +59,7 @@ describe("demandes de validation", () => {
   it("n'accepte que publication et purge", () => {
     expect(isRequestAction("publish")).toBe(true);
     expect(isRequestAction("purge")).toBe(true);
+    expect(isRequestAction("move")).toBe(true);
     expect(isRequestAction("unpublish")).toBe(false);
     expect(isRequestAction(null)).toBe(false);
   });
@@ -73,6 +74,7 @@ describe("demandes de validation", () => {
   it("nomme la demande pour Réglages", () => {
     expect(requestActionLabel("publish")).toBe("Publier");
     expect(requestActionLabel("purge")).toBe("Purger");
+    expect(requestActionLabel("move")).toBe("Déplacer");
   });
 });
 

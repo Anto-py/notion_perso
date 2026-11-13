@@ -4,15 +4,20 @@
 // avec la commande qui le range au trousseau. Puis les demandes en attente.
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { requestActionLabel, type RequestAction } from "@/lib/agent_rules";
 import { CopyUrlButton } from "../CopyUrlButton";
 import { send } from "../request";
 
 type Token = { id: string; name: string; createdAt: string; lastUsedAt: string | null; revokedAt: string | null };
+// warnings : ce qu'un déplacement ferait au public, lu à l'affichage.
 type Request = {
   id: string;
-  action: "publish" | "purge";
+  action: RequestAction;
   pageId: string;
   pageTitle: string | null;
+  targetId: string | null;
+  targetTitle: string | null;
+  warnings: string[];
   tokenName: string | null;
   model: string | null;
   createdAt: string;
@@ -151,7 +156,8 @@ export function AgentSection({ tokens, requests }: { tokens: Token[]; requests: 
 
       <h3>Demandes en attente</h3>
       <p className="hint">
-        Publication et suppression définitive passent par ici : l&apos;agent dépose la demande, rien n&apos;est fait avant votre décision.
+        Publication, suppression définitive et déplacement qui change ce que le public lit passent par ici : l&apos;agent
+        dépose la demande, rien n&apos;est fait avant votre décision.
       </p>
       {requests.length === 0 ? (
         <p>Aucune demande.</p>
@@ -159,8 +165,12 @@ export function AgentSection({ tokens, requests }: { tokens: Token[]; requests: 
         <ul className="settings-list agent-requests">
           {requests.map((demand) => (
             <li key={demand.id}>
-              <span className="settings-list-name">{demand.action === "publish" ? "Publier" : "Purger"}</span>
-              <span>{demand.pageTitle ?? demand.pageId}</span>
+              <span className="settings-list-name">{requestActionLabel(demand.action)}</span>
+              <span>
+                {demand.pageTitle ?? demand.pageId}
+                {demand.action === "move" &&
+                  (demand.targetId ? ` → sous « ${demand.targetTitle ?? demand.targetId} »` : " → à la racine")}
+              </span>
               <span className="hint">
                 {demand.tokenName ?? "jeton supprimé"}
                 {demand.model ? ` · ${demand.model}` : ""} · {DATE.format(new Date(demand.createdAt))}
@@ -173,6 +183,13 @@ export function AgentSection({ tokens, requests }: { tokens: Token[]; requests: 
                   Refuser
                 </button>
               </span>
+              {demand.warnings.length > 0 && (
+                <ul className="agent-request-warnings">
+                  {demand.warnings.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              )}
             </li>
           ))}
         </ul>

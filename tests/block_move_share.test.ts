@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockRefs, sharingWarnings } from "@/lib/block_move_share";
+import { blockRefs, pageMoveWarnings, sharingWarnings } from "@/lib/block_move_share";
 import type { ShareGraph, ShareNode } from "@/lib/publication";
 
 const node = (id: string, extra: Partial<ShareNode> = {}): ShareNode => ({
@@ -174,6 +174,64 @@ describe("sharingWarnings", () => {
     const graph = graphOf(...base());
     const copy = structuredClone([...graph.values()]);
     warn(graph, "T", ["A"], [sub("A")]);
+    expect([...graph.values()]).toEqual(copy);
+  });
+});
+
+// Déplacement d'une page par la barre latérale ou par l'agent : la page change
+// de mère, son bloc propriétaire la suit. Même règle que pour un bloc qui n'est
+// qu'une sous-page, la source pouvant être la racine.
+describe("pageMoveWarnings", () => {
+  const move = (graph: ShareGraph, pageId: string, targetId: string | null) => pageMoveWarnings({ graph, pageId, targetId });
+
+  it("prévient qu'une page privée entre dans une publication, avec ses sous-pages", () => {
+    const graph = graphOf(...base(), node("T1", { parentId: "T" }));
+    expect(move(graph, "T", "P")).toEqual(["« Cible privée » (et sa sous-page) deviendra lisible par le public : « Cible publiée » est publiée."]);
+  });
+
+  it("nomme la publication quand la nouvelle mère n'est publiée que par un ancêtre", () => {
+    expect(move(graphOf(...base()), "T", "A")).toEqual([
+      "« Cible privée » deviendra lisible par le public : « Sous A » est dans la publication « Source ».",
+    ]);
+  });
+
+  it("prévient qu'une sous-page remontée à la racine quitte sa publication", () => {
+    expect(move(graphOf(...base()), "A", null)).toEqual([
+      "« Sous A » (et ses 2 sous-pages) ne sera plus lisible par le public : elle quitte la publication « Source ».",
+    ]);
+  });
+
+  it("une page de la racine vers une page privée ne change rien", () => {
+    expect(move(graphOf(...base(), node("U")), "U", "T")).toEqual([]);
+  });
+
+  it("ne dit rien quand la mère ne change pas", () => {
+    expect(move(graphOf(...base()), "A", "S")).toEqual([]);
+    expect(move(graphOf(...base()), "T", null)).toEqual([]);
+  });
+
+  it("ne dit rien d'une page qui a sa propre publication", () => {
+    expect(move(graphOf(...base()), "P", "T")).toEqual([]);
+  });
+
+  it("une page exclue reste privée sous une page publiée", () => {
+    const graph = graphOf(...base(), node("X", { closed: true }));
+    expect(move(graph, "X", "P")).toEqual([]);
+  });
+
+  it("prévient aussi pour une base", () => {
+    const graph = graphOf(...base(), node("B", { type: "database", title: "Ma base" }));
+    expect(move(graph, "B", "P")).toEqual(["« Ma base » deviendra lisible par le public : « Cible publiée » est publiée."]);
+  });
+
+  it("ne dit rien d'une page inconnue", () => {
+    expect(move(graphOf(...base()), "Z", "P")).toEqual([]);
+  });
+
+  it("laisse le graphe intact", () => {
+    const graph = graphOf(...base());
+    const copy = structuredClone([...graph.values()]);
+    move(graph, "A", null);
     expect([...graph.values()]).toEqual(copy);
   });
 });

@@ -1,0 +1,1 @@
+ALTER TABLE "agent_requests" ADD COLUMN "target_id" text;
