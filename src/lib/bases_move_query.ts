@@ -31,6 +31,7 @@ export async function runBasesMove<T extends Record<string, unknown>>(
         title: pages.title,
         isInbox: pages.isInbox,
         isBasesRoot: pages.isBasesRoot,
+        rootException: pages.rootException,
         trashedAt: pages.trashedAt,
       })
       .from(pages)
@@ -48,8 +49,11 @@ export async function runBasesMove<T extends Record<string, unknown>>(
           .map((row) => row.parentId!),
       ),
     ];
+    // La base de l'exception To Do, à la racine de l'arbre, est à sa place.
     const outside = lite.some(
-      (row) => row.type === "database" && (!row.parentId || (row.parentId !== rootId && types.get(row.parentId) !== "folder")),
+      (row) =>
+        row.type === "database" &&
+        (row.parentId ? row.parentId !== rootId && types.get(row.parentId) !== "folder" : !row.rootException),
     );
     const titles = new Map(lite.map((row) => [row.id, row.title]));
     if (!outside) return { plan: planBasesMove([], { target: rootId }), titles, written: false };
@@ -73,6 +77,7 @@ export async function runBasesMove<T extends Record<string, unknown>>(
         trashed: row.trashedAt !== null,
         title: row.title,
         isInbox: row.isInbox,
+        rootException: row.rootException,
       })),
       ...hosts
         .filter((row) => row.type === "entry")

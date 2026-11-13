@@ -100,3 +100,25 @@ describe("planBasesMove", () => {
     expect(plan.moved).toHaveLength(1);
   });
 });
+
+// L'exception To Do (migration 0013) : la base marquée vit à la racine de
+// l'arbre. Le déménagement du démarrage la rangeait à chaque déploiement
+// (constaté le 2026-11-13 en production).
+describe("planBasesMove, exception To Do", () => {
+  it("laisse à la racine la base marquée par l'exception", () => {
+    const plan = planBasesMove([root, base("todo", null, { rootException: true })], target);
+    expect(plan.moved).toEqual([]);
+    expect(plan.report.moved).toBe(0);
+  });
+
+  it("range quand même la base marquée si elle est sous une page", () => {
+    const host = page("accueil", [subpage("b1", "todo")]);
+    const plan = planBasesMove([root, host, base("todo", "accueil", { rootException: true })], target);
+    expect(plan.moved.map((m) => m.id)).toEqual(["todo"]);
+  });
+
+  it("range une base non marquée posée à la racine", () => {
+    const plan = planBasesMove([root, base("todo", null, { rootException: true }), base("autre", null)], target);
+    expect(plan.moved.map((m) => m.id)).toEqual(["autre"]);
+  });
+});

@@ -5,7 +5,7 @@
 // d'import) et la reprise d'une sauvegarde (backup_restore_plan.ts).
 //
 // Extensions .ts explicites : npm run bases:demenager tourne sous Node seul.
-import type { PageKind } from "./bases.ts";
+import { livesAtRoot, type PageKind } from "./bases.ts";
 import { LINKED_BLOCK, SUBPAGE_BLOCK } from "./blocks.ts";
 
 type Json = unknown;
@@ -20,6 +20,8 @@ export type MoveRow = {
   trashed: boolean;
   title?: string;
   isInbox?: boolean;
+  // Exception To Do (migration 0013) : à la racine de l'arbre, la base reste.
+  rootException?: boolean;
 };
 
 export type MoveOptions = {
@@ -96,8 +98,12 @@ export function planBasesMove(rows: readonly MoveRow[], options: MoveOptions): B
   // La racine elle-même (cible) et ses dossiers reçoivent les bases.
   const isHost = (id: string): boolean => id === target || isFolder(id);
 
+  // La base marquée par l'exception To Do reste à la racine de l'arbre, où
+  // placementError l'admet ; ailleurs hors de « Bases », elle déménage.
+  const atHome = (row: MoveRow): boolean =>
+    row.parentId ? isHost(row.parentId) : livesAtRoot({ type: row.type, rootException: row.rootException });
   const outside = rows
-    .filter((row) => row.type === "database" && !(row.parentId && isHost(row.parentId)))
+    .filter((row) => row.type === "database" && !atHome(row))
     .sort(
       (a, b) =>
         Number(Boolean(b.isInbox)) - Number(Boolean(a.isInbox)) ||
