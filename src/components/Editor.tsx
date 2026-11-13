@@ -12,7 +12,7 @@ import {
 } from "@blocknote/core";
 import { fr } from "@blocknote/core/locales";
 import { BlockNoteView } from "@blocknote/mantine";
-import { getDefaultReactSlashMenuItems, SuggestionMenuController, useCreateBlockNote } from "@blocknote/react";
+import { getDefaultReactSlashMenuItems, SideMenuController, SuggestionMenuController, useCreateBlockNote } from "@blocknote/react";
 import { useEffect, useRef, useState } from "react";
 import { columnStructure } from "@/lib/blocks";
 import { checkUpload } from "@/lib/upload_rules";
@@ -21,6 +21,7 @@ import { useEdgeScroll } from "./use_edge_scroll";
 import { planBlockRuns } from "@/lib/web_save";
 import { youtubeId } from "@/lib/youtube";
 import { columnBlock, columnListBlock } from "./columnsBlock";
+import { BlockSideMenu } from "./BlockMenu";
 import { bookmarkBlock } from "./bookmarkBlock";
 import { conflictBlock } from "./conflictBlock";
 import { linkedBlock } from "./linkedBlock";
@@ -339,11 +340,12 @@ export default function Editor({ pageId, initialBody, onCreateChild, onChange, o
   return (
     <div ref={hostRef} className="editor-host" data-drop-page={acceptsSubpages ? pageId : undefined}>
       {spot && <div className="editor-drop-line" style={{ top: spot.top, left: spot.left, width: spot.width }} aria-hidden />}
-      <BlockNoteView editor={editor} theme="light" slashMenu={false} onChange={() => onChange(editor.document)}>
+      <BlockNoteView editor={editor} theme="light" slashMenu={false} sideMenu={false} onChange={() => onChange(editor.document)}>
         <SuggestionMenuController
           triggerCharacter="/"
           getItems={async (query) => filterSuggestionItems(slashItems(editor, pageId, onCreateChild), query)}
         />
+        <SideMenuController sideMenu={BlockSideMenu} />
       </BlockNoteView>
     </div>
   );
