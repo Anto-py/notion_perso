@@ -5,7 +5,7 @@
 import { fail, readJson } from "@/lib/api";
 import { requireAgent } from "@/lib/agent_auth";
 import { requestOrigin } from "@/lib/agent_rules";
-import { convertMarkdown, readMarkdown } from "@/lib/agent_write";
+import { convertMarkdown, mentionizeForPage, readMarkdown } from "@/lib/agent_write";
 import { appendBlocks, getPage } from "@/lib/pages";
 
 export async function POST(request: Request, ctx: RouteContext<"/api/agent/pages/[id]/append">) {
@@ -20,7 +20,9 @@ export async function POST(request: Request, ctx: RouteContext<"/api/agent/pages
 
   const conversion = await convertMarkdown(markdown.value, requestOrigin(request));
   if (!conversion.blocks.length) return fail(400, "Rien à ajouter : le Markdown ne donne aucun bloc.");
-  const outcome = await appendBlocks(id, conversion.blocks);
+  // Mentions dans une page, liens dans le corps d'une entrée (étape 22).
+  const blocks = page.type === "page" ? await mentionizeForPage(conversion.blocks) : conversion.blocks;
+  const outcome = await appendBlocks(id, blocks);
   if (!outcome.ok) return fail(outcome.status, outcome.error);
-  return Response.json({ id, blocks: conversion.blocks.length, ignored: conversion.ignored, converted: conversion.converted });
+  return Response.json({ id, blocks: blocks.length, ignored: conversion.ignored, converted: conversion.converted });
 }

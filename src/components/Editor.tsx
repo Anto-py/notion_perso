@@ -20,6 +20,8 @@ import { dropSpot, onEditorDrop, onEditorHover, type DropSpot } from "./editor_d
 import { useEdgeScroll } from "./use_edge_scroll";
 import { planBlockRuns } from "@/lib/web_save";
 import { youtubeId } from "@/lib/youtube";
+import { singleUrl } from "@/lib/mention_links";
+import { convertPastedRange, insertPastedMention, isInCode, mentionizeExtension } from "./mention_autolink";
 import { columnBlock, columnListBlock } from "./columnsBlock";
 import { BlockSideMenu } from "./BlockMenu";
 import { BlockLinkProvider } from "./BlockLink";
@@ -89,6 +91,9 @@ export type ChildKind = "page" | "database";
 type Props = {
   pageId: string;
   initialBody: unknown[];
+  // Une page ordinaire : une adresse nue y devient une mention (étape 22).
+  // Faux dans le corps d'une entrée, qui garde ses liens.
+  mentions: boolean;
   // Présent seulement là où une sous-page peut naître (une page, pas une
   // entrée) : crée l'enfant et rend son id, null en cas d'échec.
   onCreateChild?: (kind: ChildKind) => Promise<string | null>;
@@ -285,7 +290,7 @@ function slashItems(
   return items;
 }
 
-export default function Editor({ pageId, initialBody, onCreateChild, onChange, onUploadState, onError, onNotice, siteOrigin, onReady }: Props) {
+export default function Editor({ pageId, initialBody, mentions, onCreateChild, onChange, onUploadState, onError, onNotice, siteOrigin, onReady }: Props) {
   // uploadFile n'est appelé qu'après la création de l'éditeur : la ref est
   // alors remplie (effet ci-dessous).
   const editorRef = useRef<EditorInstance | null>(null);
@@ -308,7 +313,9 @@ export default function Editor({ pageId, initialBody, onCreateChild, onChange, o
         if (block && !(block.props as { url?: string }).url) editorRef.current?.removeBlocks([block]);
         throw error;
       }),
-    // Une URL YouTube collée seule devient un lecteur intégré.
+    // Une adresse nue devient une mention (étape 22), sauf YouTube collé seul
+    // qui reste un lecteur, et dans le corps d'une entrée.
+    extensions: mentions ? [mentionizeExtension()] : [],
     pasteHandler: ({ event, editor, defaultPasteHandler }) => {
       // Fichier collé hors règles : refus avant que BlockNote n'insère un bloc.
       const refused = [...(event.clipboardData?.files ?? [])].map(checkUpload).find((check) => !check.ok);
@@ -317,12 +324,28 @@ export default function Editor({ pageId, initialBody, onCreateChild, onChange, o
         return true;
       }
       const text = event.clipboardData?.getData("text/plain")?.trim() ?? "";
-      if (!youtubeId(text)) return defaultPasteHandler();
-      const current = editor.getTextCursorPosition().block;
-      const isEmpty = Array.isArray(current.content) && current.content.length === 0;
-      if (isEmpty) editor.updateBlock(current, { type: "youtube", props: { url: text } });
-      else editor.insertBlocks([{ type: "youtube", props: { url: text } }], current, "after");
-      return true;
+      if (youtubeId(text)) {
+        const current = editor.getTextCursorPosition().block;
+        const isEmpty = Array.isArray(current.content) && current.content.length === 0;
+        if (isEmpty) editor.updateBlock(current, { type: "youtube", props: { url: text } });
+        else editor.insertBlocks([{ type: "youtube", props: { url: text } }], current, "after");
+        return true;
+      }
+      const state = editor.prosemirrorState;
+      const single = mentions && state.selection.empty ? singleUrl(text) : null;
+      if (single && !isInCode(state.doc, state.selection.from)) {
+        insertPastedMention(editor, single);
+        return true;
+      }
+      const from = state.selection.from;
+      const removed = state.selection.to - state.selection.from;
+      const handled = defaultPasteHandler();
+      if (handled && mentions) {
+        // Le contenu collé tient de « from » à la taille ajoutée au document.
+        const size = editor.prosemirrorState.doc.content.size - state.doc.content.size;
+        convertPastedRange(editor, from, Math.min(editor.prosemirrorState.doc.content.size, from + size + removed));
+      }
+      return handled;
     },
   });
 

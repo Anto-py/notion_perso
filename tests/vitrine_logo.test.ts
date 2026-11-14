@@ -1,19 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { LOGO_FRESH_MS, logoCandidates, logoFresh, logoHost, logoTarget } from "@/lib/vitrine_logo";
+import { LOGO_FRESH_MS, logoCandidates, logoFresh, logoTarget } from "@/lib/vitrine_logo";
 
-describe("logoHost", () => {
-  it("admet un nom de domaine, mis en minuscules", () => {
-    expect(logoHost("MindMup.com")).toBe("mindmup.com");
-    expect(logoHost("xn--bcher-kva.example")).toBe("xn--bcher-kva.example");
-  });
-
-  it("refuse ce qui n'est pas un nom de domaine à point", () => {
-    for (const raw of ["", "localhost", "../etc/passwd", "a/b.com", "exemple..org", "-x.org", "x-.org", "127.0.0.1:80", "[::1]", "x.org.", "é.org"]) {
-      expect(logoHost(raw), raw).toBeNull();
-    }
-    expect(logoHost(`${"a".repeat(250)}.org`)).toBeNull();
-  });
-});
+// logoHost, alias de siteHost, est testé dans tests/site_host.test.ts.
 
 describe("logoTarget", () => {
   const sites = ["https://www.mindmup.com/", "https://excalidraw.com/", null, "https://docs.google.com/forms/d/123"];

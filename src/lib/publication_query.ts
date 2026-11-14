@@ -8,6 +8,7 @@ import { db } from "@/db";
 import { pages } from "@/db/schema";
 import { imageIcon } from "./icons";
 import { newToken } from "./ids";
+import { hostsOfMentions } from "./mention";
 import { getPage, type Page } from "./pages";
 import {
   closedBy,
@@ -125,10 +126,12 @@ export async function listChildren(pageId: string) {
 // se ferme aussitôt.
 const REACH_TTL_MS = 30_000;
 type ReachMemo = { at: number; ids: Promise<Set<string>> };
-const store = globalThis as typeof globalThis & { __notionPublicReach?: ReachMemo | null };
+type HostsMemo = { at: number; hosts: Promise<Set<string>> };
+const store = globalThis as typeof globalThis & { __notionPublicReach?: ReachMemo | null; __notionMentionHosts?: HostsMemo | null };
 
 export function forgetPublicReach(): void {
   store.__notionPublicReach = null;
+  store.__notionMentionHosts = null;
 }
 
 async function computePublicReach(): Promise<Set<string>> {
@@ -151,6 +154,39 @@ function publicReachAll(): Promise<Set<string>> {
     if (store.__notionPublicReach?.ids === ids) forgetPublicReach();
   });
   return ids;
+}
+
+// Adresses des mentions d'une page, à toute profondeur du corps.
+const MENTION_URL = 'strict $.** ? (@.type == "mention").props.url';
+
+// Hôtes cités par une mention d'une page de la portée publique, gardés 30 s
+// comme la portée : les seuls favicons servis sans session (étape 22). Les
+// pages sans mention ne sont pas rendues.
+async function computeMentionHosts(): Promise<Set<string>> {
+  const [reach, result] = await Promise.all([
+    publicReachAll(),
+    db.execute<{ id: string; urls: string[] | null }>(sql`
+      SELECT p.id,
+        (SELECT array_agg(x #>> '{}') FROM jsonb_path_query(p.body, ${MENTION_URL}::jsonpath) AS t(x)) AS urls
+      FROM pages p
+      WHERE p.trashed_at IS NULL AND jsonb_path_exists(p.body, ${MENTION_URL}::jsonpath)`),
+  ]);
+  return hostsOfMentions(
+    result.rows.map((row) => ({ id: row.id, urls: row.urls ?? [] })),
+    reach,
+  );
+}
+
+export function publicMentionHosts(): Promise<ReadonlySet<string>> {
+  const memo = store.__notionMentionHosts;
+  if (memo && Date.now() - memo.at < REACH_TTL_MS) return memo.hosts;
+  const hosts = computeMentionHosts();
+  store.__notionMentionHosts = { at: Date.now(), hosts };
+  // Une lecture en échec ne reste pas en mémoire.
+  hosts.catch(() => {
+    if (store.__notionMentionHosts?.hosts === hosts) store.__notionMentionHosts = null;
+  });
+  return hosts;
 }
 
 // Un média est public s'il figure dans le corps d'une page lisible par un

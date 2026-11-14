@@ -479,7 +479,7 @@ describe("mention", () => {
   it("se rend en lien avec son favicon et son titre", () => {
     const html = renderHtml(body);
     expect(html).toContain('<a class="mention" href="https://exemple.org/a" target="_blank" rel="noopener noreferrer">');
-    expect(html).toContain('src="https://exemple.org/favicon.ico"');
+    expect(html).toContain('src="/api/favicon/exemple.org"');
     expect(html).toContain('<span class="mention-title">Exemple</span>');
   });
 

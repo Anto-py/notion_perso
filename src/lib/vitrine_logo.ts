@@ -5,8 +5,13 @@
 // La route ne visite jamais un site choisi par le visiteur : l'hôte demandé
 // doit être celui du Site Web d'une entrée de la vitrine (logoTarget), et seule
 // la page d'accueil de ce site est lue.
+import { siteHost } from "./site_host";
 import { attributes, decodeEntities } from "./unfurl";
 import { hostOf, parseSite } from "./vitrine";
+
+// Le nom d'hôte vient de site_host.ts, partagé avec les favicons de mentions
+// (étape 22).
+export const logoHost = siteHost;
 
 // Sous-dossier d'UPLOAD_DIR, hors table media : le balayage des médias ne le
 // voit pas.
@@ -27,20 +32,6 @@ export const LOGO_TYPES: Readonly<Record<string, string>> = {
   avif: "image/avif",
   ico: "image/x-icon",
 };
-
-const LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
-
-// Nom d'hôte demandé à la route, en minuscules ; null s'il n'est pas un nom de
-// domaine à point (ni chemin, ni port, ni IP v6). Sert aussi de nom de
-// fichier : seuls lettres, chiffres, points et tirets y passent.
-export function logoHost(raw: string): string | null {
-  const host = raw.toLowerCase();
-  if (host.length > 253) return null;
-  const labels = host.split(".");
-  if (labels.length < 2 || !labels.every((label) => LABEL.test(label))) return null;
-  // Un domaine de premier niveau a au moins une lettre : « 127.0.0.1 » n'en est pas un.
-  return /[a-z]/.test(labels[labels.length - 1]) ? host : null;
-}
 
 // Page d'accueil à lire pour l'hôte demandé : origine du premier Site Web de
 // la base dont l'hôte (sans www) est celui-là, null sinon.

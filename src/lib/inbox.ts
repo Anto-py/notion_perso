@@ -9,6 +9,8 @@ import { CAPTURE_TITLE_MAX, mentionBlock, noteBlock } from "./capture";
 import { newId } from "./ids";
 import { runInboxPageMove } from "./inbox_page_move_query";
 import { appendBlocks, type Page } from "./pages";
+import { bareUrlsInText } from "./mention_links";
+import { fetchTitles } from "./mention_titles";
 import { domainOf } from "./unfurl";
 
 export const INBOX_TITLE = "Vide-cerveau";
@@ -64,7 +66,11 @@ async function appendBlock(inboxId: string, block: unknown): Promise<string> {
 
 export async function captureNote(text: string): Promise<{ id: string }> {
   const inbox = await ensureInbox();
-  return { id: await appendBlock(inbox.id, noteBlock(text)) };
+  // Une adresse du texte devient une mention titrée (étape 22) ; une lecture
+  // de titre par adresse distincte, bornée.
+  const urls = [...new Set(bareUrlsInText(text).map((span) => span.url))];
+  const titles = urls.length ? await fetchTitles(urls) : new Map<string, string>();
+  return { id: await appendBlock(inbox.id, noteBlock(text, titles)) };
 }
 
 export type LinkCapture = { url: string; title?: string };

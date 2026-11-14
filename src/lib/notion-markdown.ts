@@ -11,6 +11,7 @@
 // reprend → `start`, lien seul vers une page connue → bloc-lien sans pouvoir
 // sur sa cible (`link: true`), image ou PDF distant → lien. Le profil
 // « import », par défaut, reste celui de l'export Notion.
+import { bareUrlsInText } from "./mention_links";
 
 export type Styles = Record<string, boolean>;
 
@@ -177,23 +178,22 @@ export function parseInline(text: string, ctx: MarkdownContext, inherited: Style
   return items.filter((item) => item.type === "link" || item.text !== "");
 }
 
-// Adresse nue dans le texte : sans la ponctuation qui la suit dans la phrase.
-const BARE_URL = /https?:\/\/[^\s<>"]*[^\s<>".,;:!?')\]»]/g;
-
-// Profil agent : une adresse écrite telle quelle devient un lien. Le code et
-// le texte d'un lien restent tels quels.
+// Profil agent : une adresse écrite telle quelle devient un lien, par la même
+// règle que l'éditeur (lib/mention_links.ts) : ponctuation finale ôtée,
+// parenthèses appariées gardées. Le code et le texte d'un lien restent tels
+// quels.
 export function autolink(items: InlineItem[]): InlineItem[] {
   return items.flatMap((item): InlineItem[] => {
     if (item.type !== "text" || item.styles.code) return [item];
+    const spans = bareUrlsInText(item.text);
+    if (!spans.length) return [item];
     const out: InlineItem[] = [];
     let last = 0;
-    for (const match of item.text.matchAll(BARE_URL)) {
-      const at = match.index ?? 0;
-      if (at > last) out.push(textItem(item.text.slice(last, at), item.styles));
-      out.push({ type: "link", href: match[0], content: [{ type: "text", text: match[0], styles: item.styles }] });
-      last = at + match[0].length;
+    for (const span of spans) {
+      if (span.from > last) out.push(textItem(item.text.slice(last, span.from), item.styles));
+      out.push({ type: "link", href: span.url, content: [{ type: "text", text: item.text.slice(span.from, span.to), styles: item.styles }] });
+      last = span.to;
     }
-    if (last === 0) return [item];
     if (last < item.text.length) out.push(textItem(item.text.slice(last), item.styles));
     return out;
   });

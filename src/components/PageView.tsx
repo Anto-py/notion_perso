@@ -177,6 +177,9 @@ export function PageView({ page, entry, directory, absent, siteOrigin }: Props) 
       <Editor
         pageId={page.id}
         initialBody={page.body}
+        // Mentions de sites dans les pages ordinaires seulement (étape 22),
+        // jamais le corps d'une entrée.
+        mentions={page.type === "page"}
         // Une entrée n'a pas de sous-pages (seule une page en reçoit).
         onCreateChild={entry ? undefined : subpages.createChild}
         onChange={(body) => {

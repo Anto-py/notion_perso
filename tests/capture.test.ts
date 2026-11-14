@@ -26,6 +26,20 @@ describe("noteBlock", () => {
       children: [],
     });
   });
+
+  it("change une adresse nue en mention, titre connu ou non", () => {
+    const titles = new Map([["https://exemple.org/a", "Exemple"]]);
+    expect(noteBlock("À lire https://exemple.org/a et https://exemple.org/b.", titles)).toMatchObject({
+      type: "paragraph",
+      content: [
+        { type: "text", text: "À lire ", styles: {} },
+        { type: "mention", props: { url: "https://exemple.org/a", title: "Exemple" } },
+        { type: "text", text: " et ", styles: {} },
+        { type: "mention", props: { url: "https://exemple.org/b", title: "" } },
+        { type: "text", text: ".", styles: {} },
+      ],
+    });
+  });
 });
 
 describe("mentionBlock", () => {

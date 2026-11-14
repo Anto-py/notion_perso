@@ -1,6 +1,7 @@
 // Capture rapide : un texte libre devient un bloc, une adresse seule une
 // mention en ligne. Module pur, sans base ni réseau.
 import { mentionNode } from "./mention.ts";
+import { bareUrlsInText } from "./mention_links.ts";
 
 export const CAPTURE_TITLE_MAX = 200;
 
@@ -37,8 +38,24 @@ function paragraph(content: unknown[]) {
 }
 
 // Le texte entier tient dans un seul paragraphe, retours à la ligne compris.
-export function noteBlock(text: string): Record<string, unknown> {
-  return paragraph([{ type: "text", text, styles: {} }]);
+// Une adresse nue y devient une mention (étape 22) ; sans titre connu, le
+// domaine s'affiche.
+export function noteBlock(text: string, titles: ReadonlyMap<string, string> = new Map()): Record<string, unknown> {
+  return paragraph(noteContent(text, titles));
+}
+
+function noteContent(text: string, titles: ReadonlyMap<string, string>): unknown[] {
+  const spans = bareUrlsInText(text);
+  if (!spans.length) return [{ type: "text", text, styles: {} }];
+  const content: unknown[] = [];
+  let last = 0;
+  for (const span of spans) {
+    if (span.from > last) content.push({ type: "text", text: text.slice(last, span.from), styles: {} });
+    content.push(mentionNode(span.url, titles.get(span.url) ?? ""));
+    last = span.to;
+  }
+  if (last < text.length) content.push({ type: "text", text: text.slice(last), styles: {} });
+  return content;
 }
 
 // Une adresse seule : un paragraphe qui ne contient que la mention.

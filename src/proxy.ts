@@ -9,7 +9,9 @@ import { loginPath } from "@/lib/share";
 // /api/media décide lui-même : média d'une page publiée ou refus. La vitrine
 // (/veille et ses routes publiques, limitées par IP) aussi ; son pilotage,
 // /api/vitrine/*, reste sous session.
-const PUBLIC_PATHS = [/^\/login$/, /^\/p\//, /^\/veille$/, /^\/api\/veille\//, /^\/api\/auth\//, /^\/api\/media\//];
+// /api/favicon décide lui-même : tout hôte avec session, seulement ceux cités
+// par une mention publiée sans session.
+const PUBLIC_PATHS = [/^\/login$/, /^\/p\//, /^\/veille$/, /^\/api\/veille\//, /^\/api\/auth\//, /^\/api\/media\//, /^\/api\/favicon\//];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

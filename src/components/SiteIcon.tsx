@@ -1,14 +1,14 @@
 "use client";
-// Favicon servi par le site, avec repli sur un globe. Beaucoup de pages n'en
-// publient pas à /favicon.ico, et une réponse 200 peut contenir du HTML : un
-// échec de décodage déclenche aussi onError. L'état évite de relancer la
-// requête à chaque rendu.
+// Favicon lu par le serveur de l'instance (étape 22), avec repli sur un globe.
+// Le navigateur ne demande jamais l'icône au site : ni en privé, ni sur une
+// page publiée. Une icône absente ou illisible déclenche onError. L'état évite
+// de relancer la requête à chaque rendu.
 import { useState } from "react";
-import { faviconUrl } from "@/lib/unfurl";
+import { mentionIconUrl } from "@/lib/mention";
 
 export function SiteIcon({ url }: { url: string }) {
   const [failed, setFailed] = useState(false);
-  const src = faviconUrl(url);
+  const src = mentionIconUrl(url);
   if (!src || failed) return <span className="inbox-glyph">🌐</span>;
   return (
     // L'hôte est arbitraire : next/image exigerait de déclarer chaque domaine,

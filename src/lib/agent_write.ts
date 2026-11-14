@@ -9,6 +9,8 @@ import { media, pages } from "@/db/schema";
 import { pathRows } from "./agent_read";
 import { toList, type AgentValues, type RelationAnswers } from "./agent_values";
 import { internalLinkId } from "./blocks";
+import { bareLinkUrls, mentionizeBlocks } from "./mention_links";
+import { fetchTitles } from "./mention_titles";
 import { markdownToBlocks, type MarkdownContext, type ResolvedLink } from "./notion-markdown";
 import { looksLikeId, resolvePath, type PathRow } from "./page_path";
 import { fold, type Property } from "./properties";
@@ -155,4 +157,12 @@ export async function convertMarkdown(markdown: string, origin: string | null): 
   };
   const { blocks } = markdownToBlocks(markdown, ctx);
   return { blocks, ignored: tally(ignored), converted: tally(converted) };
+}
+
+// Une page ordinaire reçoit des mentions à la place de ses adresses nues, avec
+// leur titre lu sur le site ; le corps d'une entrée garde ses liens (étape 22,
+// palier c). Un site muet laisse la mention au domaine.
+export async function mentionizeForPage(blocks: unknown[]): Promise<unknown[]> {
+  const urls = bareLinkUrls(blocks);
+  return urls.length ? mentionizeBlocks(blocks, await fetchTitles(urls)) : blocks;
 }

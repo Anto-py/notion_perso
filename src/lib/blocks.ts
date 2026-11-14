@@ -6,10 +6,10 @@
 // chaque champ inattendu est simplement ignoré.
 import { withBlockId } from "./block_link.ts";
 import { iconSrc, resolveIcon } from "./icons.ts";
-import { mentionProps } from "./mention.ts";
+import { mentionIconUrl, mentionProps } from "./mention.ts";
 import type { Orphan } from "./properties.ts";
 import { tableHtml } from "./table_html.ts";
-import { domainOf, faviconUrl } from "./unfurl.ts";
+import { domainOf } from "./unfurl.ts";
 import { isStoredName } from "./upload_rules.ts";
 import { youtubeEmbedUrl, youtubeId } from "./youtube.ts";
 
@@ -398,7 +398,7 @@ function inlineHtml(content: Json, options: RenderOptions): string {
         const label = escapeHtml(mention.title || domainOf(mention.url));
         const href = safeHref(mention.url);
         if (!href) return `<span class="mention">${label}</span>`;
-        const icon = faviconUrl(mention.url);
+        const icon = mentionIconUrl(mention.url);
         const iconHtml = icon
           ? `<img class="inbox-favicon" src="${escapeHtml(icon)}" alt="" width="16" height="16" loading="lazy">`
           : `<span class="inbox-glyph" aria-hidden="true">🌐</span>`;

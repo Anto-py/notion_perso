@@ -8,7 +8,7 @@ import { fail, optionalId, readJson } from "@/lib/api";
 import { requireAgent } from "@/lib/agent_auth";
 import { listChildren, resolveAgentPath } from "@/lib/agent_read";
 import { requestOrigin } from "@/lib/agent_rules";
-import { convertMarkdown, readMarkdown, readTitle } from "@/lib/agent_write";
+import { convertMarkdown, mentionizeForPage, readMarkdown, readTitle } from "@/lib/agent_write";
 import { createPage, getPage } from "@/lib/pages";
 
 export async function GET(request: Request) {
@@ -49,10 +49,12 @@ export async function POST(request: Request) {
   }
 
   const conversion = await convertMarkdown(markdown.value, requestOrigin(request));
-  const outcome = await createPage(parentId, "page", { title: title.value, body: conversion.blocks });
+  // Une page ordinaire : les adresses nues deviennent des mentions titrées.
+  const blocks = await mentionizeForPage(conversion.blocks);
+  const outcome = await createPage(parentId, "page", { title: title.value, body: blocks });
   if (!outcome.ok || !outcome.id) return fail(outcome.ok ? 500 : outcome.status, outcome.ok ? "Création impossible" : outcome.error);
   return Response.json(
-    { id: outcome.id, blocks: conversion.blocks.length, ignored: conversion.ignored, converted: conversion.converted },
+    { id: outcome.id, blocks: blocks.length, ignored: conversion.ignored, converted: conversion.converted },
     { status: 201 },
   );
 }
