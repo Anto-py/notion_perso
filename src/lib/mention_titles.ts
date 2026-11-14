@@ -2,8 +2,8 @@
 // (étape 22, palier c). Une lecture par adresse distincte, quatre en vol au
 // plus ; une absence de titre n'est pas une erreur : la mention affiche le
 // domaine et l'export le rend tel quel.
-import { domainOf } from "./unfurl";
-import { unfurl } from "./unfurl_fetch";
+import { domainOf } from "./unfurl.ts";
+import { unfurl } from "./unfurl_fetch.ts";
 
 export const TITLE_CONCURRENCY = 4;
 

@@ -10,6 +10,8 @@
 //    résultat par la synchronisation. Un échec n'empêche pas le démarrage.
 //    Ensuite, une seule fois (marqueur `conversion.bases_liens`), les bases
 //    encastrées de cette page deviennent des liens icône + nom (2026-11-11).
+//    Enfin, en tâche de fond, les liens nus des pages ordinaires deviennent des
+//    mentions titrées (étape 22, marqueur `conversion.mentions`).
 // 2. Purge de la corbeille (éléments de plus de 30 jours). L'autre déclencheur
 //    est l'ouverture de la corbeille (api/trash). Un échec n'empêche pas le
 //    serveur de démarrer.
@@ -62,6 +64,15 @@ export async function register() {
         (error) => console.error("Conversion du Vide-cerveau impossible :", error),
       );
     }
+    // Liens nus des pages ordinaires → mentions titrées (étape 22, palier d).
+    // En tâche de fond : la lecture des titres passe par le réseau et ne doit
+    // pas retarder le service. Marqueur `conversion.mentions`.
+    void import("./lib/mention_conversion_query")
+      .then(async ({ describeMentionConversion, mentionsConversionDone, runMentionConversion }) => {
+        if (await mentionsConversionDone(db)) return;
+        console.log(describeMentionConversion(await runMentionConversion(db, { write: true })));
+      })
+      .catch((error) => console.error("Conversion des mentions impossible :", error));
   }
   const { tryPurgeExpired } = await import("./lib/media_cleanup_query");
   await tryPurgeExpired();

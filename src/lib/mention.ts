@@ -1,6 +1,6 @@
 // Mention : un contenu en ligne BlockNote qui tient une adresse et son titre.
 // Module pur, partagé par la capture, l'éditeur et le rendu HTML.
-import { siteHost } from "./site_host";
+import { siteHost } from "./site_host.ts";
 
 export type Mention = { url: string; title: string };
 

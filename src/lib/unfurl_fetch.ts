@@ -6,7 +6,7 @@
 // contrôle a lieu à la connexion, là où un nom public qui résout vers le réseau
 // interne ne peut plus passer entre deux résolutions.
 import { Agent, fetch as undiciFetch, type RequestInit, type Response } from "undici";
-import { isPrivateHost, safeLookup } from "./safe_lookup";
+import { isPrivateHost, safeLookup } from "./safe_lookup.ts";
 import {
   domainOf,
   faviconUrl,
@@ -16,9 +16,9 @@ import {
   UNFURL_MAX_REDIRECTS,
   UNFURL_TIMEOUT_MS,
   type Unfurled,
-} from "./unfurl";
-import { ALLOWED_TYPES } from "./upload_rules";
-import { youtubeId, youtubeOEmbedUrl } from "./youtube";
+} from "./unfurl.ts";
+import { ALLOWED_TYPES } from "./upload_rules.ts";
+import { youtubeId, youtubeOEmbedUrl } from "./youtube.ts";
 
 // Image Open Graph d'un lien capturé (BRAINSTORMING §5) : même borne qu'un
 // bandeau téléversé, et mêmes types admis que le dépôt de fichiers.

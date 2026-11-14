@@ -6,7 +6,7 @@
 // « https://exemple.org/page ») ; le schéma et l'hôte sont comparés sans la
 // casse de l'hôte, le chemin, la requête et l'ancre à l'identique.
 
-import { mentionNode } from "./mention";
+import { mentionNode } from "./mention.ts";
 
 export type UrlSpan = { from: number; to: number; url: string };
 
@@ -165,6 +165,20 @@ export function bareLinkUrls(blocks: unknown): string[] {
   };
   if (Array.isArray(blocks)) for (const block of blocks) if (isObject(block)) walkBlock(block, visit);
   return [...urls];
+}
+
+// Nombre de liens nus d'un corps, occurrences comprises : la conversion
+// l'annonce avant d'écrire, un même site pouvant revenir dix fois.
+export function countBareLinks(blocks: unknown): number {
+  let count = 0;
+  const visit: InlineVisit = (items) => {
+    for (const item of items) {
+      if (isObject(item) && bareHref(item)) count++;
+    }
+    return { items, changed: false };
+  };
+  if (Array.isArray(blocks)) for (const block of blocks) if (isObject(block)) walkBlock(block, visit);
+  return count;
 }
 
 // Chaque lien nu devient une mention titrée (titre vide sans entrée : le

@@ -21,6 +21,7 @@
     "bases:page": "node --env-file-if-exists=.env --experimental-strip-types --no-warnings scripts/bases_page_move.mts",
     "bases:liens": "node --env-file-if-exists=.env --experimental-strip-types --no-warnings scripts/bases_links.mts",
     "inbox:page": "node --env-file-if-exists=.env --experimental-strip-types --no-warnings scripts/inbox_page_move.mts",
+    "mentions:convertir": "node --env-file-if-exists=.env --experimental-strip-types --no-warnings scripts/mention_conversion.mts",
     "vitrine:etiquettes": "node --env-file-if-exists=.env --experimental-strip-types --no-warnings scripts/vitrine_etiquettes.mts",
     "sync:jeton": "node --env-file-if-exists=.env --experimental-strip-types --no-warnings scripts/sync_jeton.mts"
   },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bareLinkUrls, bareUrlsInText, isBareLink, mentionizeBlocks, singleUrl } from "@/lib/mention_links";
+import { bareLinkUrls, bareUrlsInText, countBareLinks, isBareLink, mentionizeBlocks, singleUrl } from "@/lib/mention_links";
 
 describe("isBareLink", () => {
   it("reconnaît le texte qui est l'adresse elle-même", () => {
@@ -89,6 +89,28 @@ describe("bareLinkUrls", () => {
       { ...paragraph([link("https://bloc.org", "https://bloc.org")]), type: "codeBlock" },
     ];
     expect(bareLinkUrls(blocks)).toEqual([]);
+  });
+});
+
+describe("countBareLinks", () => {
+  it("compte les occurrences, pas les adresses distinctes", () => {
+    const blocks = [
+      paragraph([
+        link("https://a.org/x", "https://a.org/x"),
+        link("https://a.org/x", "https://a.org/x"),
+        link("https://titre.org", "un titre"),
+      ]),
+      table([[[link("https://c.org/z", "https://c.org/z")]]]),
+    ];
+    expect(countBareLinks(blocks)).toBe(3);
+  });
+
+  it("ignore le code, en ligne comme en bloc", () => {
+    const blocks = [
+      paragraph([link("https://code.org", "https://code.org", { code: true })]),
+      { ...paragraph([link("https://bloc.org", "https://bloc.org")]), type: "codeBlock" },
+    ];
+    expect(countBareLinks(blocks)).toBe(0);
   });
 });
 
