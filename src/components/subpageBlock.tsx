@@ -5,7 +5,8 @@
 // (arbre de la sidebar), tenu à jour par PageView à chaque rendu serveur. Un
 // titre changé dans la sous-page se voit donc ici sans réécrire le corps.
 import Link from "next/link";
-import { useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore, type DragEvent } from "react";
+import { SideMenuExtension } from "@blocknote/core/extensions";
 import { createReactBlockSpec } from "@blocknote/react";
 import { isForeignLink } from "@/lib/blocks";
 import type { AbsentTarget, TreeRow } from "@/lib/tree";
@@ -112,10 +113,40 @@ export const subpageBlock = createReactBlockSpec(
           />
         );
       }
-      return <SubpageLink pageId={pageId} kind={kind} link={link} />;
+      return <SubpageLink pageId={pageId} kind={kind} link={link} drag={blockDrag(editor as unknown as EditorInstance, block.id)} />;
     },
   },
 );
+
+// La rangée entière sert de poignée, comme dans Notion : attraper le titre
+// déplace le bloc par le même chemin que la poignée ⠿ (blockDragStart de
+// BlockNote : bloc sélectionné, « blocknote/html », dépôt en déplacement).
+// Sans cela, le navigateur glissait le <a> comme un lien ordinaire, et le
+// dépôt collait une copie en lien texte vers l'adresse absolue de l'instance
+// (http://127.0.0.1:3200/page/… sur le Mac), l'original restant en place.
+type BlockDrag = {
+  draggable: true;
+  onDragStart: (event: DragEvent) => void;
+  onDragEnd: () => void;
+};
+
+function blockDrag(editor: EditorInstance, blockId: string): BlockDrag {
+  const sideMenu = () => editor.getExtension(SideMenuExtension);
+  return {
+    draggable: true,
+    onDragStart: (event) => {
+      const menu = sideMenu();
+      const block = editor.getBlock(blockId);
+      if (!menu || !block || !editor.isEditable) {
+        // Lecture seule : ni déplacement, ni lien texte parasite.
+        event.preventDefault();
+        return;
+      }
+      menu.blockDragStart(event, block);
+    },
+    onDragEnd: () => sideMenu()?.blockDragEnd(),
+  };
+}
 
 function LinkChoice({ blockId, onPick, onCancel }: { blockId: string; onPick: (row: TreeRow) => void; onCancel: () => void }) {
   const { pages, hostId } = useDirectory();
@@ -133,7 +164,7 @@ function LinkChoice({ blockId, onPick, onCancel }: { blockId: string; onPick: (r
   );
 }
 
-function SubpageLink({ pageId, kind, link }: { pageId: string; kind: "page" | "database"; link: boolean }) {
+function SubpageLink({ pageId, kind, link, drag }: { pageId: string; kind: "page" | "database"; link: boolean; drag: BlockDrag }) {
   const { pages, hostId, absent } = useDirectory();
   const icon = kind === "database" ? "🗃️" : "📄";
   if (!pageId) {
@@ -148,14 +179,14 @@ function SubpageLink({ pageId, kind, link }: { pageId: string; kind: "page" | "d
     // Ni lien ni clic : la cible restaurée le rend au prochain rendu serveur.
     const label = absent[pageId] === "trashed" ? "En corbeille" : absent[pageId] === "deleted" ? "Page supprimée" : "Introuvable : en corbeille ou supprimée";
     return (
-      <div className="subpage-block subpage-missing" contentEditable={false}>
+      <div className="subpage-block subpage-missing" contentEditable={false} {...drag}>
         {icon} {label}
       </div>
     );
   }
   const foreign = isForeignLink(link, row.parentId, hostId);
   return (
-    <div className="subpage-block" contentEditable={false}>
+    <div className="subpage-block" contentEditable={false} {...drag}>
       <Link href={row.type === "database" ? `/db/${row.id}` : `/page/${row.id}`}>
         <PageLabel row={row} />
         {foreign && (
