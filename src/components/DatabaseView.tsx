@@ -64,6 +64,8 @@ type Props = {
   initialViewId: string | null;
   // Dossiers de « Bases » qui la contiennent, de la racine au parent.
   trail: Crumb[];
+  // `SYNC_REMOTE_URL` sur le Mac, vide sur le web (lien public, SharePanel).
+  siteOrigin: string;
 };
 
 type Pending = { properties: Property[]; losses: number };
@@ -81,7 +83,7 @@ function readStoredView(dbId: string): string | null {
   }
 }
 
-export function DatabaseView({ database, config, entries, databases, initialViewId, trail }: Props) {
+export function DatabaseView({ database, config, entries, databases, initialViewId, trail, siteOrigin }: Props) {
   const router = useRouter();
   // Titre relu au retour sur l'onglet, s'il a changé ailleurs (key).
   const [shownTitle, setShownTitle] = useState({ generation: 0, title: database.title });
@@ -424,7 +426,7 @@ export function DatabaseView({ database, config, entries, databases, initialView
     <main className="page page-wide">
       <div className="page-bar">
         <SaveIndicator status={status} pending={pagePending} />
-        <SharePanel pageId={database.id} initialPublicId={database.publicId} initialClosed={database.shareClosed} />
+        <SharePanel pageId={database.id} initialPublicId={database.publicId} initialClosed={database.shareClosed} siteOrigin={siteOrigin} />
         <button type="button" className="ghost" onClick={() => void askTrash()}>
           Supprimer la base
         </button>

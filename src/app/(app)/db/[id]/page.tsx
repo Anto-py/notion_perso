@@ -5,6 +5,7 @@ import { canAccess } from "@/lib/access";
 import { getCurrentUser } from "@/lib/auth";
 import { configOf, listEntries } from "@/lib/databases";
 import { getPage, listDatabases, listTreeRows } from "@/lib/pages";
+import { syncConfig } from "@/lib/sync_config";
 import { ancestorRows } from "@/lib/tree";
 
 // Base : en-tête, propriétés, onglets des vues (Tableau, Kanban, Liste).
@@ -45,6 +46,7 @@ async function DatabaseLoader({ params, searchParams }: Pick<PageProps<"/db/[id]
       databases={databases.map(({ id: dbId, title, icon }) => ({ id: dbId, title, icon }))}
       initialViewId={typeof vue === "string" ? vue : null}
       trail={ancestorRows(rows, page.id)}
+      siteOrigin={syncConfig()?.remote ?? ""}
     />
   );
 }

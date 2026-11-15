@@ -14,7 +14,15 @@ import { PageLabel } from "./PageIcon";
 import { send } from "./request";
 import { VitrineSection } from "./vitrine/VitrineSection";
 
-type Props = { pageId: string; initialPublicId: string | null; initialClosed: boolean };
+type Props = {
+  pageId: string;
+  initialPublicId: string | null;
+  initialClosed: boolean;
+  // Adresse du site à mettre dans le lien : `SYNC_REMOTE_URL` sur le Mac
+  // (jamais localhost, qu'un visiteur ne joindrait pas), vide sur le web, où
+  // l'origine de la page fait foi.
+  siteOrigin: string;
+};
 
 type Named = { id: string; title: string } | null;
 type PrivateLink = { row: TreeRow; path: string[]; excluded: boolean };
@@ -58,7 +66,7 @@ function privateHint({ closed, isBase, sharer, openedBy }: { closed: boolean; is
   return "Page privée : seul « Publier » la rend lisible. Un lien depuis une page publiée y affiche « Contenu privé ».";
 }
 
-export function SharePanel({ pageId, initialPublicId, initialClosed }: Props) {
+export function SharePanel({ pageId, initialPublicId, initialClosed, siteOrigin }: Props) {
   const router = useRouter();
   const [publicId, setPublicId] = useState(initialPublicId);
   const [closed, setClosed] = useState(initialClosed);
@@ -127,10 +135,13 @@ export function SharePanel({ pageId, initialPublicId, initialClosed }: Props) {
     if (await act(`/api/share/${pageId}`, "PATCH", { closed: value })) router.refresh();
   }
 
-  // L'adresse complète se compose dans le navigateur : le serveur ne connaît
-  // pas toujours le domaine sous lequel on le joint (proxy de Coolify). Le
-  // panneau ne s'ouvre qu'après un clic, jamais au rendu serveur.
-  const url = publicId && open ? `${window.location.origin}/p/${publicId}` : "";
+  // Sur le web, l'adresse complète se compose dans le navigateur : le serveur
+  // ne connaît pas toujours le domaine sous lequel on le joint (proxy de
+  // Coolify). Sur le Mac, elle part du site distant : la page publiée y arrive
+  // par la synchronisation. Le panneau ne s'ouvre qu'après un clic, jamais au
+  // rendu serveur.
+  const origin = (siteOrigin || (open ? window.location.origin : "")).replace(/\/+$/, "");
+  const url = publicId && open ? `${origin}/p/${publicId}` : "";
 
   async function copy() {
     try {

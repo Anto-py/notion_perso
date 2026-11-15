@@ -150,7 +150,7 @@ export function PageView({ page, entry, directory, absent, siteOrigin }: Props) 
             {notice}
           </span>
         )}
-        <SharePanel pageId={page.id} initialPublicId={page.publicId} initialClosed={page.shareClosed} />
+        <SharePanel pageId={page.id} initialPublicId={page.publicId} initialClosed={page.shareClosed} siteOrigin={siteOrigin} />
         <button type="button" className="ghost" onClick={moveToTrash}>
           Supprimer
         </button>
