@@ -3105,6 +3105,23 @@ mark.hit {
   border: 1px solid var(--line);
   border-radius: var(--r-surface);
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+  max-height: calc(100dvh - 6rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Sur téléphone, le panneau ancré au bouton déborde de l'écran (le bouton
+   Partager est décalé à gauche par « Supprimer »). Il passe en fixe, pleine
+   largeur : tout est atteignable, quelle que soit la largeur. */
+@media (max-width: 760px) {
+  .share-panel {
+    position: fixed;
+    top: 4.5rem;
+    left: 0.75rem;
+    right: 0.75rem;
+    width: auto;
+    max-height: calc(100dvh - 5.5rem);
+  }
 }
 
 .share-panel .hint {
