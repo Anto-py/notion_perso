@@ -23,6 +23,11 @@ const RESTART_POLL_MS = 1_000;
 // Sauvegarde, bascule et démarrage tiennent en quelques secondes ; au-delà de
 // trois minutes, quelque chose a mal tourné et le journal du lanceur le dit.
 const RESTART_GIVE_UP_MS = 180_000;
+// Relevé périodique : l'app reste ouverte et la page peut rester montée sans
+// démontage, une version déployée depuis ne doit pas rester invisible. La
+// sonde coûte un appel à Coolify, donc minute plutôt que les 10 s de la
+// synchro.
+const REFRESH_MS = 60_000;
 
 const short = (commit: string) => commit.slice(0, 7);
 
@@ -42,14 +47,29 @@ export function VersionSwitch() {
 
   const load = useCallback(async () => {
     const data = await readVersion();
-    if (data) setInfo(data as Info);
-    else setUnavailable(true);
+    if (data) {
+      setInfo(data as Info);
+      setUnavailable(false);
+    } else setUnavailable(true);
   }, []);
 
   useEffect(() => {
     // Différé d'un tour (react-hooks/set-state-in-effect), comme SyncStatus.
     const first = setTimeout(() => void load(), 0);
-    return () => clearTimeout(first);
+    // Une page gardée montée ne relit jamais /api/version seule : on sonde la
+    // version déployée, et un retour sur la fenêtre force un relevé.
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void load();
+    }, REFRESH_MS);
+    const onFocus = () => void load();
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("pageshow", onFocus);
+    return () => {
+      clearTimeout(first);
+      clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("pageshow", onFocus);
+    };
   }, [load]);
 
   // Préparation en cours : relevé léger, sans interroger Coolify.
