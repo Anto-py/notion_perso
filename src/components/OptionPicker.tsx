@@ -63,7 +63,13 @@ export function OptionPicker({ prop, selected, multiple, onChange, onCreate }: P
       if (trigger.current?.contains(target) || menu.current?.contains(target)) return;
       setOpen(false);
     };
-    const close = () => setOpen(false);
+    // Un défilement hors du menu le referme plutôt que de le laisser flotter
+    // à côté de sa cellule ; un défilement dans le menu lui-même (la liste
+    // déborde et défile) ne le referme pas.
+    const close = (event: Event) => {
+      if (event.target instanceof Node && menu.current?.contains(event.target)) return;
+      setOpen(false);
+    };
     document.addEventListener("pointerdown", closeOut);
     window.addEventListener("scroll", close, true);
     window.addEventListener("resize", close);
